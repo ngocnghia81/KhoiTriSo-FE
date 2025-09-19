@@ -8,7 +8,7 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   CalendarIcon,
-  TrendingUpIcon,
+  ArrowTrendingUpIcon,
   ArrowDownTrayIcon,
   EyeIcon,
   DocumentTextIcon
