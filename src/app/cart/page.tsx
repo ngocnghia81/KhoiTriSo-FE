@@ -87,7 +87,8 @@ const suggestedItems = [
     price: 499000,
     originalPrice: 699000,
     rating: 4.8,
-    students: 1250
+    students: 1250,
+    type: 'course' as const
   },
   {
     id: '5',
@@ -96,7 +97,8 @@ const suggestedItems = [
     image: '/images/product/cart-2.png',
     price: 259000,
     rating: 4.9,
-    reviews: 89
+    reviews: 89,
+    type: 'book' as const
   }
 ];
 
@@ -169,16 +171,16 @@ export default function CartPage() {
     }).format(price);
   };
 
-  const addToCart = (item: any) => {
+  const addToCart = (item: { id: string; title: string; price: number; type: 'course' | 'book'; thumbnail?: string; author?: string; instructor?: string; image?: string; originalPrice?: number }) => {
     const newItem: CartItem = {
       id: item.id,
       type: item.author ? 'book' : 'course',
       title: item.title,
       instructor: item.instructor,
       author: item.author,
-      image: item.image,
+      image: item.image || '',
       price: item.price,
-      originalPrice: item.originalPrice,
+      originalPrice: item.originalPrice || item.price,
       quantity: 1,
       slug: item.title.toLowerCase().replace(/\s+/g, '-')
     };

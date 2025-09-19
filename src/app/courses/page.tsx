@@ -193,7 +193,7 @@ export default function CoursesPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
 
   const filteredAndSortedCourses = useMemo(() => {
-    let filtered = courses.filter(course => {
+    const filtered = courses.filter(course => {
       // Category filter
       if (selectedCategory !== 'all' && course.category !== selectedCategory) {
         return false;

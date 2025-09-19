@@ -116,14 +116,14 @@ const mockAssignment: Assignment = {
   ]
 };
 
-export default function AssignmentPage({ params }: { params: { slug: string } }) {
+export default function AssignmentPage({ params: _params }: { params: { slug: string } }) {
   const isClient = useClientOnly();
   const [assignment] = useState<Assignment>(mockAssignment);
   const [timeLeft, setTimeLeft] = useState(assignment.timeLimit * 60); // Convert to seconds
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [currentQuestion, setCurrentQuestion] = useState(1);
+  const [currentQuestion] = useState(1);
   const [showWarning, setShowWarning] = useState(false);
 
   // Timer effect
@@ -227,7 +227,7 @@ export default function AssignmentPage({ params }: { params: { slug: string } })
                 <CheckCircleIcon className="h-12 w-12 text-green-600" />
               </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Hoàn thành bài tập!</h1>
-              <p className="text-gray-600">Bạn đã hoàn thành bài tập "{assignment.title}"</p>
+              <p className="text-gray-600">Bạn đã hoàn thành bài tập &quot;{assignment.title}&quot;</p>
             </div>
 
             {/* Score Display */}
@@ -337,7 +337,7 @@ export default function AssignmentPage({ params }: { params: { slug: string } })
                 <li>• Đọc kỹ đề bài trước khi chọn đáp án</li>
                 <li>• Mỗi câu hỏi chỉ có 1 đáp án đúng</li>
                 <li>• Bạn có thể quay lại câu trước đó để sửa đáp án</li>
-                <li>• Nhấn "Nộp bài" khi hoàn thành tất cả câu hỏi</li>
+                <li>• Nhấn &quot;Nộp bài&quot; khi hoàn thành tất cả câu hỏi</li>
                 <li>• Kết quả sẽ được hiển thị ngay sau khi nộp bài</li>
               </ul>
             </div>

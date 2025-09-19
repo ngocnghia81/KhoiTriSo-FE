@@ -30,7 +30,7 @@ const stats = [
     change: '+12%',
     changeType: 'increase' as const,
     icon: UserGroupIcon,
-    color: 'blue',
+    color: 'blue' as const,
     description: 'So với tháng trước'
   },
   {
@@ -39,7 +39,7 @@ const stats = [
     change: '+8%',
     changeType: 'increase' as const,
     icon: AcademicCapIcon,
-    color: 'green',
+    color: 'green' as const,
     description: 'Khóa học đang hoạt động'
   },
   {
@@ -48,7 +48,7 @@ const stats = [
     change: '+3%',
     changeType: 'increase' as const,
     icon: BookOpenIcon,
-    color: 'purple',
+    color: 'purple' as const,
     description: 'Sách đang bán'
   },
   {
@@ -57,7 +57,7 @@ const stats = [
     change: '+18%',
     changeType: 'increase' as const,
     icon: CurrencyDollarIcon,
-    color: 'yellow',
+    color: 'yellow' as const,
     description: 'Doanh thu tháng này'
   },
   {
@@ -66,7 +66,7 @@ const stats = [
     change: '+15%',
     changeType: 'increase' as const,
     icon: ChartBarIcon,
-    color: 'indigo',
+    color: 'indigo' as const,
     description: 'Học sinh đang học'
   },
   {
@@ -75,7 +75,7 @@ const stats = [
     change: '-2%',
     changeType: 'decrease' as const,
     icon: CheckCircleIcon,
-    color: 'red',
+    color: 'red' as const,
     description: 'Tỷ lệ hoàn thành khóa học'
   }
 ];

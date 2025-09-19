@@ -148,7 +148,7 @@ export default function SearchPage() {
           {/* Search Stats */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-sm text-gray-600">
-              Tìm thấy <span className="font-medium">{filteredResults.length}</span> kết quả cho "{searchQuery}"
+              Tìm thấy <span className="font-medium">{filteredResults.length}</span> kết quả cho &quot;{searchQuery}&quot;
             </p>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">Sắp xếp theo:</span>

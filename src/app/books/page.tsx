@@ -222,7 +222,7 @@ export default function BooksPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
 
   const filteredAndSortedBooks = useMemo(() => {
-    let filtered = books.filter(book => {
+    const filtered = books.filter(book => {
       // Category filter
       if (selectedCategory !== 'all' && book.category.slug !== selectedCategory) {
         return false;

@@ -7,9 +7,7 @@ import {
   LightBulbIcon,
   ShieldCheckIcon,
   GlobeAltIcon,
-  SparklesIcon,
-  CheckCircleIcon,
-  ArrowTrendingUpIcon
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
 export const metadata: Metadata = {
