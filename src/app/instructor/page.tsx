@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import {
   AcademicCapIcon,
   BookOpenIcon,
@@ -13,7 +14,10 @@ import {
   StarIcon,
   ArrowTrendingUpIcon,
   CalendarIcon,
-  PlusIcon
+  PlusIcon,
+  DocumentTextIcon,
+  VideoCameraIcon,
+  UsersIcon
 } from '@heroicons/react/24/outline';
 
 export const metadata: Metadata = {
@@ -162,14 +166,14 @@ export default function InstructorDashboard() {
             </p>
           </div>
           <div className="hidden md:flex space-x-3">
-            <button className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+            <Link href="/instructor/courses/create" className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
               <PlusIcon className="h-4 w-4 inline mr-2" />
               Tạo khóa học
-            </button>
-            <button className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-              <BookOpenIcon className="h-4 w-4 inline mr-2" />
-              Tạo sách mới
-            </button>
+            </Link>
+            <Link href="/instructor/assignments/create" className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              <DocumentTextIcon className="h-4 w-4 inline mr-2" />
+              Tạo bài tập
+            </Link>
           </div>
         </div>
       </div>
@@ -311,22 +315,26 @@ export default function InstructorDashboard() {
               <h3 className="text-lg font-medium text-gray-900">Thao tác nhanh</h3>
             </div>
             <div className="p-6 space-y-3">
-              <button className="w-full flex items-center justify-center px-4 py-2 border border-green-300 rounded-lg text-green-700 hover:bg-green-50 transition-colors">
+              <Link href="/instructor/courses/create" className="w-full flex items-center justify-center px-4 py-2 border border-green-300 rounded-lg text-green-700 hover:bg-green-50 transition-colors">
                 <PlusIcon className="h-4 w-4 mr-2" />
                 Tạo khóa học mới
-              </button>
-              <button className="w-full flex items-center justify-center px-4 py-2 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors">
-                <BookOpenIcon className="h-4 w-4 mr-2" />
-                Tạo sách điện tử
-              </button>
-              <button className="w-full flex items-center justify-center px-4 py-2 border border-purple-300 rounded-lg text-purple-700 hover:bg-purple-50 transition-colors">
+              </Link>
+              <Link href="/instructor/assignments/create" className="w-full flex items-center justify-center px-4 py-2 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors">
+                <DocumentTextIcon className="h-4 w-4 mr-2" />
+                Tạo bài tập
+              </Link>
+              <Link href="/instructor/live-classes/create" className="w-full flex items-center justify-center px-4 py-2 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors">
+                <VideoCameraIcon className="h-4 w-4 mr-2" />
+                Tạo lớp học trực tuyến
+              </Link>
+              <Link href="/instructor/students" className="w-full flex items-center justify-center px-4 py-2 border border-indigo-300 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors">
+                <UsersIcon className="h-4 w-4 mr-2" />
+                Xem học sinh
+              </Link>
+              <Link href="/instructor/analytics" className="w-full flex items-center justify-center px-4 py-2 border border-purple-300 rounded-lg text-purple-700 hover:bg-purple-50 transition-colors">
                 <ChartBarIcon className="h-4 w-4 mr-2" />
                 Xem thống kê
-              </button>
-              <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                <EyeIcon className="h-4 w-4 mr-2" />
-                Xem hồ sơ công khai
-              </button>
+              </Link>
             </div>
           </div>
         </div>
