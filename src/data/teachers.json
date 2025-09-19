@@ -1,0 +1,158 @@
+{
+  "teachers": [
+    {
+      "id": "nguyen-van-a",
+      "name": "Thầy Nguyễn Văn A",
+      "title": "Thạc sĩ Toán học",
+      "avatar": "/images/team/1.jpg",
+      "specialization": ["Toán học", "Giải tích", "Hình học"],
+      "experience": 15,
+      "education": [
+        {
+          "degree": "Thạc sĩ Toán học",
+          "university": "Đại học Sư phạm Hà Nội",
+          "year": "2010"
+        },
+        {
+          "degree": "Cử nhân Toán học",
+          "university": "Đại học Khoa học Tự nhiên",
+          "year": "2008"
+        }
+      ],
+      "achievements": [
+        "Giải nhất cuộc thi Giáo viên giỏi toàn quốc 2020",
+        "Tác giả 5 cuốn sách giáo khoa Toán học",
+        "Hướng dẫn hơn 500 học sinh đỗ đại học",
+        "Giảng viên xuất sắc 3 năm liên tiếp"
+      ],
+      "courses": [
+        {
+          "id": "toan-lop-12-free",
+          "title": "Toán lớp 12 miễn phí",
+          "type": "free"
+        },
+        {
+          "id": "toan-nang-cao",
+          "title": "Toán nâng cao luyện thi THPT",
+          "type": "paid"
+        }
+      ],
+      "demoVideo": "https://youtube.com/watch?v=demo1",
+      "biography": "Thầy Nguyễn Văn A có hơn 15 năm kinh nghiệm giảng dạy Toán học tại các trường THPT và trung tâm luyện thi. Thầy đã giúp hàng nghìn học sinh nắm vững kiến thức Toán học và đạt điểm cao trong các kỳ thi quan trọng.",
+      "teachingPhilosophy": "Toán học không chỉ là con số và công thức, mà là cách tư duy logic và giải quyết vấn đề trong cuộc sống.",
+      "contact": {
+        "email": "nguyenvana@khoitriso.edu.vn",
+        "facebook": "fb.com/thay.nguyenvana"
+      },
+      "stats": {
+        "totalStudents": 1234,
+        "totalCourses": 8,
+        "rating": 4.9,
+        "totalReviews": 456
+      }
+    },
+    {
+      "id": "tran-thi-b",
+      "name": "Cô Trần Thị B",
+      "title": "Tiến sĩ Vật lý",
+      "avatar": "/images/team/2.jpg",
+      "specialization": ["Vật lý", "Cơ học", "Điện học"],
+      "experience": 12,
+      "education": [
+        {
+          "degree": "Tiến sĩ Vật lý",
+          "university": "Đại học Bách khoa Hà Nội",
+          "year": "2015"
+        },
+        {
+          "degree": "Thạc sĩ Vật lý",
+          "university": "Đại học Khoa học Tự nhiên",
+          "year": "2012"
+        }
+      ],
+      "achievements": [
+        "Giải Ba cuộc thi Sáng tạo khoa học kỹ thuật toàn quốc",
+        "Tác giả 3 cuốn sách chuyên khảo Vật lý",
+        "Giảng viên được yêu thích nhất 2022",
+        "Chứng chỉ giảng dạy quốc tế Cambridge"
+      ],
+      "courses": [
+        {
+          "id": "vat-ly-lop-12-free",
+          "title": "Vật lý lớp 12 miễn phí",
+          "type": "free"
+        },
+        {
+          "id": "vat-ly-nang-cao",
+          "title": "Vật lý nâng cao luyện thi",
+          "type": "paid"
+        }
+      ],
+      "demoVideo": "https://youtube.com/watch?v=demo2",
+      "biography": "Cô Trần Thị B là chuyên gia hàng đầu trong lĩnh vực giảng dạy Vật lý. Với phương pháp giảng dạy sinh động và dễ hiểu, cô đã giúp nhiều học sinh yêu thích môn Vật lý.",
+      "teachingPhilosophy": "Vật lý là khoa học về thế giới xung quanh chúng ta. Tôi muốn học sinh hiểu được vẻ đẹp của tự nhiên qua các định luật vật lý.",
+      "contact": {
+        "email": "tranthib@khoitriso.edu.vn",
+        "facebook": "fb.com/co.tranthib"
+      },
+      "stats": {
+        "totalStudents": 987,
+        "totalCourses": 6,
+        "rating": 4.8,
+        "totalReviews": 321
+      }
+    },
+    {
+      "id": "le-van-c",
+      "name": "Thầy Lê Văn C",
+      "title": "Thạc sĩ Hóa học",
+      "avatar": "/images/team/3.jpg",
+      "specialization": ["Hóa học", "Hóa hữu cơ", "Hóa vô cơ"],
+      "experience": 10,
+      "education": [
+        {
+          "degree": "Thạc sĩ Hóa học",
+          "university": "Đại học Khoa học Tự nhiên",
+          "year": "2014"
+        },
+        {
+          "degree": "Cử nhân Hóa học",
+          "university": "Đại học Sư phạm",
+          "year": "2012"
+        }
+      ],
+      "achievements": [
+        "Giải Nhì cuộc thi Giáo viên sáng tạo 2021",
+        "Chuyên gia tư vấn học thuật tại 10 trường THPT",
+        "Tác giả bộ đề thi thử THPT Quốc gia môn Hóa",
+        "Giảng viên được đánh giá cao nhất khoa Hóa học"
+      ],
+      "courses": [
+        {
+          "id": "hoa-hoc-lop-12-free",
+          "title": "Hóa học lớp 12 miễn phí",
+          "type": "free"
+        },
+        {
+          "id": "hoa-hoc-nang-cao",
+          "title": "Hóa học nâng cao",
+          "type": "paid"
+        }
+      ],
+      "demoVideo": "https://youtube.com/watch?v=demo3",
+      "biography": "Thầy Lê Văn C chuyên về giảng dạy Hóa học với phương pháp thực nghiệm và ứng dụng thực tế. Thầy luôn tạo hứng thú học tập cho học sinh qua các thí nghiệm thú vị.",
+      "teachingPhilosophy": "Hóa học là môn khoa học thực nghiệm. Học sinh sẽ hiểu sâu hơn khi được trực tiếp quan sát và thực hành.",
+      "contact": {
+        "email": "levanc@khoitriso.edu.vn",
+        "facebook": "fb.com/thay.levanc"
+      },
+      "stats": {
+        "totalStudents": 756,
+        "totalCourses": 5,
+        "rating": 4.7,
+        "totalReviews": 234
+      }
+    }
+  ]
+}
+

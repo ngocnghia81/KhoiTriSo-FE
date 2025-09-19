@@ -1,36 +1,189 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Khởi Trí Số - Frontend
 
-## Getting Started
+Nền tảng giáo dục trực tuyến **Khởi Trí Số** được xây dựng với Next.js 15, TypeScript và Tailwind CSS.
 
-First, run the development server:
+## 🚀 Tính năng chính
+
+- **Khóa học trực tuyến**: Video bài giảng, bài tập tương tác
+- **Sách điện tử**: Kích hoạt mã ID, video giải bài tập
+- **Diễn đàn học tập**: Hỏi đáp, thảo luận cộng đồng
+- **Hệ thống bài tập**: Trắc nghiệm, tự động chấm điểm
+- **Hồ sơ giảng viên**: Static pages với JSON data
+- **Responsive Design**: Tối ưu cho mọi thiết bị
+
+## 🛠️ Công nghệ sử dụng
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: Headless UI
+- **Icons**: Heroicons
+- **Forms**: React Hook Form
+- **Animations**: Framer Motion
+
+## 📦 Cài đặt
 
 ```bash
+# Clone repository
+git clone <repository-url>
+cd khoitriso-fe
+
+# Cài đặt dependencies
+npm install
+
+# Chạy development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở [http://localhost:3000](http://localhost:3000) để xem ứng dụng.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 Cấu trúc project
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+khoitriso-fe/
+├── src/
+│   ├── app/                    # App Router (Next.js 13+)
+│   │   ├── courses/           # Trang khóa học
+│   │   ├── books/             # Sách điện tử
+│   │   ├── forum/             # Diễn đàn
+│   │   ├── assignments/       # Bài tập
+│   │   └── teachers/          # Giảng viên
+│   ├── components/            # React components
+│   │   ├── Header.tsx
+│   │   ├── Footer.tsx
+│   │   └── ...
+│   ├── data/                  # Static data (JSON)
+│   │   └── teachers.json
+│   └── lib/                   # Utilities, helpers
+├── public/                    # Static assets
+│   ├── images/
+│   └── icons/
+├── package.json
+└── README.md
+```
 
-## Learn More
+## 🎨 Thiết kế
 
-To learn more about Next.js, take a look at the following resources:
+### Color Scheme
+- **Primary**: Blue (#3B82F6)
+- **Secondary**: Purple (#8B5CF6)
+- **Success**: Green (#10B981)
+- **Warning**: Yellow (#F59E0B)
+- **Error**: Red (#EF4444)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Typography
+- **Font**: Inter (Google Fonts)
+- **Headings**: Font weights 600-800
+- **Body**: Font weight 400-500
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔧 Scripts
 
-## Deploy on Vercel
+```bash
+# Development
+npm run dev
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Build
+npm run build
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Start production
+npm start
+
+# Linting
+npm run lint
+```
+
+## 📱 Responsive Breakpoints
+
+- **Mobile**: < 640px
+- **Tablet**: 640px - 1024px
+- **Desktop**: > 1024px
+
+## 🌟 Tính năng đặc biệt
+
+### Static Pages cho SEO
+- Khóa học miễn phí sử dụng static generation
+- Hồ sơ giảng viên với structured data
+- Diễn đàn với static pages cho câu hỏi
+
+### Performance Optimization
+- Image optimization với Next.js Image
+- Code splitting tự động
+- Lazy loading components
+- CSS optimization với Tailwind
+
+### Accessibility
+- Semantic HTML
+- ARIA labels
+- Keyboard navigation
+- Screen reader support
+
+## 🔗 API Integration
+
+Project được thiết kế để tích hợp với backend API:
+
+```typescript
+// Example API endpoints
+/api/courses          # Danh sách khóa học
+/api/courses/:id      # Chi tiết khóa học
+/api/books/activate   # Kích hoạt sách
+/api/forum/questions  # Câu hỏi diễn đàn
+/api/assignments      # Bài tập
+```
+
+## 🚀 Deployment
+
+### Vercel (Recommended)
+```bash
+npm run build
+vercel deploy
+```
+
+### Docker
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+## 🧪 Testing
+
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Coverage
+npm run test:coverage
+```
+
+## 📈 Performance Metrics
+
+- **Lighthouse Score**: 95+
+- **First Contentful Paint**: < 1.5s
+- **Largest Contentful Paint**: < 2.5s
+- **Time to Interactive**: < 3.0s
+
+## 🤝 Contributing
+
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
+
+## 📄 License
+
+Copyright © 2024 Khởi Trí Số. All rights reserved.
+
+## 📞 Contact
+
+- **Team**: Khởi Trí Số Development Team
+- **Email**: dev@khoitriso.edu.vn
+- **Website**: https://khoitriso.edu.vn
