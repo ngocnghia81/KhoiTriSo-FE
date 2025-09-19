@@ -1,6 +1,7 @@
 "use client";
+// Fixed dropdown styling
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useClientOnly } from "@/hooks/useClientOnly";
 import Link from "next/link";
@@ -85,8 +86,24 @@ export default function Header() {
     const [cartOpen, setCartOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+    const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState("Tất cả danh mục");
     const [searchQuery, setSearchQuery] = useState("");
+    const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+                setCategoryDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     // Function to check if a navigation item is active
     const isActive = (href: string, children?: Array<{ href: string }>) => {
@@ -122,27 +139,67 @@ export default function Header() {
                         <div className="hidden md:flex items-center flex-1 max-w-2xl mx-8">
                             <form
                                 onSubmit={handleSearch}
-                                className="flex w-full bg-white rounded-full shadow-lg overflow-hidden border border-gray-100"
+                                className="flex w-full bg-white rounded-full shadow-lg border border-gray-200 relative"
                             >
                                 {/* Category Dropdown */}
-                                <div className="relative">
-                                    <select
-                                        value={selectedCategory}
-                                        onChange={(e) =>
-                                            setSelectedCategory(e.target.value)
-                                        }
-                                        className="h-12 pl-6 pr-8 bg-white text-gray-700 border-r border-gray-200 focus:outline-none focus:ring-0 text-sm font-medium min-w-[160px] cursor-pointer appearance-none rounded-l-full"
+                                <div className="relative overflow-visible" ref={categoryDropdownRef}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            console.log('Dropdown clicked, current state:', categoryDropdownOpen);
+                                            const newState = !categoryDropdownOpen;
+                                            console.log('Setting dropdown to:', newState);
+                                            setCategoryDropdownOpen(newState);
+                                        }}
+                                        className="h-12 pl-6 pr-8 bg-white text-gray-700 border-r border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium min-w-[160px] cursor-pointer flex items-center justify-between transition-all duration-200 hover:bg-gray-50 overflow-visible rounded-l-full"
+                                        aria-expanded={categoryDropdownOpen}
+                                        aria-haspopup="listbox"
+                                        aria-label="Chọn danh mục"
                                     >
-                                        {categories.map((category) => (
-                                            <option
-                                                key={category}
-                                                value={category}
-                                            >
-                                                {category}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        <span className="truncate">
+                                            {selectedCategory}
+                                        </span>
+                                        <ChevronDownIcon 
+                                            className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                                                categoryDropdownOpen ? 'rotate-180' : ''
+                                            }`} 
+                                        />
+                                    </button>
+                                    
+                                    {/* Dropdown Menu */}
+                                    {categoryDropdownOpen && (
+                                        <div className="absolute left-0 top-full z-[100] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl ring-1 ring-gray-900/5 animate-in fade-in-0 zoom-in-95 duration-200"
+                                             style={{ minHeight: '200px' }}>
+                                            <div className="py-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                                                {categories.map((category, index) => (
+                                                    <button
+                                                        key={category}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedCategory(category);
+                                                            setCategoryDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 hover:pl-5 active:bg-blue-100 ${
+                                                            selectedCategory === category 
+                                                                ? 'bg-blue-50 text-blue-600 font-semibold border-r-2 border-blue-600' 
+                                                                : 'text-gray-700 hover:font-medium'
+                                                        } ${index === 0 ? 'rounded-t-lg' : ''} ${index === categories.length - 1 ? 'rounded-b-lg' : ''}`}
+                                                    >
+                                                        <span className="flex items-center justify-between">
+                                                            {category}
+                                                            {selectedCategory === category && (
+                                                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                            )}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Search Input */}
@@ -154,7 +211,7 @@ export default function Header() {
                                             setSearchQuery(e.target.value)
                                         }
                                         placeholder="Search your courses..."
-                                        className="w-full h-12 px-4 pr-32 text-gray-700 bg-white focus:outline-none focus:ring-0 text-sm placeholder-gray-400 border-0"
+                                        className="w-full h-12 px-4 pr-32 text-gray-700 bg-white focus:outline-none focus:ring-0 text-sm placeholder-gray-400 border-0 rounded-r-full"
                                     />
                                     <button
                                         type="submit"
@@ -230,12 +287,7 @@ export default function Header() {
 
                             {/* Auth Buttons */}
                             <div className="flex items-center space-x-3">
-                                <button
-                                    className="px-6 py-2 text-white font-semibold rounded-full transition-all duration-300 hover:shadow-lg transform hover:scale-105"
-                                    style={{ backgroundColor: "#f59e0b" }}
-                                >
-                                    Đăng ký
-                                </button>
+                    
                                 <Link
                                     href="/auth/login"
                                     className="px-6 py-2 bg-gray-800 text-white font-semibold rounded-full hover:bg-gray-700 transition-all duration-300 hover:shadow-lg transform hover:scale-105"

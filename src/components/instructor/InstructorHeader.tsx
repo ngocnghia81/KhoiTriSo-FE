@@ -7,7 +7,6 @@ import {
   BellIcon,
   UserCircleIcon,
   SunIcon,
-  MoonIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,

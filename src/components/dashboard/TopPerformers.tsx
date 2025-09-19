@@ -1,6 +1,5 @@
 import {
   TrophyIcon,
-  StarIcon,
   AcademicCapIcon,
   UserIcon
 } from '@heroicons/react/24/outline';
@@ -90,7 +89,6 @@ const getRankIcon = (rank: number) => {
 
 const renderStars = (rating: number) => {
   const fullStars = Math.floor(rating);
-  const hasHalfStar = rating % 1 !== 0;
   
   return (
     <div className="flex items-center">

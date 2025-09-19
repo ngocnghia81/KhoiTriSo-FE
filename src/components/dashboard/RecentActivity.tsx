@@ -14,7 +14,10 @@ interface Activity {
   description: string;
   time: string;
   user?: string;
-  metadata?: any;
+  metadata?: {
+    amount?: string;
+    [key: string]: unknown;
+  };
 }
 
 const activities: Activity[] = [
