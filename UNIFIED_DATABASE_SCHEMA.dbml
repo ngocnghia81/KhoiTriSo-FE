@@ -1,0 +1,1045 @@
+// ========================================
+// KHỞI TRÍ SỐ - UNIFIED DATABASE SCHEMA
+// ========================================
+// Unified schema combining all improvements from DATABASE_IMPROVEMENTS_DETAILED.md
+// with optimized design patterns and merged question system
+
+// ========================================
+// CORE TABLES
+// ========================================
+
+Table "Users" {
+  "Id" integer [pk, not null, increment]
+  "Username" "character varying(50)" [not null, unique]
+  "Email" "character varying(100)" [not null, unique]
+  "PasswordHash" "character varying(255)" [null] // Nullable for OAuth users
+  "Role" integer [not null] // 0: Guest, 1: Student, 2: Instructor, 3: Admin
+  "IsActive" boolean [not null, default: true]
+  "EmailVerified" boolean [not null, default: false]
+  "ResetPasswordToken" text [null]
+  "ResetPasswordExpiry" timestamp [null]
+  "EmailVerificationToken" "character varying(255)" [null]
+  "EmailVerificationExpiry" timestamp [null]
+  
+  // Profile Information
+  "FullName" "character varying(100)" [null]
+  "Phone" "character varying(20)" [null]
+  "Avatar" "character varying(255)" [null]
+  "DateOfBirth" timestamp [null]
+  "Gender" integer [null] // 0: Not specified, 1: Male, 2: Female
+  "Address" text [null]
+  "SocialLinks" jsonb [null]
+  
+  // Activity Tracking
+  "IsOnline" boolean [not null, default: false]
+  "LastLogin" timestamp [null]
+  "LastActiveAt" timestamp [null]
+  
+  // Preferences
+  "PreferredLanguage" "character varying(10)" [default: 'vi']
+  "Timezone" "character varying(50)" [default: 'Asia/Ho_Chi_Minh']
+  "NotificationPreferences" jsonb [default: '{"email": true, "push": true, "sms": false}']
+  "LearningGoals" text[] [null]
+  "InterestedTopics" text[] [null]
+  
+  // Instructor Specific
+  "TeacherStaticPagePath" text [null]
+  "TeacherAdditionalInfo" jsonb [null]
+  
+  // OAuth Integration
+  "AuthProvider" "character varying(20)" [null] // 'google', 'facebook', 'local'
+  "AuthProviderId" "character varying(100)" [null]
+  
+  // Audit Fields
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    Email [unique]
+    Username [unique]
+    AuthProvider
+    Role
+    IsActive
+    LastActiveAt
+  }
+}
+
+Table "Categories" {
+  "Id" integer [pk, not null, increment]
+  "Name" "character varying(100)" [not null]
+  "Description" text [not null]
+  "ParentId" integer [null, ref: > Categories.Id]
+  "Icon" "character varying(50)" [not null]
+  "IsActive" boolean [not null, default: true]
+  "OrderIndex" integer [not null, default: 0]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    ParentId
+    IsActive
+    OrderIndex
+  }
+}
+
+// ========================================
+// COURSE SYSTEM
+// ========================================
+
+Table "Courses" {
+  "Id" integer [pk, not null, increment]
+  "Title" "character varying(200)" [not null]
+  "StaticPagePath" text [not null]
+  "Description" text [not null]
+  "Thumbnail" "character varying(255)" [not null]
+  "InstructorId" integer [not null, ref: > Users.Id]
+  "CategoryId" integer [not null, ref: > Categories.Id]
+  "Level" integer [not null] // 1: Beginner, 2: Intermediate, 3: Advanced
+  "IsFree" boolean [not null, default: false]
+  "Price" numeric(10,2) [not null, default: 0]
+  "TotalLessons" integer [not null, default: 0]
+  "TotalStudents" integer [not null, default: 0]
+  "Rating" numeric(3,2) [not null, default: 0]
+  "TotalReviews" integer [not null, default: 0]
+  "IsPublished" boolean [not null, default: false]
+  "IsActive" boolean [not null, default: true]
+  "ApprovalStatus" integer [not null, default: 1] // 1: Draft, 2: Pending, 3: Approved, 4: Rejected
+  "EstimatedDuration" integer [null] // Total hours
+  "Language" "character varying(10)" [default: 'vi']
+  "Requirements" text[] [null]
+  "WhatYouWillLearn" text[] [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    InstructorId
+    CategoryId
+    Level
+    IsFree
+    IsPublished
+    IsActive
+    ApprovalStatus
+    Rating
+    (CategoryId, IsPublished)
+    (InstructorId, IsActive)
+  }
+}
+
+Table "Lessons" {
+  "Id" integer [pk, not null, increment]
+  "CourseId" integer [not null, ref: > Courses.Id]
+  "Title" "character varying(200)" [not null]
+  "Description" text [not null]
+  "LessonOrder" integer [not null]
+  "VideoUrl" "character varying(255)" [null]
+  "VideoDuration" integer [null] // seconds
+  "ContentText" text [null]
+  "StaticPagePath" text [null]
+  "IsPublished" boolean [not null, default: false]
+  "IsFree" boolean [not null, default: false] // Preview lessons
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    CourseId
+    LessonOrder
+    IsPublished
+    IsFree
+  }
+}
+
+Table "LessonMaterials" {
+  "Id" integer [pk, not null, increment]
+  "LessonId" integer [not null, ref: > Lessons.Id]
+  "Title" "character varying(200)" [not null]
+  "FileName" "character varying(255)" [not null]
+  "FilePath" "character varying(255)" [not null]
+  "FileType" "character varying(20)" [not null]
+  "FileSize" integer [null]
+  "DownloadCount" integer [not null, default: 0]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    LessonId
+    FileType
+  }
+}
+
+Table "CourseEnrollments" {
+  "Id" integer [pk, not null, increment]
+  "CourseId" integer [not null, ref: > Courses.Id]
+  "UserId" integer [not null, ref: > Users.Id]
+  "EnrolledAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "CompletedAt" timestamp [null]
+  "ProgressPercentage" numeric(5,2) [not null, default: 0]
+  "IsActive" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (CourseId, UserId) [unique]
+    UserId
+    IsActive
+    ProgressPercentage
+  }
+}
+
+Table "UserLessonProgresses" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "LessonId" integer [not null, ref: > Lessons.Id]
+  "IsCompleted" boolean [not null, default: false]
+  "WatchTime" integer [not null, default: 0] // seconds
+  "CompletedAt" timestamp [null]
+  "LastAccessed" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, LessonId) [unique]
+    UserId
+    LessonId
+    IsCompleted
+    LastAccessed
+  }
+}
+
+// ========================================
+// UNIFIED QUESTION SYSTEM
+// ========================================
+
+Table "Questions" {
+  "Id" integer [pk, not null, increment]
+  "ContextType" integer [not null] // 1: Assignment, 2: Book, 3: Practice, 4: Forum
+  "ContextId" integer [not null] // AssignmentId, BookId, ChapterId, etc.
+  "QuestionContent" text [not null]
+  "QuestionType" integer [not null] // 1: Multiple Choice, 2: True/False, 3: Short Answer, 4: Essay
+  "DifficultyLevel" integer [not null] // 1: Easy, 2: Medium, 3: Hard
+  "Points" numeric[] [not null] // Flexible scoring system
+  "DefaultPoints" decimal(5,2) [not null, default: 0.25]
+  "ExplanationContent" text [null]
+  "QuestionImage" text [null]
+  "VideoUrl" text [null]
+  "TimeLimit" integer [null] // seconds per question
+  "SubjectType" "character varying(50)" [null] // 'math', 'physics', etc.
+  "OrderIndex" integer [not null, default: 0]
+  "IsActive" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (ContextType, ContextId)
+    QuestionType
+    DifficultyLevel
+    SubjectType
+    OrderIndex
+    IsActive
+  }
+}
+
+Table "QuestionOptions" {
+  "Id" integer [pk, not null, increment]
+  "QuestionId" integer [not null, ref: > Questions.Id]
+  "OptionContent" text [not null]
+  "OptionImage" text [null]
+  "IsCorrect" boolean [not null, default: false]
+  "OrderIndex" integer [not null, default: 0]
+  "PointsValue" decimal(5,2) [null] // For partial credit questions
+  "ExplanationText" text [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    QuestionId
+    (QuestionId, OrderIndex)
+    IsCorrect
+  }
+}
+
+// ========================================
+// ASSIGNMENT SYSTEM
+// ========================================
+
+Table "Assignments" {
+  "Id" integer [pk, not null, increment]
+  "LessonId" integer [not null, ref: > Lessons.Id]
+  "Title" "character varying(200)" [not null]
+  "Description" text [not null]
+  "AssignmentType" integer [not null] // 1: Quiz, 2: Homework, 3: Exam, 4: Practice
+  "MaxScore" integer [not null]
+  "TimeLimit" integer [null] // minutes
+  "MaxAttempts" integer [not null, default: 1]
+  "ShowAnswersAfter" integer [not null, default: 2] // 1: Immediately, 2: After submission, 3: After due date, 4: Never
+  "DueDate" timestamp [null]
+  "IsPublished" boolean [not null, default: false]
+  "PassingScore" decimal(5,2) [null] // Minimum score to pass
+  "ShuffleQuestions" boolean [not null, default: false]
+  "ShuffleOptions" boolean [not null, default: false]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    LessonId
+    AssignmentType
+    IsPublished
+    DueDate
+    (LessonId, DueDate) [name: "IX_Assignments_Published", where: "IsPublished = true"]
+  }
+}
+
+Table "UserAssignmentAttempts" {
+  "Id" integer [pk, not null, increment]
+  "AssignmentId" integer [not null, ref: > Assignments.Id]
+  "UserId" integer [not null, ref: > Users.Id]
+  "AttemptNumber" integer [not null]
+  "StartedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "SubmittedAt" timestamp [null]
+  "Score" numeric [null]
+  "IsCompleted" boolean [not null, default: false]
+  "TimeSpent" integer [null] // seconds
+  "IsPassed" boolean [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    AssignmentId
+    UserId
+    (AssignmentId, UserId, AttemptNumber) [unique]
+    IsCompleted
+    Score
+  }
+}
+
+Table "UserAssignmentAnswers" {
+  "Id" integer [pk, not null, increment]
+  "AttemptId" integer [not null, ref: > UserAssignmentAttempts.Id]
+  "QuestionId" integer [not null, ref: > Questions.Id]
+  "OptionId" integer [null, ref: > QuestionOptions.Id] // For multiple choice
+  "AnswerText" text [null] // For short answer/essay
+  "IsCorrect" boolean [null]
+  "PointsEarned" numeric [not null, default: 0]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (AttemptId, QuestionId) [unique]
+    AttemptId
+    QuestionId
+    OptionId
+    IsCorrect
+  }
+}
+
+// ========================================
+// BOOK SYSTEM
+// ========================================
+
+Table "Books" {
+  "Id" integer [pk, not null, increment]
+  "Title" "character varying(200)" [not null]
+  "StaticPagePath" text [not null]
+  "Description" text [not null]
+  "AuthorId" integer [null, ref: > Users.Id]
+  "ISBN" "character varying(20)" [not null, unique]
+  "CoverImage" "character varying(255)" [not null]
+  "Price" numeric(10,2) [not null, default: 0]
+  "EbookFile" "character varying(255)" [null]
+  "CategoryId" integer [null, ref: > Categories.Id]
+  "TotalQuestions" integer [not null, default: 0]
+  "IsActive" boolean [not null, default: true]
+  "ApprovalStatus" integer [not null, default: 1] // 1: Draft, 2: Pending, 3: Approved, 4: Rejected
+  "Language" "character varying(10)" [default: 'vi']
+  "PublicationYear" integer [null]
+  "Edition" "character varying(50)" [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    AuthorId
+    CategoryId
+    ISBN [unique]
+    IsActive
+    ApprovalStatus
+    Price
+  }
+}
+
+Table "BookChapters" {
+  "Id" integer [pk, not null, increment]
+  "BookId" integer [not null, ref: > Books.Id]
+  "Title" "character varying(200)" [not null]
+  "Description" text [not null]
+  "OrderIndex" integer [not null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    BookId
+    OrderIndex
+    (BookId, OrderIndex) [unique]
+  }
+}
+
+Table "BookActivationCodes" {
+  "Id" integer [pk, not null, increment]
+  "BookId" integer [not null, ref: > Books.Id]
+  "ActivationCode" "character varying(50)" [not null, unique]
+  "IsUsed" boolean [not null, default: false]
+  "UsedById" integer [null, ref: > Users.Id]
+  "ExpiresAt" timestamp [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    ActivationCode [unique]
+    BookId
+    UsedById
+    IsUsed
+    ExpiresAt
+  }
+}
+
+Table "UserBooks" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ActivationCodeId" integer [not null, ref: > BookActivationCodes.Id]
+  "ExpiresAt" timestamp [null]
+  "IsActive" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    UserId
+    ActivationCodeId [unique]
+    IsActive
+    ExpiresAt
+  }
+}
+
+// ========================================
+// COMMERCE SYSTEM
+// ========================================
+
+Table "Orders" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "OrderCode" "character varying(50)" [not null, unique]
+  "TotalAmount" numeric(10,2) [not null]
+  "DiscountAmount" numeric(10,2) [not null, default: 0]
+  "TaxAmount" numeric(10,2) [not null, default: 0]
+  "FinalAmount" numeric(10,2) [not null] // TotalAmount - DiscountAmount + TaxAmount
+  "Status" integer [not null, default: 1] // 1: Pending, 2: Paid, 3: Cancelled, 4: Refunded
+  "PaymentMethod" "character varying(50)" [null]
+  "PaymentGateway" "character varying(50)" [null]
+  "TransactionId" "character varying(100)" [null]
+  "PaidAt" timestamp [null]
+  "Currency" "character varying(3)" [default: 'VND']
+  "ExchangeRate" decimal(10,4) [default: 1.0000]
+  "BillingAddress" jsonb [null]
+  "OrderNotes" text [null]
+  "CouponId" integer [null, ref: > Coupons.Id]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    OrderCode [unique]
+    UserId
+    Status
+    PaymentMethod
+    PaidAt
+    (UserId, Status)
+  }
+}
+
+Table "OrderItems" {
+  "Id" integer [pk, not null, increment]
+  "OrderId" integer [not null, ref: > Orders.Id]
+  "ItemId" integer [not null]
+  "ItemType" integer [not null] // 1: Course, 2: Book, 3: LearningPath
+  "ItemName" "character varying(200)" [not null]
+  "Price" numeric(10,2) [not null]
+  "Quantity" integer [not null, default: 1]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    OrderId
+    ItemType
+    ItemId
+  }
+}
+
+Table "CartItems" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ItemId" integer [not null]
+  "ItemType" integer [not null] // 1: Course, 2: Book, 3: LearningPath
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, ItemId, ItemType) [unique]
+    UserId
+  }
+}
+
+Table "Coupons" {
+  "Id" integer [pk, not null, increment]
+  "Code" "character varying(50)" [not null, unique]
+  "Name" "character varying(200)" [not null]
+  "Description" text [null]
+  "DiscountType" integer [not null] // 1: Percentage, 2: Fixed Amount
+  "DiscountValue" decimal(10,2) [not null]
+  "MinimumOrderValue" decimal(10,2) [default: 0]
+  "MaximumDiscountAmount" decimal(10,2) [null]
+  "UsageLimit" integer [null]
+  "UsedCount" integer [not null, default: 0]
+  "ValidFrom" timestamp [not null]
+  "ValidTo" timestamp [not null]
+  "IsActive" boolean [not null, default: true]
+  "ApplicableItemType" integer [null] // NULL: All, 1: Course, 2: Book, 3: LearningPath
+  "ApplicableItemIds" integer[] [null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    Code [unique]
+    IsActive
+    (ValidFrom, ValidTo)
+    ApplicableItemType
+  }
+}
+
+Table "CouponUsages" {
+  "Id" integer [pk, not null, increment]
+  "CouponId" integer [not null, ref: > Coupons.Id]
+  "UserId" integer [not null, ref: > Users.Id]
+  "OrderId" integer [not null, ref: > Orders.Id]
+  "DiscountAmount" decimal(10,2) [not null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  Indexes {
+    CouponId
+    UserId
+    OrderId
+  }
+}
+
+// ========================================
+// REVIEW & RATING SYSTEM
+// ========================================
+
+Table "Reviews" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ItemType" integer [not null] // 1: Course, 2: Book, 3: LearningPath
+  "ItemId" integer [not null]
+  "Rating" integer [not null] // 1-5 stars
+  "ReviewTitle" "character varying(200)" [null]
+  "ReviewContent" text [null]
+  "IsVerifiedPurchase" boolean [not null, default: false]
+  "HelpfulCount" integer [not null, default: 0]
+  "IsApproved" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, ItemType, ItemId) [unique]
+    (ItemType, ItemId)
+    Rating
+    IsApproved
+    IsVerifiedPurchase
+    (ItemType, ItemId, Rating)
+  }
+}
+
+Table "Wishlists" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ItemType" integer [not null] // 1: Course, 2: Book, 3: LearningPath
+  "ItemId" integer [not null]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, ItemType, ItemId) [unique]
+    UserId
+    (ItemType, ItemId)
+  }
+}
+
+// ========================================
+// LIVE CLASSES
+// ========================================
+
+Table "LiveClasses" {
+  "Id" integer [pk, not null, increment]
+  "CourseId" integer [not null, ref: > Courses.Id]
+  "InstructorId" integer [not null, ref: > Users.Id]
+  "Title" "character varying(200)" [not null]
+  "Description" text [not null]
+  "MeetingUrl" "character varying(500)" [null]
+  "MeetingId" "character varying(100)" [null]
+  "MeetingPassword" "character varying(50)" [null]
+  "ScheduledAt" timestamp [not null]
+  "DurationMinutes" integer [not null]
+  "MaxParticipants" integer [null]
+  "Status" integer [not null, default: 1] // 1: Scheduled, 2: Live, 3: Ended, 4: Cancelled
+  "RecordingUrl" "character varying(500)" [null]
+  "RecordingStatus" integer [not null, default: 0] // 0: Not recorded, 1: Recording, 2: Processing, 3: Ready
+  "AttendeeCount" integer [not null, default: 0]
+  "ChatEnabled" boolean [not null, default: true]
+  "RecordingEnabled" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    CourseId
+    InstructorId
+    ScheduledAt
+    Status
+    RecordingStatus
+  }
+}
+
+Table "LiveClassParticipants" {
+  "Id" integer [pk, not null, increment]
+  "LiveClassId" integer [not null, ref: > LiveClasses.Id]
+  "UserId" integer [not null, ref: > Users.Id]
+  "JoinedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "LeftAt" timestamp [null]
+  "AttendanceDuration" integer [not null, default: 0] // seconds
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (LiveClassId, UserId) [unique]
+    LiveClassId
+    UserId
+    JoinedAt
+  }
+}
+
+// ========================================
+// LEARNING PATHS
+// ========================================
+
+Table "LearningPaths" {
+  "Id" integer [pk, not null, increment]
+  "Title" "character varying(200)" [not null]
+  "Description" text [not null]
+  "Thumbnail" "character varying(255)" [not null]
+  "InstructorId" integer [not null, ref: > Users.Id]
+  "CategoryId" integer [null, ref: > Categories.Id]
+  "EstimatedDuration" integer [null] // Total hours
+  "DifficultyLevel" integer [not null] // 1: Beginner, 2: Intermediate, 3: Advanced
+  "Price" decimal(10,2) [not null, default: 0]
+  "IsPublished" boolean [not null, default: false]
+  "IsActive" boolean [not null, default: true]
+  "ApprovalStatus" integer [not null, default: 1] // 1: Draft, 2: Pending, 3: Approved, 4: Rejected
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    InstructorId
+    CategoryId
+    DifficultyLevel
+    IsPublished
+    IsActive
+    ApprovalStatus
+  }
+}
+
+Table "LearningPathCourses" {
+  "Id" integer [pk, not null, increment]
+  "LearningPathId" integer [not null, ref: > LearningPaths.Id]
+  "CourseId" integer [not null, ref: > Courses.Id]
+  "OrderIndex" integer [not null]
+  "IsRequired" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  Indexes {
+    (LearningPathId, CourseId) [unique]
+    LearningPathId
+    OrderIndex
+  }
+}
+
+Table "UserLearningPaths" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "LearningPathId" integer [not null, ref: > LearningPaths.Id]
+  "EnrolledAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "CompletedAt" timestamp [null]
+  "ProgressPercentage" decimal(5,2) [not null, default: 0]
+  "IsActive" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, LearningPathId) [unique]
+    UserId
+    LearningPathId
+    IsActive
+    ProgressPercentage
+  }
+}
+
+// ========================================
+// CERTIFICATES
+// ========================================
+
+Table "Certificates" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ItemType" integer [not null] // 1: Course, 2: LearningPath
+  "ItemId" integer [not null]
+  "CertificateNumber" "character varying(100)" [not null, unique]
+  "CompletionPercentage" decimal(5,2) [not null]
+  "FinalScore" decimal(5,2) [null]
+  "IssuedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "CertificateUrl" text [null] // Generated PDF URL
+  "IsValid" boolean [not null, default: true]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    UserId
+    (ItemType, ItemId)
+    CertificateNumber [unique]
+    IssuedAt
+    IsValid
+    (UserId, ItemType, ItemId) [unique]
+  }
+}
+
+// ========================================
+// DISCUSSION SYSTEM
+// ========================================
+
+Table "LessonDiscussions" {
+  "Id" integer [pk, not null, increment]
+  "LessonId" integer [not null, ref: > Lessons.Id]
+  "UserId" integer [not null, ref: > Users.Id]
+  "ParentId" integer [null, ref: > LessonDiscussions.Id]
+  "Content" text [not null]
+  "VideoTimestamp" integer [null] // Second in video where comment was made
+  "IsInstructor" boolean [not null, default: false]
+  "LikeCount" integer [not null, default: 0]
+  "IsHidden" boolean [not null, default: false]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    LessonId
+    UserId
+    ParentId
+    VideoTimestamp
+    IsHidden
+  }
+}
+
+// ========================================
+// PROGRESS TRACKING
+// ========================================
+
+Table "UserVideoProgresses" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "LessonId" integer [not null, ref: > Lessons.Id]
+  "VideoPosition" integer [not null, default: 0] // Seconds
+  "VideoDuration" integer [not null, default: 0] // Total duration in seconds
+  "WatchPercentage" decimal(5,2) [not null, default: 0] // 0-100%
+  "IsCompleted" boolean [not null, default: false]
+  "LastWatchedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    (UserId, LessonId) [unique]
+    UserId
+    LessonId
+    LastWatchedAt
+    IsCompleted
+  }
+}
+
+// ========================================
+// NOTIFICATIONS
+// ========================================
+
+Table "Notifications" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [not null, ref: > Users.Id]
+  "Title" "character varying(200)" [not null]
+  "Message" text [not null]
+  "Type" integer [not null] // 1: Course, 2: Assignment, 3: System, 4: Payment, 5: Social
+  "ActionUrl" "character varying(500)" [null]
+  "IsRead" boolean [not null, default: false]
+  "Priority" integer [not null, default: 1] // 1: Low, 2: Medium, 3: High
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    UserId
+    IsRead
+    Type
+    Priority
+    CreatedAt
+    (UserId, IsRead)
+  }
+}
+
+// ========================================
+// ANALYTICS & TRACKING
+// ========================================
+
+Table "UserActivityLogs" {
+  "Id" integer [pk, not null, increment]
+  "UserId" integer [null, ref: > Users.Id]
+  "ActivityType" "character varying(50)" [not null] // login, course_view, lesson_complete, etc.
+  "ResourceType" "character varying(50)" [null] // course, lesson, assignment, etc.
+  "ResourceId" integer [null]
+  "SessionId" "character varying(100)" [null]
+  "IpAddress" "character varying(45)" [null]
+  "UserAgent" "character varying(500)" [null]
+  "Duration" integer [null] // seconds spent
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  Indexes {
+    UserId
+    ActivityType
+    ResourceType
+    CreatedAt
+    SessionId
+  }
+}
+
+Table "DailyAnalytics" {
+  "Id" integer [pk, not null, increment]
+  "Date" date [not null, unique]
+  "TotalUsers" integer [not null, default: 0]
+  "ActiveUsers" integer [not null, default: 0]
+  "NewRegistrations" integer [not null, default: 0]
+  "CourseEnrollments" integer [not null, default: 0]
+  "BookPurchases" integer [not null, default: 0]
+  "TotalRevenue" decimal(12,2) [not null, default: 0]
+  "LessonsCompleted" integer [not null, default: 0]
+  "AssignmentsSubmitted" integer [not null, default: 0]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  Indexes {
+    Date [unique]
+    TotalRevenue
+    ActiveUsers
+  }
+}
+
+// ========================================
+// SYSTEM TABLES
+// ========================================
+
+Table "SystemSettings" {
+  "Id" integer [pk, not null, increment]
+  "SettingKey" "character varying(100)" [not null, unique]
+  "SettingValue" text [not null]
+  "SettingType" integer [not null] // 1: String, 2: Number, 3: Boolean, 4: JSON
+  "Description" text [not null]
+  "IsPublic" boolean [not null, default: false]
+  "CreatedBy" text [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "UpdatedBy" text [null]
+  "UpdatedAt" timestamp [null]
+  
+  Indexes {
+    SettingKey [unique]
+    SettingType
+    IsPublic
+  }
+}
+
+Table "AuditLogs" {
+  "Id" integer [pk, not null, increment]
+  "CorrelationId" "character varying(36)" [null]
+  "UserId" integer [null, ref: > Users.Id]
+  "Module" "character varying(100)" [not null]
+  "Action" "character varying(100)" [not null]
+  "TableName" "character varying(100)" [null]
+  "RecordId" integer [null]
+  "OldValues" jsonb [null]
+  "NewValues" jsonb [null]
+  "IpAddress" "character varying(45)" [null]
+  "UserAgent" "character varying(500)" [null]
+  "Description" "character varying(1000)" [null]
+  "Status" "character varying(50)" [null]
+  "CreatedAt" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  Indexes {
+    UserId
+    Module
+    Action
+    TableName
+    RecordId
+    CreatedAt
+    CorrelationId
+  }
+}
+
+// ========================================
+// FOREIGN KEY RELATIONSHIPS
+// ========================================
+
+// User relationships are defined inline with ref syntax above
+// Additional composite relationships for Questions system:
+
+Ref: Questions.ContextId > Assignments.Id [delete: cascade, note: "When ContextType = 1"]
+Ref: Questions.ContextId > BookChapters.Id [delete: cascade, note: "When ContextType = 2"]
+
+// ========================================
+// VIEWS FOR COMMON QUERIES
+// ========================================
+
+// Note: Views would be created in actual SQL, not DBML
+// These are documented here for reference:
+
+/*
+CREATE VIEW "CoursesWithStats" AS
+SELECT 
+  c.*,
+  COUNT(DISTINCT ce."UserId") as "EnrollmentCount",
+  COUNT(DISTINCT l."Id") as "LessonCount",
+  AVG(r."Rating") as "AverageRating",
+  COUNT(r."Id") as "ReviewCount"
+FROM "Courses" c
+LEFT JOIN "CourseEnrollments" ce ON c."Id" = ce."CourseId" AND ce."IsActive" = true
+LEFT JOIN "Lessons" l ON c."Id" = l."CourseId"
+LEFT JOIN "Reviews" r ON c."Id" = r."ItemId" AND r."ItemType" = 1
+GROUP BY c."Id";
+
+CREATE VIEW "UserProgressSummary" AS
+SELECT 
+  u."Id" as "UserId",
+  u."FullName",
+  COUNT(DISTINCT ce."CourseId") as "EnrolledCourses",
+  COUNT(DISTINCT CASE WHEN ce."CompletedAt" IS NOT NULL THEN ce."CourseId" END) as "CompletedCourses",
+  COUNT(DISTINCT ulp."LessonId") as "LessonsAccessed",
+  COUNT(DISTINCT CASE WHEN ulp."IsCompleted" = true THEN ulp."LessonId" END) as "LessonsCompleted",
+  COUNT(DISTINCT uaa."AttemptId") as "AssignmentsAttempted"
+FROM "Users" u
+LEFT JOIN "CourseEnrollments" ce ON u."Id" = ce."UserId"
+LEFT JOIN "UserLessonProgresses" ulp ON u."Id" = ulp."UserId"
+LEFT JOIN "UserAssignmentAttempts" uaa ON u."Id" = uaa."UserId"
+GROUP BY u."Id", u."FullName";
+*/
+
+// ========================================
+// CONSTRAINTS & VALIDATIONS
+// ========================================
+
+// Note: These would be added as ALTER TABLE statements in actual SQL:
+
+/*
+-- User constraints
+ALTER TABLE "Users" 
+  ADD CONSTRAINT "chk_users_role" CHECK ("Role" IN (0, 1, 2, 3)),
+  ADD CONSTRAINT "chk_users_gender" CHECK ("Gender" IS NULL OR "Gender" IN (0, 1, 2));
+
+-- Question constraints  
+ALTER TABLE "Questions"
+  ADD CONSTRAINT "chk_questions_type" CHECK ("QuestionType" IN (1, 2, 3, 4)),
+  ADD CONSTRAINT "chk_questions_difficulty" CHECK ("DifficultyLevel" IN (1, 2, 3)),
+  ADD CONSTRAINT "chk_questions_context_type" CHECK ("ContextType" IN (1, 2, 3, 4)),
+  ADD CONSTRAINT "chk_points_array_valid" CHECK (array_length("Points", 1) > 0 AND array_length("Points", 1) <= 10),
+  ADD CONSTRAINT "chk_points_by_type" CHECK (
+    CASE 
+      WHEN "QuestionType" = 1 THEN "Points" = ARRAY[0.25] -- Multiple choice: 0.25pt
+      WHEN "QuestionType" = 2 THEN "Points" <@ ARRAY[0.1, 0.25, 0.5, 1.0] -- True/False: flexible points
+      WHEN "QuestionType" = 3 AND "SubjectType" = 'math' THEN "Points" = ARRAY[0.5] -- Math short answer: 0.5pt
+      WHEN "QuestionType" = 3 THEN "Points" = ARRAY[0.25] -- Other short answer: 0.25pt
+      ELSE TRUE -- Essay and other types are flexible
+    END
+  );
+
+-- Assignment constraints
+ALTER TABLE "Assignments"
+  ADD CONSTRAINT "chk_assignments_type" CHECK ("AssignmentType" IN (1, 2, 3, 4)),
+  ADD CONSTRAINT "chk_assignments_show_answers" CHECK ("ShowAnswersAfter" IN (1, 2, 3, 4));
+
+-- Review constraints
+ALTER TABLE "Reviews"
+  ADD CONSTRAINT "chk_reviews_rating" CHECK ("Rating" >= 1 AND "Rating" <= 5),
+  ADD CONSTRAINT "chk_reviews_item_type" CHECK ("ItemType" IN (1, 2, 3));
+
+-- Order constraints
+ALTER TABLE "Orders"
+  ADD CONSTRAINT "chk_orders_status" CHECK ("Status" IN (1, 2, 3, 4)),
+  ADD CONSTRAINT "chk_orders_final_amount" CHECK ("FinalAmount" >= 0);
+
+-- Coupon constraints
+ALTER TABLE "Coupons"
+  ADD CONSTRAINT "chk_coupons_discount_type" CHECK ("DiscountType" IN (1, 2)),
+  ADD CONSTRAINT "chk_coupons_discount_value" CHECK ("DiscountValue" > 0),
+  ADD CONSTRAINT "chk_coupons_valid_dates" CHECK ("ValidTo" > "ValidFrom");
+*/
