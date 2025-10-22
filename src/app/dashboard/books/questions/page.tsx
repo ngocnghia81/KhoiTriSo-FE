@@ -1,0 +1,384 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  QuestionMarkCircleIcon,
+  ArrowLeftIcon,
+  MagnifyingGlassIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  UserIcon,
+  CalendarIcon,
+  DocumentDuplicateIcon,
+  EyeIcon,
+  PlusIcon,
+} from '@heroicons/react/24/outline';
+import { useBooks, useBookQuestions } from '@/hooks/useBooks';
+
+export default function AllBookQuestionsPage() {
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+
+  // Fetch all books for selection
+  const { data: booksData, loading: booksLoading } = useBooks({
+    page: 1,
+    pageSize: 100,
+    search: '',
+    categoryId: undefined,
+    approvalStatus: undefined,
+    authorId: undefined,
+    sortBy: 'title',
+    sortOrder: 'asc'
+  });
+
+  // Fetch questions for selected book
+  const { data: questionsData, loading: questionsLoading, error } = useBookQuestions(
+    selectedBookId || 0, 
+    page, 
+    pageSize
+  );
+
+  const books = booksData?.items || [];
+  const questions = questionsData?.items || [];
+  const totalQuestions = questionsData?.total || 0;
+
+  const filteredBooks = books.filter(book =>
+    book.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const exportQuestions = () => {
+    if (!questions.length) return;
+    
+    const csvContent = [
+      'Câu hỏi,Loại câu hỏi,Độ khó,Ngày tạo',
+      ...questions.map(question => [
+        question.questionText,
+        question.questionType === 1 ? 'Trắc nghiệm' : 'Tự luận',
+        question.difficultyLevel === 0 ? 'Dễ' : question.difficultyLevel === 1 ? 'Trung bình' : 'Khó',
+        new Date(question.createdAt).toLocaleDateString('vi-VN')
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `questions-book-${selectedBookId}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Quản lý câu hỏi</h1>
+            <p className="text-sm text-gray-600">Xem và quản lý câu hỏi của tất cả sách</p>
+          </div>
+        </div>
+        {selectedBookId && questions.length > 0 && (
+          <div className="flex space-x-3">
+            <button
+              onClick={exportQuestions}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <DocumentDuplicateIcon className="h-4 w-4 mr-2" />
+              Xuất CSV
+            </button>
+            <button
+              onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions`)}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Thêm câu hỏi
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Book Selection */}
+      <div className="bg-white shadow-lg rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Chọn sách</h3>
+        
+        <div className="mb-4">
+          <div className="relative">
+            <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm sách..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        {booksLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredBooks.map((book) => (
+              <div
+                key={book.id}
+                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                  selectedBookId === book.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => {
+                  console.log('BookQuestionsPage: Selecting book with ID:', book.id);
+                  setSelectedBookId(book.id);
+                  setPage(1);
+                }}
+              >
+                <div className="flex items-center space-x-3">
+                  {book.coverImage ? (
+                    <img
+                      src={book.coverImage}
+                      alt={book.title}
+                      className="w-12 h-16 object-cover rounded"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        (e.currentTarget.nextElementSibling as HTMLElement)?.style.setProperty('display', 'flex');
+                      }}
+                    />
+                  ) : null}
+                  <div className="w-12 h-16 bg-gray-200 rounded flex items-center justify-center" style={{ display: book.coverImage ? 'none' : 'flex' }}>
+                    <QuestionMarkCircleIcon className="h-6 w-6 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                      {book.title}
+                    </h4>
+                    <p className="text-xs text-gray-500 truncate">
+                      {book.author?.fullName || 'Không có tác giả'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      ID: {book.id}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Questions */}
+      {selectedBookId && (
+        <div className="space-y-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <QuestionMarkCircleIcon className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500">Tổng câu hỏi</dt>
+                    <dd className="text-2xl font-bold text-gray-900">{totalQuestions}</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                    <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500">Câu hỏi đã duyệt</dt>
+                    <dd className="text-2xl font-bold text-gray-900">
+                      {questions.filter(q => q.isActive).length}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Questions Table */}
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Danh sách câu hỏi</h3>
+            </div>
+            
+            {questionsLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : error ? (
+              <div className="p-6 text-center text-red-600">{error}</div>
+            ) : questions.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                Không có câu hỏi nào cho sách này
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Câu hỏi
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Loại
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Độ khó
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Lựa chọn
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Trạng thái
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ngày tạo
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Thao tác
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {questions.map((question) => (
+                        <tr key={question.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 max-w-xs">
+                              <div className="font-medium">{question.questionText}</div>
+                              {question.explanationContent && (
+                                <div className="text-xs text-gray-500 mt-1 truncate">
+                                  {question.explanationContent}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-900">
+                              {question.questionType === 0 ? 'Trắc nghiệm' : 
+                               question.questionType === 1 ? 'Tự luận' : 'Khác'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              question.difficultyLevel === 0 ? 'bg-green-100 text-green-800' :
+                              question.difficultyLevel === 1 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {question.difficultyLevel === 0 ? 'Dễ' :
+                               question.difficultyLevel === 1 ? 'Trung bình' : 'Khó'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-900">
+                              {question.questionType === 1 ? `${question.options?.length || 0} lựa chọn` : 'Tự luận'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              question.isActive
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {question.isActive ? (
+                                <>
+                                  <CheckCircleIcon className="h-3 w-3 mr-1" />
+                                  Hoạt động
+                                </>
+                              ) : (
+                                <>
+                                  <ClockIcon className="h-3 w-3 mr-1" />
+                                  Tạm dừng
+                                </>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-sm text-gray-900">
+                                {new Date(question.createdAt).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions`)}
+                                className="text-blue-600 hover:text-blue-900 transition-colors"
+                              >
+                                Xem chi tiết
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {totalQuestions > 0 && (
+                  <div className="px-6 py-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Hiển thị <span className="font-medium">{(page - 1) * pageSize + 1}</span> đến{' '}
+                          <span className="font-medium">{Math.min(page * pageSize, totalQuestions)}</span> trong{' '}
+                          <span className="font-medium">{totalQuestions}</span> kết quả
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setPage(page - 1)}
+                          disabled={page <= 1}
+                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Trước
+                        </button>
+                        <button
+                          onClick={() => setPage(page + 1)}
+                          disabled={page >= Math.ceil(totalQuestions / pageSize)}
+                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Sau
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

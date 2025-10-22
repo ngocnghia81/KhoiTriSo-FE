@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   MagnifyingGlassIcon,
   BellIcon,
@@ -16,6 +17,7 @@ import {
 
 export default function DashboardHeader() {
   const { toggleSidebar } = useSidebar();
+  const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -161,8 +163,11 @@ export default function DashboardHeader() {
                   <UserCircleIcon className="h-5 w-5 text-white" />
                 </div>
                 <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium">Admin User</p>
-                  <p className="text-xs text-gray-500">Quản trị viên</p>
+                  <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                  <p className="text-xs text-gray-500">
+                    {user?.role === 'admin' ? 'Quản trị viên' : 
+                     user?.role === 'instructor' ? 'Giảng viên' : 'Học viên'}
+                  </p>
                 </div>
                 <ChevronDownIcon className="h-4 w-4 text-gray-400" />
               </button>
@@ -172,8 +177,8 @@ export default function DashboardHeader() {
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                   <div className="py-1">
                     <div className="px-4 py-3 border-b border-gray-200">
-                      <p className="text-sm font-medium text-gray-900">Admin User</p>
-                      <p className="text-sm text-gray-500">admin@khoitriso.com</p>
+                      <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
+                      <p className="text-sm text-gray-500">{user?.email || 'No email'}</p>
                     </div>
                     
                     <a
@@ -196,6 +201,10 @@ export default function DashboardHeader() {
                       <button
                         type="button"
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          logout();
+                        }}
                       >
                         <ArrowRightOnRectangleIcon className="mr-3 h-4 w-4 text-gray-400" />
                         Đăng xuất

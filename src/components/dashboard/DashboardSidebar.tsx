@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -25,7 +25,8 @@ import {
   Bars3Icon,
   XMarkIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 import Logo from '@/components/Logo';
 
@@ -41,20 +42,51 @@ const navigation = [
     icon: UserGroupIcon,
     children: [
       { name: 'Danh sách người dùng', href: '/dashboard/users' },
-      { name: 'Giảng viên', href: '/dashboard/instructors' },
-      { name: 'Học sinh', href: '/dashboard/students' },
-      { name: 'Vai trò & quyền', href: '/dashboard/roles' },
+      { name: 'Thống kê người dùng', href: '/dashboard/users/analytics' },
     ],
   },
   {
-    name: 'Khóa học',
+    name: 'Quản lý giảng viên',
     icon: AcademicCapIcon,
+    children: [
+      { name: 'Danh sách giảng viên', href: '/dashboard/instructors' },
+      { name: 'Hồ sơ giảng viên', href: '/dashboard/instructors/profiles' },
+      { name: 'Giảng viên tiêu biểu', href: '/dashboard/instructors/featured' },
+      { name: 'Thống kê giảng viên', href: '/dashboard/instructors/analytics' },
+    ],
+  },
+  {
+    name: 'Quản lý khóa học',
+    icon: BookOpenIcon,
     children: [
       { name: 'Danh sách khóa học', href: '/dashboard/courses' },
       { name: 'Tạo khóa học mới', href: '/dashboard/courses/create' },
-      { name: 'Bài giảng', href: '/dashboard/lessons' },
-      { name: 'Tài liệu', href: '/dashboard/materials' },
-      { name: 'Lớp học trực tuyến', href: '/dashboard/live-classes' },
+      { name: 'Khóa học miễn phí', href: '/dashboard/courses/free' },
+      { name: 'Khóa học trả phí', href: '/dashboard/courses/paid' },
+      { name: 'Khóa học chờ duyệt', href: '/dashboard/courses/pending' },
+      { name: 'Thống kê khóa học', href: '/dashboard/courses/analytics' },
+    ],
+  },
+  {
+    name: 'Quản lý bài học',
+    icon: DocumentTextIcon,
+    children: [
+      { name: 'Danh sách bài học', href: '/dashboard/lessons' },
+      { name: 'Tạo bài học mới', href: '/dashboard/lessons/create' },
+      { name: 'Video bài giảng', href: '/dashboard/lessons/videos' },
+      { name: 'Tài liệu tham khảo', href: '/dashboard/lessons/materials' },
+      { name: 'Thảo luận bài học', href: '/dashboard/lessons/discussions' },
+    ],
+  },
+  {
+    name: 'Lớp học trực tuyến',
+    icon: VideoCameraIcon,
+    children: [
+      { name: 'Danh sách lớp học', href: '/dashboard/live-classes' },
+      { name: 'Tạo lớp học mới', href: '/dashboard/live-classes/create' },
+      { name: 'Lớp học sắp diễn ra', href: '/dashboard/live-classes/upcoming' },
+      { name: 'Lịch sử lớp học', href: '/dashboard/live-classes/history' },
+      { name: 'Điểm danh', href: '/dashboard/live-classes/attendance' },
     ],
   },
   {
@@ -62,9 +94,11 @@ const navigation = [
     icon: ClipboardDocumentListIcon,
     children: [
       { name: 'Danh sách bài tập', href: '/dashboard/assignments' },
-      { name: 'Câu hỏi', href: '/dashboard/questions' },
-      { name: 'Kết quả', href: '/dashboard/results' },
-      { name: 'Thống kê điểm', href: '/dashboard/grades' },
+      { name: 'Tạo bài tập mới', href: '/dashboard/assignments/create' },
+      { name: 'Import từ Word', href: '/dashboard/assignments/import' },
+      { name: 'Kết quả bài tập', href: '/dashboard/assignments/results' },
+      { name: 'Thống kê điểm', href: '/dashboard/assignments/statistics' },
+      { name: 'Hướng dẫn soạn bài', href: '/dashboard/assignments/guide' },
     ],
   },
   {
@@ -72,79 +106,103 @@ const navigation = [
     icon: BookOpenIcon,
     children: [
       { name: 'Danh sách sách', href: '/dashboard/books' },
-      { name: 'Mã kích hoạt', href: '/dashboard/activation-codes' },
-      { name: 'Chương sách', href: '/dashboard/book-chapters' },
-      { name: 'Câu hỏi sách', href: '/dashboard/book-questions' },
+      { name: 'Thêm sách mới', href: '/dashboard/books/create' },
+      { name: 'Mã kích hoạt', href: '/dashboard/books/activation-codes' },
+      { name: 'Câu hỏi sách', href: '/dashboard/books/questions' },
+      { name: 'Lời giải video', href: '/dashboard/books/solutions' },
+      { name: 'Thống kê sách', href: '/dashboard/books/analytics' },
     ],
   },
   {
-    name: 'Diễn đàn',
+    name: 'Diễn đàn & Câu hỏi',
     icon: ChatBubbleLeftRightIcon,
     children: [
-      { name: 'Bài viết', href: '/dashboard/forum-posts' },
-      { name: 'Câu trả lời', href: '/dashboard/forum-replies' },
-      { name: 'Moderation', href: '/dashboard/forum-moderation' },
-      { name: 'Báo cáo', href: '/dashboard/forum-reports' },
+      { name: 'Danh sách câu hỏi', href: '/dashboard/forum/questions' },
+      { name: 'Câu hỏi chưa trả lời', href: '/dashboard/forum/unanswered' },
+      { name: 'Câu hỏi nổi bật', href: '/dashboard/forum/featured' },
+      { name: 'Moderation', href: '/dashboard/forum/moderation' },
+      { name: 'Báo cáo vi phạm', href: '/dashboard/forum/reports' },
+      { name: 'Thống kê forum', href: '/dashboard/forum/analytics' },
+    ],
+  },
+  {
+    name: 'Trang tĩnh',
+    icon: DocumentTextIcon,
+    children: [
+      { name: 'Danh sách trang', href: '/dashboard/static-pages' },
+      { name: 'Tạo trang mới', href: '/dashboard/static-pages/create' },
+      { name: 'Trang khóa học', href: '/dashboard/static-pages/courses' },
+      { name: 'Trang giảng viên', href: '/dashboard/static-pages/instructors' },
+      { name: 'Trang câu hỏi', href: '/dashboard/static-pages/questions' },
+      { name: 'SEO Management', href: '/dashboard/static-pages/seo' },
+    ],
+  },
+  {
+    name: 'AI Học tập',
+    icon: CogIcon,
+    children: [
+      { name: 'Luyện phát âm', href: '/dashboard/ai/pronunciation' },
+      { name: 'Phân tích học tập', href: '/dashboard/ai/learning-analysis' },
+      { name: 'Gợi ý cá nhân hóa', href: '/dashboard/ai/personalization' },
+      { name: 'Chatbot hỗ trợ', href: '/dashboard/ai/chatbot' },
+      { name: 'Thống kê AI', href: '/dashboard/ai/analytics' },
+    ],
+  },
+  {
+    name: 'Đánh giá & Phản hồi',
+    icon: StarIcon,
+    children: [
+      { name: 'Đánh giá khóa học', href: '/dashboard/reviews' },
+      { name: 'Đánh giá giảng viên', href: '/dashboard/reviews/instructors' },
+      { name: 'Phản hồi học viên', href: '/dashboard/reviews/feedback' },
+      { name: 'Thống kê đánh giá', href: '/dashboard/reviews/analytics' },
     ],
   },
   {
     name: 'Đơn hàng & Thanh toán',
     icon: ShoppingCartIcon,
     children: [
-      { name: 'Đơn hàng', href: '/dashboard/orders' },
-      { name: 'Thanh toán', href: '/dashboard/payments' },
+      { name: 'Danh sách đơn hàng', href: '/dashboard/orders' },
+      { name: 'Giao dịch', href: '/dashboard/transactions' },
       { name: 'Giỏ hàng', href: '/dashboard/carts' },
       { name: 'Mã giảm giá', href: '/dashboard/coupons' },
+      { name: 'Hoàn tiền', href: '/dashboard/refunds' },
+      { name: 'Thống kê doanh thu', href: '/dashboard/revenue' },
     ],
   },
   {
-    name: 'Báo cáo & Thống kê',
+    name: 'Thống kê & Báo cáo',
     icon: ChartBarIcon,
     children: [
-      { name: 'Doanh thu', href: '/dashboard/revenue' },
-      { name: 'Người dùng', href: '/dashboard/user-analytics' },
-      { name: 'Khóa học', href: '/dashboard/course-analytics' },
-      { name: 'Hoạt động', href: '/dashboard/activity-analytics' },
+      { name: 'Dashboard Analytics', href: '/dashboard/analytics' },
+      { name: 'Thống kê khóa học', href: '/dashboard/analytics/courses' },
+      { name: 'Thống kê giảng viên', href: '/dashboard/analytics/instructors' },
+      { name: 'Thống kê học viên', href: '/dashboard/analytics/students' },
+      { name: 'Báo cáo hệ thống', href: '/dashboard/analytics/system' },
+      { name: 'Báo cáo SEO', href: '/dashboard/analytics/seo' },
     ],
   },
   {
-    name: 'Nội dung',
-    icon: DocumentTextIcon,
+    name: 'Thông báo',
+    icon: BellIcon,
     children: [
-      { name: 'Danh mục', href: '/dashboard/categories' },
-      { name: 'Tags', href: '/dashboard/tags' },
-      { name: 'Thông báo', href: '/dashboard/announcements' },
-      { name: 'Trang tĩnh', href: '/dashboard/static-pages' },
+      { name: 'Gửi thông báo', href: '/dashboard/notifications/create' },
+      { name: 'Danh sách thông báo', href: '/dashboard/notifications' },
+      { name: 'Thông báo chưa đọc', href: '/dashboard/notifications/unread' },
+      { name: 'Mẫu thông báo', href: '/dashboard/notifications/templates' },
+      { name: 'Push Notifications', href: '/dashboard/notifications/push' },
     ],
   },
   {
-    name: 'Phê duyệt',
-    icon: ExclamationTriangleIcon,
-    children: [
-      { name: 'Tổng quan', href: '/dashboard/approvals' },
-      { name: 'Đăng ký giảng viên', href: '/dashboard/approvals/instructors' },
-      { name: 'Khóa học', href: '/dashboard/approvals/courses' },
-      { name: 'Sách điện tử', href: '/dashboard/approvals/books' },
-    ],
-  },
-  {
-    name: 'Chiết khấu',
-    icon: CurrencyDollarIcon,
-    children: [
-      { name: 'Tổng quan', href: '/dashboard/commissions' },
-      { name: 'Thanh toán chờ', href: '/dashboard/commissions/pending' },
-      { name: 'Lịch sử thanh toán', href: '/dashboard/commissions/history' },
-      { name: 'Top giảng viên', href: '/dashboard/commissions/top-instructors' },
-    ],
-  },
-  {
-    name: 'Hệ thống',
+    name: 'Cài đặt hệ thống',
     icon: CogIcon,
     children: [
-      { name: 'Cài đặt', href: '/dashboard/settings' },
-      { name: 'Audit Logs', href: '/dashboard/audit-logs' },
-      { name: 'Notifications', href: '/dashboard/notifications' },
-      { name: 'Backup & Restore', href: '/dashboard/backup' },
+      { name: 'Cài đặt chung', href: '/dashboard/settings' },
+      { name: 'Cài đặt streaming', href: '/dashboard/settings/streaming' },
+      { name: 'Cài đặt SEO', href: '/dashboard/settings/seo' },
+      { name: 'Sức khỏe hệ thống', href: '/dashboard/settings/health' },
+      { name: 'Backup & Restore', href: '/dashboard/settings/backup' },
+      { name: 'Thống kê hệ thống', href: '/dashboard/settings/stats' },
     ],
   },
 ];
@@ -169,11 +227,28 @@ export default function DashboardSidebar() {
     );
   };
 
+  // Auto-expand parent items that have active children
+  useEffect(() => {
+    const activeParents = navigation
+      .filter(item => item.children && hasActiveChild(item.children))
+      .map(item => item.name);
+    
+    // Only keep active parents and default items (like 'Tổng quan')
+    const defaultItems = ['Tổng quan'];
+    const newExpandedItems = [...new Set([...defaultItems, ...activeParents])];
+    
+    setExpandedItems(newExpandedItems);
+  }, [pathname]);
+
   const isActive = (href: string) => {
     if (href === '/dashboard') {
       return pathname === '/dashboard';
     }
     return pathname.startsWith(href);
+  };
+
+  const hasActiveChild = (children: any[]) => {
+    return children.some(child => isActive(child.href));
   };
 
   const handleWidthChange = (newWidth: number) => {
@@ -255,7 +330,11 @@ export default function DashboardSidebar() {
                   <div>
                     <button
                       onClick={() => toggleExpanded(item.name)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100 group transition-all duration-200"
+                      className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group transition-all duration-200 ${
+                        hasActiveChild(item.children)
+                          ? 'text-blue-700 bg-blue-50 border-l-2 border-blue-600'
+                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
                     >
                       <div className="flex items-center">
                         <item.icon className={`h-4 w-4 text-gray-500 group-hover:text-blue-600 ${sidebarCollapsed ? 'mx-auto' : 'mr-3'}`} />

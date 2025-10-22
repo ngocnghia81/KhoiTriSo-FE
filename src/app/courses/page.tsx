@@ -664,16 +664,16 @@ export default function CoursesPage() {
       <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">
-            Bạn là giảng viên?
+            Bạn muốn trở thành giảng viên?
           </h2>
           <p className="text-xl text-blue-100 mb-8">
-            Tham gia cùng chúng tôi để chia sẻ kiến thức và kiếm thu nhập từ việc giảng dạy
+            Liên hệ với admin để được cấp quyền giảng viên và tham gia cùng chúng tôi chia sẻ kiến thức
           </p>
           <Link
-            href="/become-instructor"
+            href="/contact"
             className="inline-flex items-center px-8 py-4 bg-white text-blue-600 font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-lg"
           >
-            Trở thành giảng viên
+            Liên hệ Admin
             <ArrowRightIcon className="ml-2 h-5 w-5" />
           </Link>
         </div>

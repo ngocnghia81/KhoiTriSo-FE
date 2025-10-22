@@ -4,7 +4,9 @@
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useClientOnly } from "@/hooks/useClientOnly";
+import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
+import { useLanguage } from "@/contexts/LanguageContext";
 import Image from "next/image";
 import {
     Bars3Icon,
@@ -14,8 +16,11 @@ import {
     BookOpenIcon,
 } from "@heroicons/react/24/outline";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
+import LanguageSwitcher from "./LanguageSwitcher";
 import Logo from "./Logo";
 import BackdropBlur from "./BackdropBlur";
+import UserMenu from "./UserMenu";
+import { useCategories } from "@/hooks/useCategories";
 
 const navigation = [
     {
@@ -68,20 +73,14 @@ const navigation = [
     },
 ];
 
-const categories = [
-    "Tất cả danh mục",
-    "Toán học",
-    "Vật lý",
-    "Hóa học",
-    "Sinh học",
-    "Văn học",
-    "Tiếng Anh",
-    "Lịch sử",
-];
+// Categories will be loaded from API
 
 export default function Header() {
     const pathname = usePathname();
     const isClient = useClientOnly();
+    const { isAuthenticated } = useAuth();
+    const { language, setLanguage } = useLanguage();
+    const { categories, loading: categoriesLoading } = useCategories(false); // Only active categories
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [cartOpen, setCartOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -90,6 +89,9 @@ export default function Header() {
     const [selectedCategory, setSelectedCategory] = useState("Tất cả danh mục");
     const [searchQuery, setSearchQuery] = useState("");
     const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Create categories list with "All categories" option
+    const categoryOptions = ["Tất cả danh mục", ...categories.map(cat => cat.name)];
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -173,30 +175,36 @@ export default function Header() {
                                         <div className="absolute left-0 top-full z-[100] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl ring-1 ring-gray-900/5 animate-in fade-in-0 zoom-in-95 duration-200"
                                              style={{ minHeight: '200px' }}>
                                             <div className="py-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                                                {categories.map((category, index) => (
-                                                    <button
-                                                        key={category}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedCategory(category);
-                                                            setCategoryDropdownOpen(false);
-                                                        }}
-                                                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 hover:pl-5 active:bg-blue-100 ${
-                                                            selectedCategory === category 
-                                                                ? 'bg-blue-50 text-blue-600 font-semibold border-r-2 border-blue-600' 
-                                                                : 'text-gray-700 hover:font-medium'
-                                                        } ${index === 0 ? 'rounded-t-lg' : ''} ${index === categories.length - 1 ? 'rounded-b-lg' : ''}`}
-                                                    >
-                                                        <span className="flex items-center justify-between">
-                                                            {category}
-                                                            {selectedCategory === category && (
-                                                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                                </svg>
-                                                            )}
-                                                        </span>
-                                                    </button>
-                                                ))}
+                                                {categoriesLoading ? (
+                                                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                                                        Đang tải danh mục...
+                                                    </div>
+                                                ) : (
+                                                    categoryOptions.map((category, index) => (
+                                                        <button
+                                                            key={category}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedCategory(category);
+                                                                setCategoryDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-3 text-sm font-medium transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 hover:pl-5 active:bg-blue-100 ${
+                                                                selectedCategory === category 
+                                                                    ? 'bg-blue-50 text-blue-600 font-semibold border-r-2 border-blue-600' 
+                                                                    : 'text-gray-700 hover:font-medium'
+                                                            } ${index === 0 ? 'rounded-t-lg' : ''} ${index === categoryOptions.length - 1 ? 'rounded-b-lg' : ''}`}
+                                                        >
+                                                            <span className="flex items-center justify-between">
+                                                                {category}
+                                                                {selectedCategory === category && (
+                                                                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                )}
+                                                            </span>
+                                                        </button>
+                                                    ))
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -285,15 +293,23 @@ export default function Header() {
                                 </a>
                             </div>
 
+                            {/* Language Selector - custom dropdown */}
+                            <LanguageSwitcher />
+
                             {/* Auth Buttons */}
                             <div className="flex items-center space-x-3">
-                    
-                                <Link
-                                    href="/auth/login"
-                                    className="px-6 py-2 bg-gray-800 text-white font-semibold rounded-full hover:bg-gray-700 transition-all duration-300 hover:shadow-lg transform hover:scale-105"
-                                >
-                                    Đăng nhập
-                                </Link>
+                                {isAuthenticated ? (
+                                    <UserMenu />
+                                ) : (
+                                    <>
+                                        <Link
+                                            href="/auth/login"
+                                            className="px-6 py-2 bg-gray-800 text-white font-semibold rounded-full hover:bg-gray-700 transition-all duration-300 hover:shadow-lg transform hover:scale-105"
+                                        >
+                                            Đăng nhập
+                                        </Link>
+                                    </>
+                                )}
                             </div>
 
                             {/* Mobile Menu Button */}

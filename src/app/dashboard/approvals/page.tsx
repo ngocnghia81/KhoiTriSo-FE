@@ -17,7 +17,7 @@ import {
 
 export const metadata: Metadata = {
   title: 'Phê duyệt nội dung - Admin Dashboard',
-  description: 'Phê duyệt khóa học, sách điện tử và đăng ký giảng viên',
+  description: 'Phê duyệt khóa học và sách điện tử',
 };
 
 // Mock data for pending approvals
@@ -132,7 +132,7 @@ export default function ApprovalsPage() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">Phê duyệt nội dung</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Xem xét và phê duyệt đăng ký giảng viên, khóa học và sách điện tử
+            Xem xét và phê duyệt khóa học và sách điện tử
           </p>
         </div>
       </div>
@@ -156,22 +156,6 @@ export default function ApprovalsPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden shadow-sm rounded-lg p-4 border border-blue-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                <UserIcon className="h-5 w-5 text-white" />
-              </div>
-            </div>
-            <div className="ml-4">
-              <dl>
-                <dt className="text-sm font-medium text-blue-700">Giảng viên</dt>
-                <dd className="text-2xl font-bold text-blue-900">2</dd>
-                <dd className="text-sm text-blue-600">Đăng ký mới</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
 
         <div className="bg-gradient-to-br from-green-50 to-green-100 overflow-hidden shadow-sm rounded-lg p-4 border border-green-200">
           <div className="flex items-center">
@@ -208,70 +192,6 @@ export default function ApprovalsPage() {
         </div>
       </div>
 
-      {/* Pending Instructors */}
-      <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Đăng ký giảng viên chờ phê duyệt</h3>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {pendingInstructors.map((instructor) => (
-            <div key={instructor.id} className="p-6">
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0">
-                  <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">
-                      {instructor.name.charAt(0)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-lg font-medium text-gray-900">{instructor.name}</h4>
-                    <div className="flex space-x-2">
-                      <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
-                        <CheckCircleIcon className="h-4 w-4 mr-1" />
-                        Phê duyệt
-                      </button>
-                      <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700">
-                        <XCircleIcon className="h-4 w-4 mr-1" />
-                        Từ chối
-                      </button>
-                      <button className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                        <EyeIcon className="h-4 w-4 mr-1" />
-                        Xem chi tiết
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div>
-                      <span className="font-medium">Email:</span> {instructor.email}
-                    </div>
-                    <div>
-                      <span className="font-medium">Chuyên môn:</span> {instructor.specialization}
-                    </div>
-                    <div>
-                      <span className="font-medium">Kinh nghiệm:</span> {instructor.experienceYears} năm
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-sm text-gray-600">Bằng cấp:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {instructor.qualifications.map((qual, index) => (
-                        <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {qual}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Đăng ký: {formatDate(instructor.appliedAt)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Pending Courses */}
       <div className="bg-white shadow-sm rounded-lg border border-gray-200">
