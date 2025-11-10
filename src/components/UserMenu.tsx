@@ -1,11 +1,19 @@
 'use client';
 
-import { Fragment } from 'react';
-import { Menu, Transition } from '@headlessui/react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronDownIcon, ArrowRightOnRectangleIcon, UserCircleIcon, ShoppingCartIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function UserMenu() {
   const { user, logout } = useAuth();
@@ -14,99 +22,58 @@ export default function UserMenu() {
     return null;
   }
 
-  return (
-    <Menu as="div" className="relative inline-block text-left">
-      <div>
-        <Menu.Button className="flex items-center rounded-full bg-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-          <span className="sr-only">Open user menu</span>
-          <Image
-            className="h-10 w-10 rounded-full object-cover"
-            src={user.avatar || '/images/default-avatar.svg'} // Fallback to a default avatar
-            alt={user.name}
-            width={40}
-            height={40}
-          />
-           <span className='font-semibold ml-2 mr-1 text-gray-700'>{user.name}</span>
-          <ChevronDownIcon className="h-5 w-5 text-gray-500 mr-2" aria-hidden="true" />
-        </Menu.Button>
-      </div>
+  const handleLogout = () => {
+    logout();
+  };
 
-      <Transition
-        as={Fragment}
-        enter="transition ease-out duration-100"
-        enterFrom="transform opacity-0 scale-95"
-        enterTo="transform opacity-100 scale-100"
-        leave="transition ease-in duration-75"
-        leaveFrom="transform opacity-100 scale-100"
-        leaveTo="transform opacity-0 scale-95"
-      >
-        <Menu.Items className="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-          <div className="py-1">
-            <Menu.Item>
-              {({ active }) => (
-                <Link
-                  href="/profile/my-courses"
-                  className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} group flex items-center px-4 py-2 text-sm`}
-                >
-                  <ShoppingCartIcon className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" aria-hidden="true" />
-                  Khóa học đã mua
-                </Link>
-              )}
-            </Menu.Item>
-            <Menu.Item>
-              {({ active }) => (
-                <Link
-                  href="/profile/my-assignments"
-                  className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} group flex items-center px-4 py-2 text-sm`}
-                >
-                  <svg className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Bài tập của tôi
-                </Link>
-              )}
-            </Menu.Item>
-            
-            <Menu.Item>
-              {({ active }) => (
-                <Link
-                  href="/profile"
-                  className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} group flex items-center px-4 py-2 text-sm`}
-                >
-                  <UserCircleIcon className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" aria-hidden="true" />
-                  Thông tin tài khoản
-                </Link>
-              )}
-            </Menu.Item>
-            
-            {/* Show "Change Password" only for admin/instructor */}
-            {(user.role === 'admin' || user.role === 'instructor') && (
-              <Menu.Item>
-                {({ active }) => (
-                  <Link
-                    href="/auth/change-password"
-                    className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} group flex items-center px-4 py-2 text-sm`}
-                  >
-                    <LockClosedIcon className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" aria-hidden="true" />
-                    Đổi mật khẩu
-                  </Link>
-                )}
-              </Menu.Item>
-            )}
-            <Menu.Item>
-              {({ active }) => (
-                <button
-                  onClick={logout}
-                  className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} group flex w-full items-center px-4 py-2 text-sm`}
-                >
-                  <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" aria-hidden="true" />
-                  Đăng xuất
-                </button>
-              )}
-            </Menu.Item>
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="flex items-center space-x-2 p-2">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.avatar || '/images/default-avatar.svg'} alt={user.name} />
+            <AvatarFallback className="bg-blue-500 text-white text-sm">
+              {user.name?.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-medium text-gray-700 hidden sm:block">{user.name}</span>
+          <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">{user.name}</p>
+            <p className="text-xs leading-none text-muted-foreground">
+              {user.email}
+            </p>
           </div>
-        </Menu.Items>
-      </Transition>
-    </Menu>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/profile" className="flex items-center">
+            <UserCircleIcon className="mr-2 h-4 w-4" />
+            <span>Hồ sơ cá nhân</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard" className="flex items-center">
+            <LockClosedIcon className="mr-2 h-4 w-4" />
+            <span>Bảng điều khiển</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/cart" className="flex items-center">
+            <ShoppingCartIcon className="mr-2 h-4 w-4" />
+            <span>Giỏ hàng</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
+          <ArrowRightOnRectangleIcon className="mr-2 h-4 w-4" />
+          <span>Đăng xuất</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

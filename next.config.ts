@@ -22,8 +22,36 @@ const nextConfig: NextConfig = {
                 hostname: 'via.placeholder.com',
                 port: '',
                 pathname: '/**',
+            },
+            {
+                protocol: 'https',
+                hostname: 'khoitriso-upload-worker.quang159258.workers.dev',
+                port: '',
+                pathname: '/**',
             }
         ],
+    },
+    async rewrites() {
+        return [
+            {
+                source: '/api/:path*',
+                destination: 'http://localhost:8080/api/:path*',
+            },
+        ];
+    },
+    // Suppress Ant Design compatibility warnings
+    webpack: (config, { isServer }) => {
+        if (!isServer) {
+            config.resolve.fallback = {
+                ...config.resolve.fallback,
+                fs: false,
+            };
+        }
+        return config;
+    },
+    // Suppress React 19 compatibility warnings
+    experimental: {
+        suppressHydrationWarning: true,
     },
 };
 

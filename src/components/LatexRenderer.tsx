@@ -3,16 +3,16 @@
 import { useState, useEffect } from 'react';
 
 interface LatexRendererProps {
-  content: string;
+  content: string | undefined | null;
   className?: string;
 }
 
 export function LatexRenderer({ content, className = '' }: LatexRendererProps) {
-  const [renderedContent, setRenderedContent] = useState(content);
+  const [renderedContent, setRenderedContent] = useState(content || '');
 
   useEffect(() => {
     // Simple LaTeX-like rendering for common math expressions
-    let processed = content;
+    let processed = content || '';
     
     // Handle inline math expressions $...$
     processed = processed.replace(/\$([^$]+)\$/g, (match, formula) => {
@@ -151,3 +151,5 @@ export function LatexEditor({ value, onChange, placeholder, rows = 4, className 
     </div>
   );
 }
+
+

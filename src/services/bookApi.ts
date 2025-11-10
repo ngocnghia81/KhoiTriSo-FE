@@ -1,0 +1,646 @@
+import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage, retryRequest, throttleRequest } from '../utils/apiHelpers';
+
+export interface Book {
+  id: number;
+  title: string;
+  description?: string;
+  authorId: number;
+  authorName?: string;
+  categoryId?: number;
+  categoryName?: string;
+  coverImage?: string;
+  price: number;
+  isFree: boolean;
+  approvalStatus: number;
+  totalQuestions?: number;
+  totalChapters?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BookChapter {
+  id: number;
+  bookId: number;
+  title: string;
+  content?: string;
+  orderIndex: number;
+  isPublished: boolean;
+  createdAt: string;
+}
+
+export interface QuestionOption {
+  Id?: number;
+  id?: number;
+  QuestionId?: number;
+  questionId?: number;
+  OptionText?: string;
+  optionText?: string;
+  IsCorrect?: boolean;
+  isCorrect?: boolean;
+  PointsValue?: number;
+  pointsValue?: number;
+  OrderIndex?: number;
+  orderIndex?: number;
+  CreatedAt?: string;
+  createdAt?: string;
+  UpdatedAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookQuestion {
+  id: number;
+  bookId?: number;
+  chapterId?: number;
+  question?: string;
+  QuestionContent?: string;
+  questionType?: number;
+  QuestionType?: number;
+  options?: QuestionOption[];
+  correctAnswer?: string;
+  explanation?: string;
+  explanationContent?: string;
+  ExplanationContent?: string;
+  videoUrl?: string;
+  VideoUrl?: string;
+  difficulty?: number;
+  DifficultyLevel?: number;
+  orderIndex?: number;
+  OrderIndex?: number;
+}
+
+export interface ActivationCode {
+  id: number;
+  bookId: number;
+  code: string;
+  isUsed: boolean;
+  usedBy?: number;
+  usedAt?: string;
+  createdAt: string;
+}
+
+export interface BookActivationRequest {
+  activationCode: string;
+}
+
+export interface ApiResponse<T> {
+  success?: boolean;
+  Success?: boolean;
+  result?: T;
+  Result?: T;
+  message?: string;
+  Message?: string;
+  error?: any;
+  Error?: any;
+}
+
+class BookApiService {
+  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  
+  private getAuthHeaders() {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    console.log('BookApi - Token:', token ? 'Present' : 'Missing');
+    console.log('BookApi - Token length:', token?.length || 0);
+    
+    if (!token) {
+      console.warn('BookApi - No token found in localStorage');
+      return {};
+    }
+    
+    return {
+      'Authorization': `Bearer ${token}`,
+    };
+  }
+
+  /**
+   * Get books with filters
+   */
+  async getBooks(params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    categoryId?: number;
+    approvalStatus?: number;
+    authorId?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}): Promise<Book[]> {
+    const url = this.buildUrlWithParams('/api/books', params);
+    
+    const cacheKey = `books-${JSON.stringify(params)}`;
+    const response = await throttleRequest(cacheKey, async () => {
+      return await retryRequest(async () => {
+        const authHeaders = this.getAuthHeaders();
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          } as HeadersInit
+        });
+        return res;
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No books data received');
+      }
+      
+      // Handle different response formats
+      // Backend returns: { Items: [...], Total: number, Page: number, PageSize: number }
+      let books = [];
+      if (Array.isArray(extracted)) {
+        books = extracted;
+      } else if (extracted.Items || extracted.items) {
+        books = extracted.Items || extracted.items;
+      } else if (extracted.Result || extracted.result) {
+        books = extracted.Result || extracted.result;
+      }
+      
+      return Array.isArray(books) ? books.map(this.mapBook) : [];
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get books with pagination info
+   */
+  async getBooksWithPagination(params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    categoryId?: number;
+    approvalStatus?: number;
+    authorId?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}): Promise<{ books: Book[]; total: number; page: number; pageSize: number }> {
+    const url = this.buildUrlWithParams('/api/books', params);
+    
+    const cacheKey = `books-paginated-${JSON.stringify(params)}`;
+    const response = await throttleRequest(cacheKey, async () => {
+      return await retryRequest(async () => {
+        const authHeaders = this.getAuthHeaders();
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          } as HeadersInit
+        });
+        return res;
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No books data received');
+      }
+      
+      // Backend returns: { Items: [...], Total: number, Page: number, PageSize: number }
+      let books = [];
+      let total = 0;
+      let page = params.page || 1;
+      let pageSize = params.pageSize || 20;
+      
+      if (Array.isArray(extracted)) {
+        books = extracted;
+        total = extracted.length;
+      } else {
+        books = extracted.Items || extracted.items || extracted.Result || extracted.result || [];
+        total = extracted.Total || extracted.total || extracted.TotalCount || extracted.totalCount || books.length;
+        page = extracted.Page || extracted.page || page;
+        pageSize = extracted.PageSize || extracted.pageSize || pageSize;
+      }
+      
+      return {
+        books: Array.isArray(books) ? books.map(this.mapBook) : [],
+        total,
+        page,
+        pageSize
+      };
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get book details by ID
+   */
+  async getBookById(id: number): Promise<Book> {
+    const response = await throttleRequest(`book-${id}`, async () => {
+      return await retryRequest(async () => {
+        const res = await fetch(`${this.baseUrl}/api/books/${id}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders() as HeadersInit
+        });
+        return res;
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No book data received');
+      }
+      return this.mapBook(extracted);
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get book chapters
+   */
+  async getBookChapters(bookId: number): Promise<BookChapter[]> {
+    console.log(`BookApi - Getting chapters for book ${bookId}`);
+    
+    const { fetchWithAutoRefresh } = await import('../utils/apiHelpers');
+    const { retryRequest } = await import('../utils/apiHelpers');
+    
+    const response = await retryRequest(async () => {
+      return await fetchWithAutoRefresh(`${this.baseUrl}/api/books/${bookId}/chapters`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    console.log('BookApi - Parsed result:', result);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No chapters data received');
+      }
+      
+      // Handle both direct array and Chapters property
+      const chaptersData = extracted.Chapters || extracted.chapters || extracted;
+      const chapters = Array.isArray(chaptersData) ? chaptersData : [];
+      console.log(`BookApi - Found ${chapters.length} chapters`);
+      return chapters.map(this.mapBookChapter);
+    } else {
+      console.error('BookApi - Unsuccessful response:', result);
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get book questions
+   */
+  async getBookQuestions(bookId: number, page: number = 1, pageSize: number = 20): Promise<BookQuestion[]> {
+    debugger;
+    const { fetchWithAutoRefresh } = await import('../utils/apiHelpers');
+    const { retryRequest } = await import('../utils/apiHelpers');
+    
+    const response = await retryRequest(async () => {
+      return await fetchWithAutoRefresh(`${this.baseUrl}/api/books/${bookId}/questions?page=${page}&pageSize=${pageSize}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    console.log('getBookQuestions - Parsed result:', result);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      console.log('getBookQuestions - Extracted:', extracted);
+      
+      if (!extracted) {
+        throw new Error('No questions data received');
+      }
+      
+      // Response structure: { Result: { Items: [...], Total: ... } }
+      // So extracted = Result object, and extracted.Items = questions array
+      const questions = extracted.Items || extracted.items || 
+                       (Array.isArray(extracted) ? extracted : []) || 
+                       extracted.Result || extracted.result || [];
+      
+      console.log('getBookQuestions - Questions array:', questions);
+      console.log('getBookQuestions - Questions count:', Array.isArray(questions) ? questions.length : 0);
+      
+      const mapped = Array.isArray(questions) ? questions.map(this.mapBookQuestion) : [];
+      console.log('getBookQuestions - Mapped questions:', mapped);
+      
+      return mapped;
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get all questions (from all books)
+   */
+  async getAllQuestions(page: number = 1, pageSize: number = 20): Promise<{ questions: BookQuestion[]; total: number }> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/questions?page=${page}&pageSize=${pageSize}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No questions data received');
+      }
+      
+      const questions = extracted.Items || extracted.items || extracted.Result || extracted.result || [];
+      const total = extracted.Total || extracted.total || extracted.TotalCount || extracted.totalCount || questions.length;
+      
+      return {
+        questions: Array.isArray(questions) ? questions.map(this.mapBookQuestion) : [],
+        total
+      };
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Validate activation code
+   */
+  async validateActivationCode(code: string): Promise<{ isValid: boolean; bookId?: number; bookTitle?: string }> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/activation-codes/${code}/validate`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No validation data received');
+      }
+      return {
+        isValid: extracted.isValid || extracted.IsValid || false,
+        bookId: extracted.bookId || extracted.BookId,
+        bookTitle: extracted.bookTitle || extracted.BookTitle
+      };
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Activate book with code
+   */
+  async activateBook(activationCode: string): Promise<{ success: boolean; message: string }> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/activate`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders() as HeadersInit,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ activationCode })
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      return {
+        success: true,
+        message: extractMessage(result)
+      };
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Delete a book
+   */
+  async deleteBook(bookId: number): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/api/books/${bookId}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders() as HeadersInit
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      return {
+        success: true,
+        message: extractMessage(result)
+      };
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get activation codes for a book
+   */
+  async getActivationCodes(bookId: number, page: number = 1, pageSize: number = 20): Promise<any[]> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/${bookId}/activation-codes?page=${page}&pageSize=${pageSize}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No activation codes data received');
+      }
+      
+      const codes = extracted.Items || extracted.items || extracted.Result || extracted.result || [];
+      return Array.isArray(codes) ? codes : [];
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Generate activation codes for a book
+   */
+  async generateActivationCodes(bookId: number, request: any): Promise<any> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/${bookId}/activation-codes/generate`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders() as HeadersInit,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No generation result received');
+      }
+      return extracted;
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Update a book
+   */
+  async updateBook(bookId: number, request: any): Promise<any> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/${bookId}`, {
+        method: 'PUT',
+        headers: {
+          ...this.getAuthHeaders() as HeadersInit,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No update result received');
+      }
+      return extracted;
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get user's activated books
+   */
+  async getMyBooks(page: number = 1, pageSize: number = 20): Promise<Book[]> {
+    const response = await retryRequest(async () => {
+      const res = await fetch(`${this.baseUrl}/api/books/my-books?page=${page}&pageSize=${pageSize}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+      return res;
+    });
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No books data received');
+      }
+      
+      const books = extracted.Items || extracted.items || extracted.Result || extracted.result || [];
+      return Array.isArray(books) ? books.map(this.mapBook) : [];
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Helper methods
+   */
+  private buildUrlWithParams(baseUrl: string, params: Record<string, any>): string {
+    const urlParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        urlParams.append(key, value.toString());
+      }
+    });
+    
+    const queryString = urlParams.toString();
+    return queryString ? `${this.baseUrl}${baseUrl}?${queryString}` : `${this.baseUrl}${baseUrl}`;
+  }
+
+  private mapBook(book: any): Book {
+    return {
+      id: book.id || book.Id,
+      title: book.title || book.Title,
+      description: book.description || book.Description,
+      authorId: book.authorId || book.AuthorId,
+      authorName: book.authorName || book.AuthorName,
+      categoryId: book.categoryId || book.CategoryId,
+      categoryName: book.categoryName || book.CategoryName,
+      coverImage: book.coverImage || book.CoverImage,
+      price: book.price || book.Price || 0,
+      isFree: book.isFree || book.IsFree || false,
+      approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
+      totalQuestions: book.totalQuestions || book.TotalQuestions,
+      totalChapters: book.totalChapters || book.TotalChapters,
+      createdAt: book.createdAt || book.CreatedAt,
+      updatedAt: book.updatedAt || book.UpdatedAt
+    };
+  }
+
+  private mapBookChapter(chapter: any): BookChapter {
+    return {
+      id: chapter.id || chapter.Id,
+      bookId: chapter.bookId || chapter.BookId,
+      title: chapter.title || chapter.Title,
+      content: chapter.content || chapter.Content || chapter.Description || chapter.description,
+      orderIndex: chapter.orderIndex || chapter.OrderIndex || 0,
+      isPublished: chapter.isPublished || chapter.IsPublished || true,
+      createdAt: chapter.createdAt || chapter.CreatedAt
+    };
+  }
+
+  private mapBookQuestion(question: any): BookQuestion {
+    const chapterId = question.chapterId || question.ChapterId;
+    const mapped = {
+      id: question.id || question.Id,
+      bookId: question.bookId || question.BookId || question.ContextId,
+      chapterId: chapterId,
+      question: question.question || question.Question || question.QuestionContent,
+      QuestionContent: question.QuestionContent || question.question || question.Question,
+      questionType: question.questionType || question.QuestionType || 1,
+      QuestionType: question.QuestionType || question.questionType || 1,
+      options: question.options || question.Options || [],
+      correctAnswer: question.correctAnswer || question.CorrectAnswer,
+      explanation: question.explanation || question.Explanation || question.ExplanationContent,
+      explanationContent: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation,
+      ExplanationContent: question.ExplanationContent || question.explanationContent || question.explanation || question.Explanation,
+      videoUrl: question.videoUrl || question.VideoUrl,
+      VideoUrl: question.VideoUrl || question.videoUrl,
+      difficulty: question.difficulty || question.Difficulty || question.DifficultyLevel || 1,
+      DifficultyLevel: question.DifficultyLevel || question.difficulty || question.Difficulty || 1,
+      orderIndex: question.orderIndex || question.OrderIndex || 0,
+      OrderIndex: question.OrderIndex || question.orderIndex || 0
+    };
+    console.log('mapBookQuestion:', { 
+      originalChapterId: question.ChapterId || question.chapterId,
+      mappedChapterId: mapped.chapterId,
+      questionId: mapped.id
+    });
+    return mapped;
+  }
+}
+
+export const bookApiService = new BookApiService();

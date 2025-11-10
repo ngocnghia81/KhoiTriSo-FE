@@ -69,6 +69,24 @@ export const API_CONFIG = {
       SETTING_BY_KEY: (key: string) => `/system/settings/${key}`,
       HEALTH: '/system/health',
       STATS: '/system/stats',
+    },
+    UPLOAD: {
+      PRESIGN: '/upload/presign',
+    },
+    COURSE_TEST: {
+      IMPORT_ASSIGNMENT: (lessonId: number | string) => `/course-test/import-assignment/${lessonId}`,
+    },
+    ASSIGNMENTS: {
+      BASE: '/assignments',
+      BY_ID_BASE: '/assignments',
+      IMPORT_WORD: '/assignments/import-word',
+      VALIDATE_WORD: '/assignments/validate-word',
+      TEMPLATES: '/assignments/templates',
+      QUESTIONS: (id: number | string) => `/assignments/${id}/questions`,
+      SUBMISSIONS: (id: number | string) => `/assignments/${id}/submissions`,
+      SUBMIT: (id: number | string) => `/assignments/${id}/submit`,
+      RESULTS: (id: number | string) => `/assignments/${id}/results`,
+      GRADE: (id: number | string) => `/assignments/${id}/grade`,
     }
   }
 };
@@ -128,6 +146,20 @@ export const API_URLS = {
   SYSTEM_SETTING_BY_KEY: (key: string) => buildApiUrl(API_CONFIG.ENDPOINTS.SYSTEM.SETTING_BY_KEY(key)),
   SYSTEM_HEALTH: buildApiUrl(API_CONFIG.ENDPOINTS.SYSTEM.HEALTH),
   SYSTEM_STATS: buildApiUrl(API_CONFIG.ENDPOINTS.SYSTEM.STATS),
+  // upload
+  UPLOAD_PRESIGN: buildApiUrl(API_CONFIG.ENDPOINTS.UPLOAD.PRESIGN),
+  COURSE_TEST_IMPORT_ASSIGNMENT: (lessonId: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.COURSE_TEST.IMPORT_ASSIGNMENT(lessonId)),
+  // assignments
+  ASSIGNMENTS_BASE: buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.BASE),
+  ASSIGNMENTS_BY_ID_BASE: buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.BY_ID_BASE),
+  ASSIGNMENTS_IMPORT_WORD: buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.IMPORT_WORD),
+  ASSIGNMENTS_VALIDATE_WORD: buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.VALIDATE_WORD),
+  ASSIGNMENTS_TEMPLATES: buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.TEMPLATES),
+  ASSIGNMENTS_QUESTIONS: (id: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.QUESTIONS(id)),
+  ASSIGNMENTS_SUBMISSIONS: (id: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.SUBMISSIONS(id)),
+  ASSIGNMENTS_SUBMIT: (id: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.SUBMIT(id)),
+  ASSIGNMENTS_RESULTS: (id: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.RESULTS(id)),
+  ASSIGNMENTS_GRADE: (id: number | string) => buildApiUrl(API_CONFIG.ENDPOINTS.ASSIGNMENTS.GRADE(id)),
 };
 
 export const buildUserByIdUrl = (id: number | string): string => {

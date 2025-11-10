@@ -5,6 +5,21 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('authToken')?.value;
   const refreshToken = request.cookies.get('refreshToken')?.value;
   const language = request.cookies.get('lang')?.value || 'vi';
+  const { pathname } = request.nextUrl;
+
+  // Redirect unauthenticated users trying to access dashboard routes
+  const isDashboardRoute = pathname.startsWith('/dashboard');
+  const isAuthRoute = pathname.startsWith('/auth');
+  const isPublicAsset = pathname.startsWith('/_next') || pathname === '/favicon.ico';
+  const isApiRoute = pathname.startsWith('/api');
+
+  if (!token && isDashboardRoute && !isAuthRoute && !isPublicAsset && !isApiRoute) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = '/auth/login';
+    loginUrl.search = '';
+    loginUrl.searchParams.set('redirect', pathname + request.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
+  }
   
   // Debug logging
   if (request.nextUrl.pathname.includes('/api/auth/admin/change-password')) {

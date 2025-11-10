@@ -150,6 +150,7 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
           QuestionType: question.questionType,
           DifficultyLevel: question.difficultyLevel,
           DefaultPoints: question.defaultPoints,
+          Points: [question.defaultPoints], // Add Points as required
           ExplanationContent: question.explanationContent,
           QuestionImage: '',
           VideoUrl: '',
@@ -477,7 +478,7 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
                           <div key={optIndex} className={`text-sm p-2 rounded ${
                             option.isCorrect ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-700'
                           }`}>
-                            {String.fromCharCode(65 + optIndex)}. <LatexRenderer content={option.optionText} />
+                            {String.fromCharCode(65 + optIndex)}. <LatexRenderer content={option.optionText || ''} />
                             {option.isCorrect && <span className="ml-2 text-green-600">✓</span>}
                           </div>
                         ))}
@@ -486,7 +487,7 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
                     
                     {question.explanationContent && (
                       <div className="mt-3 p-2 bg-gray-50 rounded text-sm text-gray-600">
-                        <strong>Giải thích:</strong> <LatexRenderer content={question.explanationContent} />
+                        <strong>Giải thích:</strong> <LatexRenderer content={question.explanationContent || ''} />
                       </div>
                     )}
                   </div>

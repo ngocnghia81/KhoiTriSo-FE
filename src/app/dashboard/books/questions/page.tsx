@@ -2,383 +2,671 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import {
-  QuestionMarkCircleIcon,
-  ArrowLeftIcon,
-  MagnifyingGlassIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  UserIcon,
-  CalendarIcon,
-  DocumentDuplicateIcon,
-  EyeIcon,
-  PlusIcon,
-} from '@heroicons/react/24/outline';
-import { useBooks, useBookQuestions } from '@/hooks/useBooks';
+  BookOpen,
+  Search,
+  Filter,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  FileQuestion,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  ArrowLeft
+} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { bookApiService, BookQuestion, Book, BookChapter } from '@/services/bookApi';
 
-export default function AllBookQuestionsPage() {
+const questionTypeLabels: Record<number, string> = {
+  1: 'Trắc nghiệm',
+  2: 'Đúng/Sai',
+  3: 'Tự luận',
+  4: 'Điền khuyết'
+};
+
+const difficultyConfig: Record<number, { label: string; color: string }> = {
+  1: { label: 'Dễ', color: 'bg-green-100 text-green-700' },
+  2: { label: 'Trung bình', color: 'bg-yellow-100 text-yellow-700' },
+  3: { label: 'Khó', color: 'bg-red-100 text-red-700' }
+};
+
+export default function QuestionsPage() {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [chapters, setChapters] = useState<BookChapter[]>([]);
+  const [questions, setQuestions] = useState<BookQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [bookSearchQuery, setBookSearchQuery] = useState('');
+  const [chapterSearchQuery, setChapterSearchQuery] = useState('');
+  const [selectedBookId, setSelectedBookId] = useState<string>('');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
+  const [totalQuestions, setTotalQuestions] = useState(0);
 
-  // Fetch all books for selection
-  const { data: booksData, loading: booksLoading } = useBooks({
-    page: 1,
-    pageSize: 100,
-    search: '',
-    categoryId: undefined,
-    approvalStatus: undefined,
-    authorId: undefined,
-    sortBy: 'title',
-    sortOrder: 'asc'
+  useEffect(() => {
+    fetchBooks();
+  }, []);
+
+  useEffect(() => {
+    if (selectedBookId) {
+      fetchChapters();
+    }
+  }, [selectedBookId]);
+
+  useEffect(() => {
+    if (selectedChapterId) {
+      fetchQuestions();
+    }
+  }, [currentPage, selectedChapterId]);
+
+  const fetchBooks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const booksData = await bookApiService.getBooks({ page: 1, pageSize: 100 });
+      setBooks(booksData);
+    } catch (err: any) {
+      console.error('Error fetching books:', err);
+      setError(err.message || 'Không thể tải danh sách sách');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchChapters = async () => {
+    if (!selectedBookId) return;
+    
+    try {
+      setLoadingChapters(true);
+      setError(null);
+      
+      const bookId = parseInt(selectedBookId);
+      const chaptersData = await bookApiService.getBookChapters(bookId);
+      setChapters(chaptersData);
+      
+    } catch (err: any) {
+      console.error('Error fetching chapters:', err);
+      setError(err.message || 'Không thể tải danh sách chương');
+    } finally {
+      setLoadingChapters(false);
+    }
+  };
+
+  const fetchQuestions = async () => {
+    if (!selectedChapterId) return;
+    
+    try {
+      setLoadingQuestions(true);
+      setError(null);
+      
+      const bookId = parseInt(selectedBookId);
+      const chapterId = parseInt(selectedChapterId);
+      const allQuestions = await bookApiService.getBookQuestions(bookId, 1, 1000);
+      
+      // Filter questions by chapter
+      const filteredQuestions = allQuestions.filter(q => q.chapterId === chapterId);
+      
+      // If no questions found for chapter, show all book questions as fallback
+      if (filteredQuestions.length === 0) {
+        console.warn('No questions found for chapter, showing all book questions');
+        setQuestions(allQuestions);
+        setTotalQuestions(allQuestions.length);
+      } else {
+        setQuestions(filteredQuestions);
+        setTotalQuestions(filteredQuestions.length);
+      }
+      
+    } catch (err: any) {
+      console.error('Error fetching questions:', err);
+      setError(err.message || 'Không thể tải danh sách câu hỏi');
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  const handleDelete = async (questionId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) return;
+    
+    try {
+      // Add delete API call here
+      alert('Chức năng xóa sẽ được triển khai sau');
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      alert('Không thể xóa câu hỏi!');
+    }
+  };
+
+  const filteredQuestions = questions.filter(q => {
+    const matchesSearch = searchQuery === '' || 
+      q.question.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = selectedType === 'all' || q.questionType.toString() === selectedType;
+    const matchesDifficulty = selectedDifficulty === 'all' || q.difficulty.toString() === selectedDifficulty;
+    
+    return matchesSearch && matchesType && matchesDifficulty;
   });
 
-  // Fetch questions for selected book
-  const { data: questionsData, loading: questionsLoading, error } = useBookQuestions(
-    selectedBookId || 0, 
-    page, 
-    pageSize
-  );
+  const totalPages = Math.ceil(totalQuestions / pageSize);
 
-  const books = booksData?.items || [];
-  const questions = questionsData?.items || [];
-  const totalQuestions = questionsData?.total || 0;
-
-  const filteredBooks = books.filter(book =>
-    book.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  const exportQuestions = () => {
-    if (!questions.length) return;
-    
-    const csvContent = [
-      'Câu hỏi,Loại câu hỏi,Độ khó,Ngày tạo',
-      ...questions.map(question => [
-        question.questionText,
-        question.questionType === 1 ? 'Trắc nghiệm' : 'Tự luận',
-        question.difficultyLevel === 0 ? 'Dễ' : question.difficultyLevel === 1 ? 'Trung bình' : 'Khó',
-        new Date(question.createdAt).toLocaleDateString('vi-VN')
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `questions-book-${selectedBookId}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-20 -left-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl"
+          animate={{ y: [0, -50, 0], x: [0, 30, 0] }}
+          transition={{ duration: 20, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute bottom-20 -right-20 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl"
+          animate={{ y: [0, 50, 0], x: [0, -30, 0] }}
+          transition={{ duration: 25, repeat: Infinity }}
+        />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <Button
+            onClick={() => router.push('/dashboard/books')}
+            variant="ghost"
+            className="mb-4"
           >
-            <ArrowLeftIcon className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Quản lý câu hỏi</h1>
-            <p className="text-sm text-gray-600">Xem và quản lý câu hỏi của tất cả sách</p>
-          </div>
-        </div>
-        {selectedBookId && questions.length > 0 && (
-          <div className="flex space-x-3">
-            <button
-              onClick={exportQuestions}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <DocumentDuplicateIcon className="h-4 w-4 mr-2" />
-              Xuất CSV
-            </button>
-            <button
-              onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions`)}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Thêm câu hỏi
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Book Selection */}
-      <div className="bg-white shadow-lg rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Chọn sách</h3>
-        
-        <div className="mb-4">
-          <div className="relative">
-            <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm sách..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Quay lại danh sách sách
+          </Button>
+          
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
+            <FileQuestion className="w-10 h-10 text-blue-600" />
+            Quản lý Câu hỏi
+          </h1>
+          <p className="text-gray-600 mt-2">Chọn sách để xem và quản lý câu hỏi</p>
         </div>
 
-        {booksLoading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredBooks.map((book) => (
-              <div
-                key={book.id}
-                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                  selectedBookId === book.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => {
-                  console.log('BookQuestionsPage: Selecting book with ID:', book.id);
-                  setSelectedBookId(book.id);
-                  setPage(1);
-                }}
-              >
-                <div className="flex items-center space-x-3">
-                  {book.coverImage ? (
-                    <img
-                      src={book.coverImage}
-                      alt={book.title}
-                      className="w-12 h-16 object-cover rounded"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        (e.currentTarget.nextElementSibling as HTMLElement)?.style.setProperty('display', 'flex');
-                      }}
-                    />
-                  ) : null}
-                  <div className="w-12 h-16 bg-gray-200 rounded flex items-center justify-center" style={{ display: book.coverImage ? 'none' : 'flex' }}>
-                    <QuestionMarkCircleIcon className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">
-                      {book.title}
-                    </h4>
-                    <p className="text-xs text-gray-500 truncate">
-                      {book.author?.fullName || 'Không có tác giả'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      ID: {book.id}
-                    </p>
-                  </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-md">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Tổng câu hỏi</p>
+                  <p className="text-2xl font-bold text-blue-600">{totalQuestions}</p>
                 </div>
+                <FileQuestion className="w-8 h-8 text-blue-600" />
               </div>
-            ))}
-          </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-md">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Dễ</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {questions.filter(q => q.difficulty === 1).length}
+                  </p>
+                </div>
+                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-md">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Trung bình</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {questions.filter(q => q.difficulty === 2).length}
+                  </p>
+                </div>
+                <AlertCircle className="w-8 h-8 text-yellow-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-md">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Khó</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {questions.filter(q => q.difficulty === 3).length}
+                  </p>
+                </div>
+                <XCircle className="w-8 h-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Book Selection */}
+        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              Chọn Sách
+            </CardTitle>
+            <CardDescription>Tìm kiếm và chọn sách để xem câu hỏi</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Search Input for Books */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Tìm kiếm sách theo tên..."
+                value={bookSearchQuery}
+                onChange={(e) => setBookSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Books Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1">
+              {books
+                .filter(book => 
+                  bookSearchQuery === '' || 
+                  book.title.toLowerCase().includes(bookSearchQuery.toLowerCase()) ||
+                  book.id.toString().includes(bookSearchQuery)
+                )
+                .slice(0, 50)
+                .map((book) => (
+                  <button
+                    key={book.id}
+                    onClick={() => setSelectedBookId(book.id.toString())}
+                    className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
+                      selectedBookId === book.id.toString()
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{book.title}</p>
+                        <p className="text-xs text-gray-500 mt-1">ID: {book.id}</p>
+                        {book.totalQuestions !== undefined && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            {book.totalQuestions} câu hỏi
+                          </p>
+                        )}
+                      </div>
+                      {selectedBookId === book.id.toString() && (
+                        <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+            </div>
+
+            {books.filter(book => 
+              bookSearchQuery === '' || 
+              book.title.toLowerCase().includes(bookSearchQuery.toLowerCase()) ||
+              book.id.toString().includes(bookSearchQuery)
+            ).length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">Không tìm thấy sách nào</p>
+              </div>
+            )}
+
+            {selectedBookId && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900">
+                    Đã chọn: {books.find(b => b.id.toString() === selectedBookId)?.title}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedBookId('')}
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Chapter Selection - Only show when book is selected */}
+        {selectedBookId && (
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Chọn Chương
+              </CardTitle>
+              <CardDescription>Chọn chương để xem câu hỏi</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Search Input for Chapters */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Tìm kiếm chương..."
+                  value={chapterSearchQuery}
+                  onChange={(e) => setChapterSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              {loadingChapters ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">Đang tải chương...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Chapters List */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-80 overflow-y-auto p-1">
+                    {chapters
+                      .filter(ch => 
+                        chapterSearchQuery === '' || 
+                        ch.title.toLowerCase().includes(chapterSearchQuery.toLowerCase()) ||
+                        ch.id.toString().includes(chapterSearchQuery)
+                      )
+                      .map((chapter) => (
+                        <button
+                          key={chapter.id}
+                          onClick={() => setSelectedChapterId(chapter.id.toString())}
+                          className={`p-3 rounded-lg border-2 text-left transition-all hover:shadow-md ${
+                            selectedChapterId === chapter.id.toString()
+                              ? 'border-purple-500 bg-purple-50'
+                              : 'border-gray-200 hover:border-purple-300'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{chapter.title}</p>
+                              <p className="text-xs text-gray-500 mt-1">Chương {chapter.orderIndex}</p>
+                            </div>
+                            {selectedChapterId === chapter.id.toString() && (
+                              <CheckCircle2 className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+
+                  {chapters.filter(ch => 
+                    chapterSearchQuery === '' || 
+                    ch.title.toLowerCase().includes(chapterSearchQuery.toLowerCase()) ||
+                    ch.id.toString().includes(chapterSearchQuery)
+                  ).length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">Không tìm thấy chương nào</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {selectedChapterId && (
+                <div className="flex items-center gap-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-purple-900">
+                      Đã chọn: {chapters.find(ch => ch.id.toString() === selectedChapterId)?.title}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedChapterId('')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
-      </div>
 
-      {/* Questions */}
-      {selectedBookId && (
-        <div className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <QuestionMarkCircleIcon className="h-6 w-6 text-blue-600" />
-                  </div>
+        {/* Filters & Actions - Only show when chapter is selected */}
+        {selectedChapterId && (
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+            <CardHeader>
+              <CardTitle>Bộ lọc & Tìm kiếm</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Tìm kiếm câu hỏi..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-                <div className="ml-4">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500">Tổng câu hỏi</dt>
-                    <dd className="text-2xl font-bold text-gray-900">{totalQuestions}</dd>
-                  </dl>
-                </div>
+
+                {/* Question Type Filter */}
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Loại câu hỏi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả loại</SelectItem>
+                    <SelectItem value="1">Trắc nghiệm</SelectItem>
+                    <SelectItem value="2">Đúng/Sai</SelectItem>
+                    <SelectItem value="3">Tự luận</SelectItem>
+                    <SelectItem value="4">Điền khuyết</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Difficulty Filter */}
+                <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Độ khó" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả độ khó</SelectItem>
+                    <SelectItem value="1">Dễ</SelectItem>
+                    <SelectItem value="2">Trung bình</SelectItem>
+                    <SelectItem value="3">Khó</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Add Button */}
+                <Button
+                  onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions/create`)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm câu hỏi
+                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        )}
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                    <CheckCircleIcon className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-                <div className="ml-4">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500">Câu hỏi đã duyệt</dt>
-                    <dd className="text-2xl font-bold text-gray-900">
-                      {questions.filter(q => q.isActive).length}
-                    </dd>
-                  </dl>
-                </div>
+        {/* Questions Table */}
+        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md">
+          <CardHeader>
+            <CardTitle>Danh sách Câu hỏi</CardTitle>
+            <CardDescription>
+              Hiển thị {filteredQuestions.length} câu hỏi
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!selectedBookId ? (
+              <div className="text-center py-12">
+                <BookOpen className="w-12 h-12 text-blue-400 mx-auto mb-4" />
+                <p className="text-gray-600 mb-2 font-medium">Vui lòng chọn một cuốn sách</p>
+                <p className="text-sm text-gray-500">
+                  Chọn sách từ dropdown bên trên để xem danh sách câu hỏi
+                </p>
               </div>
-            </div>
-          </div>
-
-          {/* Questions Table */}
-          <div className="bg-white shadow-lg rounded-xl">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Danh sách câu hỏi</h3>
-            </div>
-            
-            {questionsLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            ) : loadingQuestions ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Đang tải câu hỏi...</p>
               </div>
             ) : error ? (
-              <div className="p-6 text-center text-red-600">{error}</div>
-            ) : questions.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
-                Không có câu hỏi nào cho sách này
+              <div className="text-center py-12">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <p className="text-red-600">{error}</p>
+                <Button onClick={fetchQuestions} className="mt-4">
+                  Thử lại
+                </Button>
+              </div>
+            ) : filteredQuestions.length === 0 ? (
+              <div className="text-center py-12">
+                <FileQuestion className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 mb-2">Chưa có câu hỏi nào</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  Sách này chưa có câu hỏi. Hãy thêm câu hỏi mới!
+                </p>
+                <Button
+                  onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions/create`)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm câu hỏi đầu tiên
+                </Button>
               </div>
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Câu hỏi
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Loại
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Độ khó
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Lựa chọn
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Trạng thái
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Ngày tạo
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Thao tác
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {questions.map((question) => (
-                        <tr key={question.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 max-w-xs">
-                              <div className="font-medium">{question.questionText}</div>
-                              {question.explanationContent && (
-                                <div className="text-xs text-gray-500 mt-1 truncate">
-                                  {question.explanationContent}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-900">
-                              {question.questionType === 0 ? 'Trắc nghiệm' : 
-                               question.questionType === 1 ? 'Tự luận' : 'Khác'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              question.difficultyLevel === 0 ? 'bg-green-100 text-green-800' :
-                              question.difficultyLevel === 1 ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {question.difficultyLevel === 0 ? 'Dễ' :
-                               question.difficultyLevel === 1 ? 'Trung bình' : 'Khó'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-900">
-                              {question.questionType === 1 ? `${question.options?.length || 0} lựa chọn` : 'Tự luận'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              question.isActive
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {question.isActive ? (
-                                <>
-                                  <CheckCircleIcon className="h-3 w-3 mr-1" />
-                                  Hoạt động
-                                </>
-                              ) : (
-                                <>
-                                  <ClockIcon className="h-3 w-3 mr-1" />
-                                  Tạm dừng
-                                </>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
-                              <span className="text-sm text-gray-900">
-                                {new Date(question.createdAt).toLocaleDateString('vi-VN')}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions`)}
-                                className="text-blue-600 hover:text-blue-900 transition-colors"
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">ID</TableHead>
+                        <TableHead>Câu hỏi</TableHead>
+                        <TableHead>Loại</TableHead>
+                        <TableHead>Độ khó</TableHead>
+                        <TableHead>Sách</TableHead>
+                        <TableHead className="text-right">Thao tác</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredQuestions.map((question) => (
+                        <TableRow key={question.id}>
+                          <TableCell className="font-medium">#{question.id}</TableCell>
+                          <TableCell className="max-w-md">
+                            <p className="truncate">{question.question}</p>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {questionTypeLabels[question.questionType] || 'Không xác định'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={difficultyConfig[question.difficulty]?.color || 'bg-gray-100 text-gray-700'}>
+                              {difficultyConfig[question.difficulty]?.label || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-gray-600">Book #{question.bookId}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions/${question.id}`)}
                               >
-                                Xem chi tiết
-                              </button>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.push(`/dashboard/books/${selectedBookId}/questions/${question.id}/edit`)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDelete(question.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
 
                 {/* Pagination */}
-                {totalQuestions > 0 && (
-                  <div className="px-6 py-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Hiển thị <span className="font-medium">{(page - 1) * pageSize + 1}</span> đến{' '}
-                          <span className="font-medium">{Math.min(page * pageSize, totalQuestions)}</span> trong{' '}
-                          <span className="font-medium">{totalQuestions}</span> kết quả
-                        </p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => setPage(page - 1)}
-                          disabled={page <= 1}
-                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Trước
-                        </button>
-                        <button
-                          onClick={() => setPage(page + 1)}
-                          disabled={page >= Math.ceil(totalQuestions / pageSize)}
-                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Sau
-                        </button>
-                      </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6">
+                    <p className="text-sm text-gray-600">
+                      Trang {currentPage} / {totalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 )}
               </>
             )}
-          </div>
-        </div>
-      )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import Header from './Header';
+import HeaderModern from './HeaderModern';
 import Footer from './Footer';
 
 interface ConditionalLayoutProps {
@@ -12,7 +12,7 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
   const pathname = usePathname();
   
   // Don't show header/footer on dashboard pages
-  const isDashboard = pathname.startsWith('/dashboard');
+  const isDashboard = pathname?.startsWith('/dashboard') || pathname?.startsWith('/instructor');
   
   if (isDashboard) {
     return <>{children}</>;
@@ -20,8 +20,10 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
   
   return (
     <>
-      <Header />
-      {children}
+      <HeaderModern />
+      <main className="pt-20">
+        {children}
+      </main>
       <Footer />
     </>
   );

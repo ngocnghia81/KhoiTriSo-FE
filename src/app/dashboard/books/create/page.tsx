@@ -2,314 +2,404 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { motion } from 'framer-motion';
 import {
-  BookOpenIcon,
-  ArrowLeftIcon,
-  PhotoIcon,
-  DocumentTextIcon,
-  CurrencyDollarIcon,
-  TagIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
-import { useCreateBook, generateISBN } from '@/hooks/useBooks';
-import { useCategories } from '@/hooks/useCategories';
-import { CreateBookRequest } from '@/types/book';
+  BookOpen,
+  ArrowLeft,
+  Save,
+  Upload,
+  Image as ImageIcon,
+  DollarSign
+} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { FileUpload } from '@/components/FileUpload';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { useUpdateBook } from '@/hooks/useBooks';
 
-const createBookSchema = z.object({
-  title: z.string().min(1, 'Tiêu đề sách là bắt buộc').max(200, 'Tiêu đề không được quá 200 ký tự'),
-  description: z.string().min(1, 'Mô tả sách là bắt buộc').max(2000, 'Mô tả không được quá 2000 ký tự'),
-  price: z.number().min(0, 'Giá sách phải lớn hơn hoặc bằng 0'),
-  categoryId: z.number().min(1, 'Vui lòng chọn danh mục'),
-});
-
-type CreateBookFormData = z.infer<typeof createBookSchema>;
+interface CreateBookForm {
+  title: string;
+  description: string;
+  coverImage: string;
+  price: string;
+  categoryId: string;
+  language: string;
+  publicationYear: string;
+  edition: string;
+}
 
 export default function CreateBookPage() {
   const router = useRouter();
-  const { createBook, loading, error } = useCreateBook();
-  const { categories, loading: categoriesLoading } = useCategories();
-  const [coverImage, setCoverImage] = useState<string>('');
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    watch,
-  } = useForm<CreateBookFormData>({
-    resolver: zodResolver(createBookSchema),
-    defaultValues: {
-      title: '',
-      description: '',
-      price: 0,
-      categoryId: 0,
-    },
+  const [loading, setLoading] = useState(false);
+  const [createdBookId, setCreatedBookId] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const { updateBook } = useUpdateBook();
+  const [formData, setFormData] = useState<CreateBookForm>({
+    title: '',
+    description: '',
+    coverImage: '',
+    price: '',
+    categoryId: '0',
+    language: 'vi',
+    publicationYear: new Date().getFullYear().toString(),
+    edition: '1'
   });
 
-  const onSubmit = async (data: CreateBookFormData) => {
-    // Generate ISBN from title and description
-    const generatedISBN = generateISBN(data.title, data.description);
+  const handleChange = (field: keyof CreateBookForm, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    const request: CreateBookRequest = {
-      title: data.title,
-      description: data.description,
-      isbn: generatedISBN,
-      price: data.price,
-      categoryId: data.categoryId,
-      coverImage: coverImage || undefined,
-    };
-
-    const result = await createBook(request);
-    if (result) {
-      router.push('/dashboard/books');
+    // Step 1 validation: only minimal required fields before upload
+    if (!formData.title || !formData.description || !formData.price) {
+      alert('Vui lòng nhập Tiêu đề, Mô tả và Giá trước.');
+      return;
     }
-  };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setCoverImage(e.target?.result as string);
+    try {
+      setLoading(true);
+      setCreating(true);
+      
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (!token) {
+        alert('Vui lòng đăng nhập!');
+        router.push('/auth/login');
+        return;
+      }
+
+      // Backend will auto-generate ISBN and StaticPagePath if not provided
+      const requestBody: any = {
+        title: formData.title,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        // Include file URLs if already uploaded
+        coverImage: formData.coverImage || null,
+        categoryId: formData.categoryId && formData.categoryId !== '0' ? parseInt(formData.categoryId) : null,
+        language: formData.language || null,
+        publicationYear: formData.publicationYear ? parseInt(formData.publicationYear) : null,
+        edition: formData.edition || null
       };
-      reader.readAsDataURL(file);
+      
+      // Only include optional fields if they have values
+      // ISBN, StaticPagePath, and EbookFile will be auto-generated by backend
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/books`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const result = await response.json();
+
+      if (response.ok && (result.success || result.Success)) {
+        // Try to extract created book id from flexible response shapes
+        const data = result.result || result.Result || result.data || result.Data || {};
+        const newBookId: number | null = data?.id || data?.Id || null;
+        setCreatedBookId(newBookId);
+        
+        // If cover image was uploaded before creating book, update it now
+        if (newBookId && formData.coverImage) {
+          try {
+            await updateBook(newBookId, { coverImage: formData.coverImage });
+          } catch (e) {
+            console.warn('Failed to update cover image:', e);
+          }
+        }
+        
+        // Auto redirect to book detail page
+        if (newBookId) {
+          // Small delay to ensure state updates are processed
+          setTimeout(() => {
+            router.push(`/dashboard/books/${newBookId}`);
+          }, 100);
+        } else {
+          alert('Tạo sách thành công!');
+        }
+      } else {
+        throw new Error(result.message || result.Message || 'Không thể tạo sách');
+      }
+    } catch (err: any) {
+      console.error('Error creating book:', err);
+      alert(err.message || 'Có lỗi xảy ra khi tạo sách');
+    } finally {
+      setCreating(false);
+      setLoading(false);
     }
   };
+
+  const handleCoverUploaded = async (url: string) => {
+    handleChange('coverImage', url);
+    if (!createdBookId) return;
+    try {
+      setUploadingCover(true);
+      await updateBook(createdBookId, { coverImage: url });
+      alert('Cập nhật ảnh bìa thành công');
+    } catch (e: any) {
+      console.error('Update cover failed', e);
+      alert(e?.message || 'Cập nhật ảnh bìa thất bại');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Thêm sách mới</h1>
-            <p className="text-sm text-gray-600">Tạo sách điện tử mới cho hệ thống</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
+      {/* Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-20 -left-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl"
+          animate={{ y: [0, -50, 0], x: [0, 30, 0] }}
+          transition={{ duration: 20, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute bottom-20 -right-20 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl"
+          animate={{ y: [0, 50, 0], x: [0, -30, 0] }}
+          transition={{ duration: 25, repeat: Infinity }}
+        />
       </div>
 
-      {/* Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main form */}
-        <div className="lg:col-span-2">
-          <div className="bg-white shadow-lg rounded-xl">
-            <div className="p-6">
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                {/* Basic Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <DocumentTextIcon className="h-5 w-5 mr-2 text-blue-600" />
-                    Thông tin cơ bản
-                  </h3>
+      <div className="relative z-10 max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <Button
+            onClick={() => router.push('/dashboard/books')}
+            variant="ghost"
+            className="mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Quay lại
+          </Button>
 
-                  {/* Title */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tiêu đề sách *
-                    </label>
-                    <input
-                      {...register('title')}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Nhập tiêu đề sách..."
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
+            <BookOpen className="w-10 h-10 text-blue-600" />
+            Thêm Sách Mới
+          </h1>
+          <p className="text-gray-600 mt-2">Điền thông tin để tạo sách mới trong hệ thống</p>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* Basic Information */}
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+            <CardHeader>
+              <CardTitle>Thông tin cơ bản</CardTitle>
+              <CardDescription>Các thông tin bắt buộc về sách</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">
+                  Tiêu đề <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="title"
+                  placeholder="Nhập tiêu đề sách"
+                  value={formData.title}
+                  onChange={(e) => handleChange('title', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="description">
+                  Mô tả <span className="text-red-500">*</span>
+                </Label>
+                <RichTextEditor
+                  value={formData.description}
+                  onChange={(value) => handleChange('description', value)}
+                  placeholder="Nhập mô tả chi tiết về sách..."
+                  className="bg-white min-h-[150px]"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Bạn có thể sử dụng các công cụ định dạng để làm nổi bật nội dung (in đậm, in nghiêng, gạch chân, v.v.)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  {/* ISBN sẽ được backend tạo tự động */}
+                  <Label htmlFor="price">
+                    Giá (VNĐ) <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      id="price"
+                      type="number"
+                      placeholder="299000"
+                      value={formData.price}
+                      onChange={(e) => handleChange('price', e.target.value)}
+                      className="pl-10"
+                      min="0"
+                      step="1000"
+                      required
+                      disabled={!!createdBookId}
                     />
-                    {errors.title && (
-                      <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
-                    )}
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Mô tả sách *
-                    </label>
-                    <textarea
-                      {...register('description')}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Nhập mô tả chi tiết về sách..."
-                    />
-                    {errors.description && (
-                      <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* Pricing and Category */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <CurrencyDollarIcon className="h-5 w-5 mr-2 text-green-600" />
-                    Giá và phân loại
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Price */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Giá sách (VNĐ) *
-                      </label>
-                      <input
-                        {...register('price', { valueAsNumber: true })}
-                        type="number"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0"
-                      />
-                      {errors.price && (
-                        <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>
-                      )}
-                    </div>
-
-                    {/* Category */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Danh mục *
-                      </label>
-                      <select
-                        {...register('categoryId', { valueAsNumber: true })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        disabled={categoriesLoading}
-                      >
-                        <option value={0}>Chọn danh mục...</option>
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.categoryId && (
-                        <p className="mt-1 text-sm text-red-600">{errors.categoryId.message}</p>
-                      )}
-                    </div>
                   </div>
                 </div>
+                <div />
+              </div>
 
-                {/* Error message */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-center">
-                      <XCircleIcon className="h-5 w-5 text-red-600 mr-2" />
-                      <p className="text-red-800">{error}</p>
-                    </div>
-                  </div>
+              <div className="grid gap-2">
+                <Label htmlFor="categoryId">Danh mục</Label>
+                <Select value={formData.categoryId} onValueChange={(value) => handleChange('categoryId', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn danh mục" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Không có</SelectItem>
+                    <SelectItem value="1">Toán học</SelectItem>
+                    <SelectItem value="2">Vật lý</SelectItem>
+                    <SelectItem value="3">Hóa học</SelectItem>
+                    <SelectItem value="4">Sinh học</SelectItem>
+                    <SelectItem value="5">Lịch sử</SelectItem>
+                    <SelectItem value="6">Địa lý</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Files & Resources */}
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                Tệp & Tài nguyên
+              </CardTitle>
+              <CardDescription>
+                Tải tệp lên trước hoặc sau khi tạo sách đều được
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label>
+                  <ImageIcon className="w-4 h-4 inline mr-1" />
+                  Ảnh bìa
+                </Label>
+                <FileUpload
+                  accept="image/*"
+                  maxSize={5 * 1024 * 1024}
+                  folder="book-covers"
+                  accessRole="GUEST"
+                  onUploadComplete={(result) => {
+                    handleChange('coverImage', result.url);
+                    if (createdBookId) {
+                      handleCoverUploaded(result.url);
+                    }
+                  }}
+                  onUploadError={(error) => alert(error)}
+                  disabled={uploadingCover}
+                />
+                {formData.coverImage && (
+                  <p className="text-xs text-green-600 mt-1">✓ Đã tải lên: {formData.coverImage}</p>
                 )}
+              </div>
 
-                {/* Submit buttons */}
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => router.back()}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Đang tạo...' : 'Tạo sách'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Cover Image */}
-          <div className="bg-white shadow-lg rounded-xl">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <PhotoIcon className="h-5 w-5 mr-2 text-purple-600" />
-                Bìa sách
-              </h3>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-4">
-                {/* Image preview */}
-                <div className="aspect-[3/4] bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
-                  {coverImage ? (
-                    <img
-                      src={coverImage}
-                      alt="Book cover preview"
-                      className="w-full h-full object-cover rounded-lg"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div className="text-center" style={{ display: coverImage ? 'none' : 'flex', flexDirection: 'column' }}>
-                    <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Chưa có hình ảnh</p>
-                  </div>
-                </div>
-
-                {/* Upload button */}
-                <div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    id="cover-upload"
+          {/* Additional Information */}
+          <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6">
+            <CardHeader>
+              <CardTitle>Thông tin bổ sung</CardTitle>
+              <CardDescription>Thông tin chi tiết khác (tùy chọn)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="publicationYear">Năm xuất bản</Label>
+                  <Input
+                    id="publicationYear"
+                    type="number"
+                    placeholder="2024"
+                    value={formData.publicationYear}
+                    onChange={(e) => handleChange('publicationYear', e.target.value)}
+                    min="1900"
+                    max="2100"
                   />
-                  <label
-                    htmlFor="cover-upload"
-                    className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-center block"
-                  >
-                    Chọn hình ảnh
-                  </label>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="language">Ngôn ngữ</Label>
+                  <Select value={formData.language} onValueChange={(value) => handleChange('language', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn ngôn ngữ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vi">Tiếng Việt</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edition">Phiên bản</Label>
+                  <Input
+                    id="edition"
+                    placeholder="1"
+                    value={formData.edition}
+                    onChange={(e) => handleChange('edition', e.target.value)}
+                  />
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Guidelines */}
-          <div className="bg-white shadow-lg rounded-xl">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <CheckCircleIcon className="h-5 w-5 mr-2 text-green-600" />
-                Hướng dẫn
-              </h3>
-
-              <div className="space-y-3 text-sm text-gray-600">
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p>Tiêu đề sách phải rõ ràng và mô tả chính xác nội dung</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p>Mô tả chi tiết giúp học viên hiểu rõ về sách</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p>Chọn danh mục phù hợp để dễ dàng tìm kiếm</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p>Hình ảnh bìa nên có tỷ lệ 3:4 và chất lượng cao</p>
-                </div>
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p>Sau khi tạo, bạn có thể thêm chương và câu hỏi</p>
-                </div>
-              </div>
-            </div>
+          {/* Actions */}
+          <div className="flex gap-4 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/dashboard/books')}
+              disabled={loading}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              disabled={loading || !!createdBookId}
+            >
+              {creating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Đang tạo...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Tạo sách
+                </>
+              )}
+            </Button>
+            {createdBookId && (
+              <Button
+                type="button"
+                onClick={() => router.push(`/dashboard/books/${createdBookId}`)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Hoàn tất
+              </Button>
+            )}
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

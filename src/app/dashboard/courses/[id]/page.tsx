@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import RejectCourseModal from '@/components/modals/RejectCourseModal';
 import {
   AcademicCapIcon,
   ArrowLeftIcon,
@@ -75,12 +76,14 @@ function CourseDetailClient() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const id = params?.id as string;
   
   const [course, setCourse] = useState<any>(null);
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
 
   useEffect(() => {
     const loadCourse = async () => {
@@ -160,6 +163,71 @@ function CourseDetailClient() {
     }
   };
 
+  const handleApproveCourse = async () => {
+    if (!confirm('Bạn có chắc muốn duyệt khóa học này?')) return;
+    
+    try {
+      const resp = await authenticatedFetch(`/api/courses/${id}/approve`, {
+        method: 'PUT'
+      });
+      
+      if (resp.ok) {
+        alert('Đã duyệt khóa học thành công!');
+        // Reload course data
+        const courseResp = await authenticatedFetch(`/api/courses/${id}`);
+        const courseData = await courseResp.json();
+        const courseInfo = courseData?.Result?.Result ?? courseData?.Result ?? courseData;
+        setCourse(courseInfo);
+      } else {
+        const data = await resp.json();
+        alert(data?.Message || 'Có lỗi xảy ra');
+      }
+    } catch (err) {
+      alert('Có lỗi xảy ra khi duyệt khóa học');
+    }
+  };
+
+  const sanitizeHtml = (html?: string) => {
+    if (!html) return '';
+    let out = String(html);
+    out = out.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
+    out = out.replace(/<\s*style[^>]*>[\s\S]*?<\s*\/\s*style\s*>/gi, '');
+    out = out.replace(/<\s*iframe[^>]*>[\s\S]*?<\s*\/\s*iframe\s*>/gi, '');
+    out = out.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const allowed = ['b','strong','i','em','u','br','p','ul','ol','li','h1','h2','h3'];
+    for (const tag of allowed) {
+      const open = new RegExp(`&lt;${tag}(\\s[^&>]*)?&gt;`, 'gi');
+      const close = new RegExp(`&lt;\\/${tag}&gt;`, 'gi');
+      out = out.replace(open, `<${tag}$1>`).replace(close, `</${tag}>`);
+    }
+    return out;
+  };
+
+  const handleRejectCourse = async (reason: string) => {
+    try {
+      const resp = await authenticatedFetch(`/api/courses/${id}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Reason: reason })
+      });
+      
+      if (resp.ok) {
+        alert('Đã từ chối khóa học. Giảng viên sẽ nhận được thông báo với lý do từ chối.');
+        setRejectModalOpen(false);
+        // Reload course data
+        const courseResp = await authenticatedFetch(`/api/courses/${id}`);
+        const courseData = await courseResp.json();
+        const courseInfo = courseData?.Result?.Result ?? courseData?.Result ?? courseData;
+        setCourse(courseInfo);
+      } else {
+        const data = await resp.json();
+        alert(data?.Message || 'Có lỗi xảy ra');
+      }
+    } catch (err) {
+      alert('Có lỗi xảy ra khi từ chối khóa học');
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -234,6 +302,24 @@ function CourseDetailClient() {
           </h1>
         </div>
         <div className="flex space-x-3">
+          {userRole === 'Admin' && course && (course.ApprovalStatus === 1 || course.approvalStatus === 1) && (
+            <>
+              <button
+                onClick={handleApproveCourse}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircleIcon className="h-4 w-4 mr-2" />
+                Duyệt
+              </button>
+              <button
+                onClick={() => setRejectModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+              >
+                <XCircleIcon className="h-4 w-4 mr-2" />
+                Từ chối
+              </button>
+            </>
+          )}
           <button
             onClick={handleEdit}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -253,20 +339,33 @@ function CourseDetailClient() {
 
       {/* Course thumbnail */}
       <div className="aspect-video bg-gray-200 relative rounded-lg overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 opacity-80"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <AcademicCapIcon className="h-24 w-24 text-white" />
-        </div>
+        {course.Thumbnail || course.thumbnail ? (
+          <img
+            src={course.Thumbnail || course.thumbnail}
+            alt={course.Title || course.title || 'Thumbnail'}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 opacity-80"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <AcademicCapIcon className="h-24 w-24 text-white" />
+            </div>
+          </>
+        )}
         
         {/* Status badges */}
         <div className="absolute top-4 left-4 flex space-x-2">
-          {course.isFree && (
+          {(course.IsFree || course.isFree || course.Price === 0 || course.price === 0) && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
               Miễn phí
             </span>
           )}
-          <span className={getStatusBadge(course.status || course.approvalStatus || 'Draft')}>
-            {course.status || course.approvalStatus || 'Draft'}
+          <span className={getStatusBadge(course.status || course.Status || course.approvalStatus || 'Draft')}>
+            {course.status || course.Status || course.approvalStatus || 'Draft'}
           </span>
         </div>
       </div>
@@ -289,9 +388,10 @@ function CourseDetailClient() {
               {course.Title || course.title || course.name || 'Khóa học'}
             </h2>
 
-            <p className="text-gray-600 mb-6">
-              {course.Description || course.description || 'Không có mô tả'}
-            </p>
+            <div
+              className="prose max-w-none text-gray-700 mb-6"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(course.Description || course.description || '') }}
+            />
 
             {/* Instructor */}
             <div className="flex items-center mb-6">
@@ -456,6 +556,15 @@ function CourseDetailClient() {
           ) : null}
         </div>
       </div>
+      
+      <RejectCourseModal
+        isOpen={rejectModalOpen}
+        courseTitle={course?.Title || course?.title || ''}
+        onClose={() => {
+          setRejectModalOpen(false);
+        }}
+        onConfirm={handleRejectCourse}
+      />
     </div>
   );
 }

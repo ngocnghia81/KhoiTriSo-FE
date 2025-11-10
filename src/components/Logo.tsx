@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 
 interface LogoProps {
     size?: "sm" | "md" | "lg";
@@ -9,9 +8,9 @@ interface LogoProps {
 }
 
 const sizeConfig = {
-    sm: { width: 40, height: 40, textClass: "text-lg" },
-    md: { width: 56, height: 56, textClass: "text-xl" },
-    lg: { width: 72, height: 72, textClass: "text-2xl" },
+    sm: { width: 48, height: 48, textClass: "text-lg" },
+    md: { width: 64, height: 64, textClass: "text-xl" },
+    lg: { width: 88, height: 88, textClass: "text-2xl" },
 };
 
 export default function Logo({
@@ -24,16 +23,17 @@ export default function Logo({
     const textColor = variant === "light" ? "text-gray-900" : "text-white";
 
     return (
-        <Link href="/" className={`flex items-center space-x-3 ${className}`}>
+        <div className={`flex items-center space-x-3 ${className}`}>
             <span className="sr-only">Khởi Trí Số</span>
             <div className="relative">
                 <Image
-                    src="/images/logo.svg"
+                    src="/images/logo/logo.png"
                     alt="Khởi Trí Số Logo"
                     width={width}
                     height={height}
-                    className="transition-all duration-300 hover:scale-110 drop-shadow-md"
+                    className="transition-all duration-300 hover:scale-110 drop-shadow-lg rounded-lg"
                     priority
+                    quality={100}
                 />
             </div>
             {showText && (
@@ -43,6 +43,6 @@ export default function Logo({
                     Khởi Trí Số
                 </span>
             )}
-        </Link>
+        </div>
     );
 }

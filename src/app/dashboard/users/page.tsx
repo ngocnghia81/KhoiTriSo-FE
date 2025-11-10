@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useDebouncedCallback } from '@/hooks/useDebounce';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   UserGroupIcon,
   MagnifyingGlassIcon,
@@ -41,6 +42,7 @@ interface UserFilters {
 
 export default function UsersManagementPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,10 +75,10 @@ export default function UsersManagementPage() {
         setUsers(result?.Items || result?.items || []);
         setTotalCount(result?.Total || result?.totalCount || 0);
       } else {
-        setError(data?.Message || 'Không thể tải danh sách người dùng');
+        setError(data?.Message || t.error.loadingData);
       }
     } catch (err) {
-      setError('Có lỗi xảy ra khi tải dữ liệu');
+      setError(t.error.somethingWrong);
     } finally {
       setLoading(false);
     }
@@ -126,13 +128,13 @@ export default function UsersManagementPage() {
       
       if (resp.ok) {
         await loadUsers(); // Reload data
-        alert('Cập nhật người dùng thành công!');
+        alert(t.common.success);
       } else {
         const data = await resp.json();
-        alert(data?.Message || 'Có lỗi xảy ra khi cập nhật');
+        alert(data?.Message || t.error.somethingWrong);
       }
     } catch (err) {
-      alert('Có lỗi xảy ra khi cập nhật người dùng');
+      alert(t.error.somethingWrong);
     }
   };
 
@@ -142,10 +144,10 @@ export default function UsersManagementPage() {
 
   const getRoleName = (role: number) => {
     switch (role) {
-      case 0: return 'Học viên';
-      case 1: return 'Giảng viên';
-      case 2: return 'Admin';
-      default: return 'Không xác định';
+      case 0: return t.users.student;
+      case 1: return t.users.instructor;
+      case 2: return t.users.admin;
+      default: return t.common.noData;
     }
   };
 
@@ -169,12 +171,12 @@ export default function UsersManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Quản lý người dùng</h1>
-          <p className="text-sm text-gray-600">Quản lý tất cả người dùng trong hệ thống</p>
+          <h1 className="text-2xl font-semibold text-gray-900">{t.users.title}</h1>
+          <p className="text-sm text-gray-600">{t.users.subtitle}</p>
         </div>
         <div className="flex items-center space-x-3">
           <span className="text-sm text-gray-500">
-            Tổng: {totalCount} người dùng
+            {t.common.total}: {totalCount}
           </span>
         </div>
       </div>
@@ -185,13 +187,13 @@ export default function UsersManagementPage() {
           {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tìm kiếm
+              {t.common.search}
             </label>
             <div className="relative">
               <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Tên, email, username..."
+                placeholder={t.users.searchPlaceholder}
                 value={searchValue}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -202,47 +204,47 @@ export default function UsersManagementPage() {
           {/* Role Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Vai trò
+              {t.users.role}
             </label>
             <select
               value={filters.role || ''}
               onChange={(e) => handleFilterChange('role', e.target.value ? parseInt(e.target.value) : undefined)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Tất cả vai trò</option>
-              <option value="0">Học viên</option>
-              <option value="1">Giảng viên</option>
-              <option value="2">Admin</option>
+              <option value="">{t.common.filter} - {t.users.role}</option>
+              <option value="0">{t.users.student}</option>
+              <option value="1">{t.users.instructor}</option>
+              <option value="2">{t.users.admin}</option>
             </select>
           </div>
 
           {/* Status Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Trạng thái
+              {t.users.status}
             </label>
             <select
               value={filters.isActive === undefined ? '' : filters.isActive.toString()}
               onChange={(e) => handleFilterChange('isActive', e.target.value ? e.target.value === 'true' : undefined)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Tất cả trạng thái</option>
-              <option value="true">Hoạt động</option>
-              <option value="false">Không hoạt động</option>
+              <option value="">{t.common.filter} - {t.users.status}</option>
+              <option value="true">{t.users.active}</option>
+              <option value="false">{t.users.inactive}</option>
             </select>
           </div>
 
           {/* Auth Provider Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nhà cung cấp
+              {t.userAnalytics.authProviders}
             </label>
             <select
               value={filters.authProvider || ''}
               onChange={(e) => handleFilterChange('authProvider', e.target.value || undefined)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Tất cả</option>
+              <option value="">{t.common.filter}</option>
               <option value="local">Local</option>
               <option value="google">Google</option>
               <option value="facebook">Facebook</option>
@@ -256,7 +258,7 @@ export default function UsersManagementPage() {
         {loading ? (
           <div className="p-6 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-600">Đang tải...</p>
+            <p className="mt-2 text-sm text-gray-600">{t.common.loading}</p>
           </div>
         ) : error ? (
           <div className="p-6 text-center text-red-600">
@@ -265,7 +267,7 @@ export default function UsersManagementPage() {
               onClick={loadUsers}
               className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Thử lại
+              {t.error.tryAgain}
             </button>
           </div>
         ) : (
@@ -274,19 +276,19 @@ export default function UsersManagementPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Người dùng
+                    {t.users.name}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vai trò
+                    {t.users.role}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Trạng thái
+                    {t.users.status}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Đăng nhập cuối
+                    {t.users.lastLogin}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Thao tác
+                    {t.users.actions}
                   </th>
                 </tr>
               </thead>
@@ -309,7 +311,7 @@ export default function UsersManagementPage() {
                             @{user.Username}
                           </div>
                           <div className="text-xs text-gray-400">
-                            {user.AuthProvider} • {user.EmailVerified ? 'Đã xác thực' : 'Chưa xác thực'}
+                            {user.AuthProvider} • {user.EmailVerified ? t.userAnalytics.verified : t.userAnalytics.unverified}
                           </div>
                         </div>
                       </div>
@@ -321,15 +323,15 @@ export default function UsersManagementPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(user.IsActive)}`}>
-                        {user.IsActive ? 'Hoạt động' : 'Không hoạt động'}
+                        {user.IsActive ? t.users.active : t.users.inactive}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div>
-                        {user.LastLogin ? new Date(user.LastLogin).toLocaleDateString('vi-VN') : 'Chưa đăng nhập'}
+                        {user.LastLogin ? new Date(user.LastLogin).toLocaleDateString() : '-'}
                       </div>
                       <div className="text-xs text-gray-400">
-                        Tạo: {new Date(user.CreatedAt).toLocaleDateString('vi-VN')}
+                        {t.users.createdAt}: {new Date(user.CreatedAt).toLocaleDateString()}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -341,7 +343,7 @@ export default function UsersManagementPage() {
                               ? 'text-red-600 hover:bg-red-50' 
                               : 'text-green-600 hover:bg-green-50'
                           }`}
-                          title={user.IsActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                          title={user.IsActive ? t.users.inactive : t.users.active}
                         >
                           {user.IsActive ? (
                             <UserMinusIcon className="h-4 w-4" />
@@ -352,14 +354,14 @@ export default function UsersManagementPage() {
                         <button
                           onClick={() => {/* TODO: Edit user modal */}}
                           className="text-blue-600 hover:text-blue-800"
-                          title="Chỉnh sửa"
+                          title={t.common.edit}
                         >
                           <PencilIcon className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => {/* TODO: View user details */}}
                           className="text-gray-600 hover:text-gray-800"
-                          title="Xem chi tiết"
+                          title={t.common.view}
                         >
                           <EyeIcon className="h-4 w-4" />
                         </button>
@@ -381,22 +383,20 @@ export default function UsersManagementPage() {
                 disabled={filters.page === 1}
                 className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
-                Trước
+                {t.common.previous}
               </button>
               <button
                 onClick={() => handleFilterChange('page', Math.min(totalPages, filters.page + 1))}
                 disabled={filters.page === totalPages}
                 className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
-                Sau
+                {t.common.next}
               </button>
             </div>
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Hiển thị <span className="font-medium">{(filters.page - 1) * filters.pageSize + 1}</span> đến{' '}
-                  <span className="font-medium">{Math.min(filters.page * filters.pageSize, totalCount)}</span> trong{' '}
-                  <span className="font-medium">{totalCount}</span> kết quả
+                  {t.common.page} <span className="font-medium">{(filters.page - 1) * filters.pageSize + 1}</span> - <span className="font-medium">{Math.min(filters.page * filters.pageSize, totalCount)}</span> {t.common.of} <span className="font-medium">{totalCount}</span>
                 </p>
               </div>
               <div>
@@ -406,7 +406,7 @@ export default function UsersManagementPage() {
                     disabled={filters.page === 1}
                     className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Trước
+                    {t.common.previous}
                   </button>
                   {[...Array(Math.min(5, totalPages))].map((_, i) => {
                     const pageNum = Math.max(1, Math.min(totalPages - 4, filters.page - 2)) + i;
@@ -430,7 +430,7 @@ export default function UsersManagementPage() {
                     disabled={filters.page === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Sau
+                    {t.common.next}
                   </button>
                 </nav>
               </div>

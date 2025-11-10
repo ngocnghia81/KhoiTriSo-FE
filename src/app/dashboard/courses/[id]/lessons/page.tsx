@@ -84,14 +84,21 @@ function LessonsClient() {
     }
   };
 
-  const formatDuration = (duration: number) => {
-    if (!duration) return 'Không xác định';
-    const hours = Math.floor(duration / 60);
-    const minutes = duration % 60;
+  const formatDuration = (duration: number | null | undefined) => {
+    if (!duration && duration !== 0) return 'Không xác định';
+    // VideoDuration từ API là giây, cần convert sang phút/giờ
+    const totalSeconds = duration;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
     if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+      return `${hours}h ${minutes}m${seconds > 0 ? ` ${seconds}s` : ''}`;
     }
-    return `${minutes}m`;
+    if (minutes > 0) {
+      return `${minutes}m${seconds > 0 ? ` ${seconds}s` : ''}`;
+    }
+    return `${seconds}s`;
   };
 
   if (loading) {
@@ -182,24 +189,24 @@ function LessonsClient() {
                       <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                         <div className="flex items-center">
                           <ClockIcon className="h-4 w-4 mr-1" />
-                          {formatDuration(lesson.duration || lesson.Duration)}
+                          {formatDuration(lesson.VideoDuration ?? lesson.videoDuration ?? lesson.Duration ?? lesson.duration)}
                         </div>
                         <div className="flex items-center">
                           <DocumentTextIcon className="h-4 w-4 mr-1" />
-                          {lesson.materials?.length || lesson.Materials?.length || 0} tài liệu
+                          {lesson.Materials?.length ?? lesson.materials?.length ?? 0} tài liệu
                         </div>
                         <div className="flex items-center">
                           <AcademicCapIcon className="h-4 w-4 mr-1" />
-                          {lesson.assignments?.length || lesson.Assignments?.length || 0} bài tập
+                          {lesson.Assignments?.length ?? lesson.assignments?.length ?? 0} bài tập
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      lesson.isPublished !== false ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      (lesson.IsPublished ?? lesson.isPublished ?? false) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {lesson.isPublished !== false ? 'Đã xuất bản' : 'Chưa xuất bản'}
+                      {(lesson.IsPublished ?? lesson.isPublished ?? false) ? 'Đã xuất bản' : 'Chưa xuất bản'}
                     </span>
                     <button
                       onClick={() => handleEditLesson(lesson.id || lesson.Id)}

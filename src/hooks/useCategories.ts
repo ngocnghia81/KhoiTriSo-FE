@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuthenticatedFetch } from './useAuthenticatedFetch';
+import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage, debugApiResponse, retryRequest } from '../utils/apiHelpers';
 
 export type Category = {
   id: number;
@@ -22,39 +23,54 @@ export const useCategories = (includeInactive = false) => {
       setLoading(true);
       setError(null);
       
-      const resp = await authenticatedFetch(`/api/categories?includeInactive=${includeInactive}&includeCount=false`);
-      const data = await resp.json();
-      
-      if (!resp.ok) {
-        throw new Error(data?.message || 'Failed to fetch categories');
-      }
-
-      // Chuẩn hóa theo nhiều cấu trúc trả về
-      let arr: any = [];
-      if (Array.isArray(data?.Result?.Result)) arr = data.Result.Result;
-      else if (Array.isArray(data?.Result)) arr = data.Result;
-      else if (Array.isArray(data?.Data)) arr = data.Data;
-      else if (Array.isArray(data?.data)) arr = data.data;
-      else if (Array.isArray(data?.Result?.Items)) arr = data.Result.Items;
-      else if (Array.isArray(data?.Items)) arr = data.Items;
-
-      // Map về dạng chuẩn Category[]
-      const mapNode = (n: any): Category => ({
-        id: n.id ?? n.Id,
-        name: n.name ?? n.Name,
-        description: n.description ?? n.Description,
-        parentId: n.parentId ?? n.ParentId ?? null,
-        isActive: n.isActive ?? n.IsActive,
-        orderIndex: n.orderIndex ?? n.OrderIndex,
-        children: Array.isArray(n.children ?? n.InverseParent)
-          ? (n.children ?? n.InverseParent).map(mapNode)
-          : [],
+      const response = await retryRequest(async () => {
+        return await authenticatedFetch(`/api/categories?includeInactive=${includeInactive}&includeCount=false`);
       });
+      
+      const result = await safeJsonParse(response);
+      
+      // Debug logging
+      debugApiResponse(result, 'Categories API');
+      
+      if (isSuccessfulResponse(result)) {
+        const extracted = extractResult(result);
+        if (!extracted) {
+          throw new Error('No categories data received');
+        }
+        
+        // Chuẩn hóa theo nhiều cấu trúc trả về
+        let arr: any = [];
+        if (Array.isArray(extracted?.Result)) arr = extracted.Result;
+        else if (Array.isArray(extracted?.Data)) arr = extracted.Data;
+        else if (Array.isArray(extracted?.data)) arr = extracted.data;
+        else if (Array.isArray(extracted?.Items)) arr = extracted.Items;
+        else if (Array.isArray(extracted)) arr = extracted;
 
-      setCategories(Array.isArray(arr) ? arr.map(mapNode) : []);
+        // Map về dạng chuẩn Category[]
+        const mapNode = (n: any): Category => ({
+          id: n.id ?? n.Id,
+          name: n.name ?? n.Name,
+          description: n.description ?? n.Description,
+          parentId: n.parentId ?? n.ParentId ?? null,
+          isActive: n.isActive ?? n.IsActive,
+          orderIndex: n.orderIndex ?? n.OrderIndex,
+          children: Array.isArray(n.children ?? n.InverseParent)
+            ? (n.children ?? n.InverseParent).map(mapNode)
+            : [],
+        });
+
+        setCategories(Array.isArray(arr) ? arr.map(mapNode) : []);
+      } else {
+        throw new Error(extractMessage(result));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      console.error('Error fetching categories:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch categories';
+      setError(errorMessage);
+      console.error('Error fetching categories:', {
+        error: err,
+        url: `/api/categories?includeInactive=${includeInactive}&includeCount=false`,
+        timestamp: new Date().toISOString()
+      });
     } finally {
       setLoading(false);
     }
@@ -71,6 +87,8 @@ export const useCategories = (includeInactive = false) => {
     refetch: fetchCategories
   };
 };
+
+
 
 
 

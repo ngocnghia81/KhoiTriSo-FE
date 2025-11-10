@@ -3,22 +3,20 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  EyeIcon,
-  EyeSlashIcon,
-  EnvelopeIcon,
-  LockClosedIcon,
-  AcademicCapIcon,
-  UserIcon,
-  ShieldCheckIcon
-} from '@heroicons/react/24/outline';
+import { Eye, EyeOff, Mail, Lock, User, Shield, BookOpen } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { API_CONFIG, API_URLS } from '@/lib/api-config';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading, user } = useAuth();
-  const [userType, setUserType] = useState<'student' | 'staff'>('student');
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -28,7 +26,7 @@ export default function LoginPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
 
-  // Redirect if already authenticated (admin -> dashboard, others -> home)
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       router.push(user?.role === 'admin' ? '/dashboard' : '/');
@@ -38,8 +36,13 @@ export default function LoginPage() {
   // Show loading while checking authentication
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center animate-pulse">
+            <BookOpen className="h-8 w-8 text-white" />
+          </div>
+          <div className="text-lg font-medium text-gray-600">Đang tải...</div>
+        </div>
       </div>
     );
   }
@@ -58,19 +61,14 @@ export default function LoginPage() {
   };
 
   const handleSocialLogin = (provider: 'google' | 'facebook') => {
-    // Use frontend API route to start OAuth; it fetches AuthUrl then 302 redirects to Google
     const localRoute = `/api/auth/${provider}`;
     window.location.href = localRoute;
   };
 
-  const validateForm = () => {
+  const validateForm = (userType: 'student' | 'staff') => {
     const newErrors: {[key: string]: string} = {};
     
-    if (userType === 'student') {
-      // For students, only email is required
-      if (!formData.email) newErrors.email = 'Vui lòng nhập email';
-    } else {
-      // For admin/instructor, only username is required
+    if (userType === 'staff') {
       if (!formData.username) newErrors.username = 'Vui lòng nhập email';
     }
     
@@ -79,9 +77,9 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, userType: 'student' | 'staff') => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (userType === 'staff' && !validateForm(userType)) return;
 
     setFormLoading(true);
     setErrors({});
@@ -101,7 +99,6 @@ export default function LoginPage() {
       const data = await response.json();
       
       if (response.ok) {
-        // Always fetch user profile from backend using returned token to avoid using form inputs
         const res = data.Result;
         const token = res?.Token as string;
         const refreshToken = res?.RefreshToken as string | undefined;
@@ -126,7 +123,6 @@ export default function LoginPage() {
             role: m.Role === 2 ? 'admin' as const : m.Role === 1 ? 'instructor' as const : 'student' as const
           };
         } else {
-          // Fallback to minimal safe data from token response only
           userData = {
             id: '0',
             name: 'User',
@@ -137,236 +133,187 @@ export default function LoginPage() {
         }
 
         login(userData, token, refreshToken);
+        toast.success('Đăng nhập thành công!');
         router.push(userData.role === 'admin' ? '/dashboard' : '/');
       } else {
-        setErrors({ general: data.Message || data.message || 'Đăng nhập thất bại' });
+        const errorMessage = data.Message || data.message || 'Đăng nhập thất bại';
+        setErrors({ general: errorMessage });
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Login error:', error);
-      setErrors({ general: 'Có lỗi xảy ra khi đăng nhập' });
+      const errorMessage = 'Có lỗi xảy ra khi đăng nhập';
+      setErrors({ general: errorMessage });
+      toast.error(errorMessage);
     } finally {
       setFormLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
-        <div className="mx-auto w-full max-w-sm lg:w-96">
-          <div>
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <AcademicCapIcon className="h-6 w-6 text-white" />
-              </div>
-              <h2 className="ml-3 text-2xl font-bold text-gray-900">Khởi Trí Số</h2>
-            </div>
-            <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">
-              Đăng nhập tài khoản
-            </h2>
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
 
-          <div className="mt-8">
-            {/* User Type Selection */}
-            <div className="mb-6">
-              <div className="flex rounded-lg bg-gray-100 p-1">
-                <button
-                  type="button"
-                  onClick={() => setUserType('student')}
-                  className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    userType === 'student'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <UserIcon className="h-4 w-4 mr-2" />
-                  Học viên
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUserType('staff')}
-                  className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    userType === 'staff'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <ShieldCheckIcon className="h-4 w-4 mr-2" />
-                  Admin/Giảng viên
-                </button>
-              </div>
-            </div>
+        {/* Login Card */}
+        <Card className="border-0 shadow-2xl bg-white/90 backdrop-blur-sm">
+          <CardHeader className="text-center pb-4">
+            <CardTitle className="text-2xl font-bold text-gray-900">Đăng nhập</CardTitle>
+            <CardDescription>
+              Chọn loại tài khoản để đăng nhập
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="space-y-6">
+            <Tabs defaultValue="student" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="student" className="flex items-center space-x-2">
+                  <User className="h-4 w-4" />
+                  <span>Học viên</span>
+                </TabsTrigger>
+                <TabsTrigger value="staff" className="flex items-center space-x-2">
+                  <Shield className="h-4 w-4" />
+                  <span>Admin/Giảng viên</span>
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Login Form - Only for Admin/Instructor */}
-            {userType === 'staff' && (
-              <form className="space-y-6" onSubmit={handleSubmit}>
-                <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <EnvelopeIcon className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="username"
-                      name="username"
-                      type="text"
-                      autoComplete="username"
-                      required
-                      value={formData.username}
-                      onChange={handleInputChange}
-                      className={`block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                        errors.username ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                      placeholder="Nhập email"
-                    />
-                  </div>
-                  {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    Mật khẩu
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <LockClosedIcon className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      required
-                      value={formData.password}
-                      onChange={handleInputChange}
-                      className={`block w-full pl-10 pr-10 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                        errors.password ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                      placeholder="Nhập mật khẩu"
-                    />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="text-gray-400 hover:text-gray-500"
-                      >
-                        {showPassword ? (
-                          <EyeSlashIcon className="h-5 w-5" />
-                        ) : (
-                          <EyeIcon className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                </div>
-
-                {errors.general && (
-                  <div className="rounded-md bg-red-50 p-4">
-                    <p className="text-sm text-red-800">{errors.general}</p>
-                  </div>
-                )}
-
-                <div>
-                  <button
-                    type="submit"
-                    disabled={formLoading}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {formLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-                  </button>
-                </div>
-
-                <div className="text-center">
-                  <Link
-                    href="/auth/forgot-password"
-                    className="text-sm text-blue-600 hover:text-blue-500"
-                  >
-                    Quên mật khẩu?
-                  </Link>
-                </div>
-              </form>
-            )}
-
-            {/* OAuth Login - Only for Students */}
-            {userType === 'student' && (
-              <div>
-                <div className="text-center mb-6">
-                  <p className="text-sm text-gray-600">
+              {/* Student Login */}
+              <TabsContent value="student" className="space-y-4">
+                <div className="text-center py-4">
+                  <p className="text-sm text-gray-600 mb-6">
                     Học viên đăng nhập bằng tài khoản Google hoặc Facebook
                   </p>
                 </div>
 
                 {errors.general && (
-                  <div className="mb-4 rounded-md bg-red-50 p-4">
-                    <p className="text-sm text-red-800">{errors.general}</p>
-                  </div>
+                  <Alert variant="destructive">
+                    <AlertDescription>{errors.general}</AlertDescription>
+                  </Alert>
                 )}
 
                 <div className="space-y-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => handleSocialLogin('google')}
-                    className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-xl shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full h-12 text-base font-medium hover:bg-blue-50 hover:border-blue-300 transition-all duration-300"
                   >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
-                    <span className="ml-3">Đăng nhập với Google</span>
-                  </button>
+                    Đăng nhập với Google
+                  </Button>
 
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => handleSocialLogin('facebook')}
-                    className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-xl shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full h-12 text-base font-medium hover:bg-blue-50 hover:border-blue-300 transition-all duration-300"
                   >
-                    <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 mr-3 fill-[#1877F2]" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                     </svg>
-                    <span className="ml-3">Đăng nhập với Facebook</span>
-                  </button>
+                    Đăng nhập với Facebook
+                  </Button>
 
-                  {/* Test Login Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      login({
-                        id: '1',
-                        name: 'Nghĩa Nguyễn',
-                        email: 'ngocnghia1999nn@gmail.com',
-                        avatar: 'https://lh3.googleusercontent.com/a/ACg8ocI6IbIfq7oy6H2jGF0APeYS8EA5kVVRe7vAknb2RpCVUooZD60v=s96-c',
-                        role: 'student'
-                      }, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjEiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9lbWFpbGFkZHJlc3MiOiJuZ29jbmdoaWExOTk5bm5AZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZSI6Im5nb2NuZ2hpYTE5OTlubiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IlN0dWRlbnQiLCJleHAiOjE3NjAyMDM1MzksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0OjcwMTYiLCJhdWQiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEifQ.XB4JRZXjNlaZhzpMej_bqSHG-yDX7CZhmAF99cyHg6g');
-                      router.push('/');
-                    }}
-                    className="w-full inline-flex justify-center py-3 px-4 border border-green-300 rounded-xl shadow-sm bg-green-50 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+                </div>
+              </TabsContent>
+
+              {/* Staff Login */}
+              <TabsContent value="staff" className="space-y-4">
+                <form onSubmit={(e) => handleSubmit(e, 'staff')} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="username"
+                        name="username"
+                        type="email"
+                        placeholder="Nhập email"
+                        value={formData.username}
+                        onChange={handleInputChange}
+                        className={`pl-10 ${errors.username ? 'border-red-500' : ''}`}
+                        required
+                      />
+                    </div>
+                    {errors.username && <p className="text-sm text-red-500">{errors.username}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Mật khẩu</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Nhập mật khẩu"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        className={`pl-10 pr-10 ${errors.password ? 'border-red-500' : ''}`}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
+                    {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
+                  </div>
+
+                  {errors.general && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{errors.general}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold transition-all duration-300"
                   >
-                    <span className="ml-3">🧪 Test Login (Real Token)</span>
-                  </button>
-                </div>
+                    {formLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                  </Button>
+                </form>
 
-                {/* Backend Connection Help */}
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">Gặp lỗi kết nối?</h4>
-                  <ul className="text-xs text-blue-800 space-y-1">
-                    <li>• Đảm bảo backend server đang chạy trên port 7016</li>
-                    <li>• Kiểm tra URL: <code className="bg-blue-100 px-1 rounded">https://localhost:7016/api</code></li>
-                    <li>• Cho phép popup trong trình duyệt</li>
-                    <li>• Kiểm tra console để xem lỗi chi tiết</li>
-                  </ul>
+                <div className="text-center">
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-sm text-blue-600 hover:text-blue-500 transition-colors"
+                  >
+                    Quên mật khẩu?
+                  </Link>
                 </div>
-              </div>
-            )}
-          </div>
+              </TabsContent>
+            </Tabs>
+
+            {/* Help Section */}
+            
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-sm text-gray-500">
+            Chưa có tài khoản?{' '}
+            <Link href="/auth/register" className="text-blue-600 hover:text-blue-500 font-medium">
+              Đăng ký ngay
+            </Link>
+          </p>
         </div>
-      </div>
-
-      <div className="hidden lg:block relative w-0 flex-1">
-        {/* Branding content... */}
       </div>
     </div>
   );

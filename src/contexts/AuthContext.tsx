@@ -147,24 +147,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshAuthToken = async (): Promise<boolean> => {
-    if (!refreshToken) {
-      console.log('No refresh token available');
+    if (!refreshToken || !token) {
+      console.log('No refresh token or access token available');
       return false;
     }
 
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+      
+      // Gọi API refresh với refreshToken qua query param và old token qua header
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh?refreshToken=${encodeURIComponent(refreshToken)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // Gửi old token để backend verify
         },
-        body: JSON.stringify({ refreshToken }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const newToken = data.token;
-        const newRefreshToken = data.refreshToken || refreshToken;
+        // Backend trả về: { result: { token, refreshToken, user, expiresAt } }
+        const newToken = data.result?.token || data.token;
+        const newRefreshToken = data.result?.refreshToken || data.refreshToken || refreshToken;
+        
+        if (!newToken) {
+          console.error('No token in refresh response');
+          logout();
+          return false;
+        }
         
         // Update tokens
         setToken(newToken);
@@ -180,6 +190,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return true;
       } else {
         // Refresh token is invalid, logout user
+        console.error('Token refresh failed with status:', response.status);
         logout();
         return false;
       }

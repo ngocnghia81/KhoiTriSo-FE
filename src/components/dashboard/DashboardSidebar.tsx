@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { navigationTranslations } from '@/locales/navigation';
 import ResizablePanel from './ResizablePanel';
+import LanguageSwitcher from '../LanguageSwitcher';
 import {
   HomeIcon,
   AcademicCapIcon,
@@ -30,6 +33,16 @@ import {
 } from '@heroicons/react/24/outline';
 import Logo from '@/components/Logo';
 
+// Type definition for navigation items
+type NavigationItem = {
+  name: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  current?: boolean;
+} & (
+  | { href: string; children?: never }
+  | { href?: never; children: { name: string; href: string }[] }
+);
+
 const navigation = [
   {
     name: 'Tổng quan',
@@ -52,7 +65,6 @@ const navigation = [
       { name: 'Danh sách giảng viên', href: '/dashboard/instructors' },
       { name: 'Hồ sơ giảng viên', href: '/dashboard/instructors/profiles' },
       { name: 'Giảng viên tiêu biểu', href: '/dashboard/instructors/featured' },
-      { name: 'Thống kê giảng viên', href: '/dashboard/instructors/analytics' },
     ],
   },
   {
@@ -60,10 +72,6 @@ const navigation = [
     icon: BookOpenIcon,
     children: [
       { name: 'Danh sách khóa học', href: '/dashboard/courses' },
-      { name: 'Tạo khóa học mới', href: '/dashboard/courses/create' },
-      { name: 'Khóa học miễn phí', href: '/dashboard/courses/free' },
-      { name: 'Khóa học trả phí', href: '/dashboard/courses/paid' },
-      { name: 'Khóa học chờ duyệt', href: '/dashboard/courses/pending' },
       { name: 'Thống kê khóa học', href: '/dashboard/courses/analytics' },
     ],
   },
@@ -186,11 +194,8 @@ const navigation = [
     name: 'Thông báo',
     icon: BellIcon,
     children: [
-      { name: 'Gửi thông báo', href: '/dashboard/notifications/create' },
       { name: 'Danh sách thông báo', href: '/dashboard/notifications' },
-      { name: 'Thông báo chưa đọc', href: '/dashboard/notifications/unread' },
-      { name: 'Mẫu thông báo', href: '/dashboard/notifications/templates' },
-      { name: 'Push Notifications', href: '/dashboard/notifications/push' },
+      { name: 'Gửi thông báo', href: '/dashboard/notifications/create' },
     ],
   },
   {
@@ -200,7 +205,6 @@ const navigation = [
       { name: 'Cài đặt chung', href: '/dashboard/settings' },
       { name: 'Cài đặt streaming', href: '/dashboard/settings/streaming' },
       { name: 'Cài đặt SEO', href: '/dashboard/settings/seo' },
-      { name: 'Sức khỏe hệ thống', href: '/dashboard/settings/health' },
       { name: 'Backup & Restore', href: '/dashboard/settings/backup' },
       { name: 'Thống kê hệ thống', href: '/dashboard/settings/stats' },
     ],
@@ -209,6 +213,7 @@ const navigation = [
 
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const { language } = useLanguage();
   const { 
     sidebarOpen, 
     sidebarCollapsed, 
@@ -217,7 +222,13 @@ export default function DashboardSidebar() {
     setSidebarWidth,
     toggleCollapse 
   } = useSidebar();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Tổng quan']);
+  
+  // Get navigation based on current language
+  const navigation = useMemo(() => {
+    return require('@/utils/getNavigation').getNavigation(language);
+  }, [language]);
+  
+  const [expandedItems, setExpandedItems] = useState<string[]>([navigation[0]?.name || '']);
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems(prev => 
@@ -230,8 +241,8 @@ export default function DashboardSidebar() {
   // Auto-expand parent items that have active children
   useEffect(() => {
     const activeParents = navigation
-      .filter(item => item.children && hasActiveChild(item.children))
-      .map(item => item.name);
+      .filter((item: NavigationItem) => item.children && hasActiveChild(item.children))
+      .map((item: NavigationItem) => item.name);
     
     // Only keep active parents and default items (like 'Tổng quan')
     const defaultItems = ['Tổng quan'];
@@ -241,10 +252,10 @@ export default function DashboardSidebar() {
   }, [pathname]);
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard';
-    }
-    return pathname.startsWith(href);
+    if (!pathname) return false;
+    
+    // Exact match only - no partial matching
+    return pathname === href;
   };
 
   const hasActiveChild = (children: any[]) => {
@@ -297,6 +308,9 @@ export default function DashboardSidebar() {
             )}
           </div>
           <div className="flex items-center space-x-1">
+            {/* Language Switcher */}
+            {!sidebarCollapsed && <LanguageSwitcher />}
+            
             {/* Collapse/Expand button */}
             <button
               type="button"
@@ -324,17 +338,13 @@ export default function DashboardSidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
-            {navigation.map((item) => (
+            {navigation.map((item: NavigationItem) => (
               <div key={item.name}>
                 {item.children ? (
                   <div>
                     <button
                       onClick={() => toggleExpanded(item.name)}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group transition-all duration-200 ${
-                        hasActiveChild(item.children)
-                          ? 'text-blue-700 bg-blue-50 border-l-2 border-blue-600'
-                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                      }`}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group transition-all duration-200 text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                     >
                       <div className="flex items-center">
                         <item.icon className={`h-4 w-4 text-gray-500 group-hover:text-blue-600 ${sidebarCollapsed ? 'mx-auto' : 'mr-3'}`} />
