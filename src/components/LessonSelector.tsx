@@ -6,15 +6,25 @@ export interface LessonSelectorProps {
   selectedLessonId?: number;
   onLessonSelect: (lessonId: number) => void;
   disabled?: boolean;
+  searchTerm?: string;
 }
 
 export function LessonSelector({ 
   courseId, 
   selectedLessonId, 
   onLessonSelect, 
-  disabled = false 
+  disabled = false,
+  searchTerm,
 }: LessonSelectorProps) {
-  const { lessons, loading, error } = useCourseLessons(courseId);
+  const { lessons: fetchedLessons, loading, error } = useCourseLessons(courseId);
+  const lessons = fetchedLessons.filter((lesson) => {
+    if (!searchTerm?.trim()) return true;
+    const keyword = searchTerm.trim().toLowerCase();
+    return (
+      lesson.title.toLowerCase().includes(keyword) ||
+      (lesson.description && lesson.description.toLowerCase().includes(keyword))
+    );
+  });
   const [isOpen, setIsOpen] = useState(false);
 
   console.log('LessonSelector - courseId:', courseId, 'lessons:', lessons, 'loading:', loading, 'error:', error);
@@ -52,7 +62,11 @@ export function LessonSelector({
     return (
       <div className="w-full">
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-          <p className="text-sm text-yellow-600">Không có bài học nào trong khóa học này</p>
+          <p className="text-sm text-yellow-600">
+            {searchTerm?.trim()
+              ? 'Không tìm thấy bài học phù hợp với từ khóa.'
+              : 'Không có bài học nào trong khóa học này'}
+          </p>
         </div>
       </div>
     );

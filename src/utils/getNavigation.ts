@@ -33,6 +33,7 @@ export const getNavigation = (language: 'vi' | 'en') => {
       icon: UserGroupIcon,
       children: [
         { name: t.userList, href: '/dashboard/users' },
+        { name: t.createUser, href: '/dashboard/users/create' },
         { name: t.userAnalytics, href: '/dashboard/users/analytics' },
       ],
     },
@@ -51,24 +52,17 @@ export const getNavigation = (language: 'vi' | 'en') => {
       children: [
         { name: t.courseList, href: '/dashboard/courses' },
         { name: t.courseAnalytics, href: '/dashboard/courses/analytics' },
+        { name: t.learningPathManagement, href: '/dashboard/courses/learning-paths' },
+        { name: t.createLearningPath, href: '/dashboard/courses/learning-paths/create' },
+        { name: t.learningPathAnalytics, href: '/dashboard/courses/learning-paths/analytics' },
       ],
     },
-    {
-      name: t.lessonManagement,
-      icon: DocumentTextIcon,
-      children: [
-        { name: t.lessonDiscussions, href: '/dashboard/lessons/discussions' },
-      ],
-    },
+ 
     {
       name: t.liveClasses,
       icon: VideoCameraIcon,
       children: [
         { name: t.liveClassList, href: '/dashboard/live-classes' },
-        { name: t.createLiveClass, href: '/dashboard/live-classes/create' },
-        { name: t.upcomingClasses, href: '/dashboard/live-classes/upcoming' },
-        { name: t.classHistory, href: '/dashboard/live-classes/history' },
-        { name: t.attendance, href: '/dashboard/live-classes/attendance' },
       ],
     },
     {
@@ -93,10 +87,6 @@ export const getNavigation = (language: 'vi' | 'en') => {
       icon: ChatBubbleLeftRightIcon,
       children: [
         { name: t.questionList, href: '/dashboard/forum/questions' },
-        { name: t.unanswered, href: '/dashboard/forum/unanswered' },
-        { name: t.featured, href: '/dashboard/forum/featured' },
-        { name: t.moderation, href: '/dashboard/forum/moderation' },
-        { name: t.reports, href: '/dashboard/forum/reports' },
         { name: t.forumAnalytics, href: '/dashboard/forum/analytics' },
       ],
     },
@@ -138,11 +128,16 @@ export const getNavigation = (language: 'vi' | 'en') => {
       icon: ShoppingCartIcon,
       children: [
         { name: t.orderList, href: '/dashboard/orders' },
-        { name: t.transactions, href: '/dashboard/transactions' },
-        { name: t.carts, href: '/dashboard/carts' },
-        { name: t.coupons, href: '/dashboard/coupons' },
-        { name: t.refunds, href: '/dashboard/refunds' },
+        { name: t.orderAnalytics, href: '/dashboard/orders/analytics' },
         { name: t.revenueStats, href: '/dashboard/revenue' },
+      ],
+    },
+    {
+      name: t.couponManagement,
+      icon: TagIcon,
+      children: [
+        { name: t.couponList, href: '/dashboard/coupons' },
+        { name: t.createCoupon, href: '/dashboard/coupons/create' },
       ],
     },
     {

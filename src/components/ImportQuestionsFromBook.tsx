@@ -13,8 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { bookApiService, Book, BookChapter, BookQuestion } from '@/services/bookApi';
-import { useAttachAssignmentQuestion } from '@/hooks/useAssignments';
-import { useCourses, Course } from '@/hooks/useCourses';
+import { useAttachAssignmentQuestion, useAssignment } from '@/hooks/useAssignments';
 import { useCourseLessons, Lesson } from '@/hooks/useLessons';
 
 interface ImportQuestionsFromBookProps {
@@ -24,10 +23,10 @@ interface ImportQuestionsFromBookProps {
 }
 
 const questionTypeLabels: Record<number, string> = {
-  1: 'Trắc nghiệm',
-  2: 'Đúng/Sai',
-  3: 'Tự luận',
-  4: 'Điền khuyết'
+  0: 'Trắc nghiệm',
+  1: 'Đúng/Sai',
+  2: 'Tự luận ngắn',
+  3: 'Tiêu đề'
 };
 
 const difficultyConfig: Record<number, { label: string; color: string }> = {
@@ -38,11 +37,16 @@ const difficultyConfig: Record<number, { label: string; color: string }> = {
 };
 
 export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: ImportQuestionsFromBookProps) {
-  // Course and Lesson selection
-  const { courses, loading: loadingCourses } = useCourses();
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  const { lessons, loading: loadingLessons } = useCourseLessons(selectedCourseId ? parseInt(selectedCourseId) : 0);
-  const [selectedLessonId, setSelectedLessonId] = useState<string>('');
+  // Get assignment to auto-populate course and lesson
+  const { assignment, loading: loadingAssignment } = useAssignment(assignmentId);
+  
+  // Auto-set courseId and lessonId from assignment
+  const courseId = assignment?.lesson?.courseId;
+  const lessonId = assignment?.lessonId;
+  
+  const { lessons, loading: loadingLessons } = useCourseLessons(courseId || 0);
+  const selectedCourseId = courseId ? courseId.toString() : '';
+  const selectedLessonId = lessonId ? lessonId.toString() : '';
 
   // Book and Question selection
   const [books, setBooks] = useState<Book[]>([]);
@@ -59,12 +63,7 @@ export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: Im
 
   const { attachQuestion, loading: attaching } = useAttachAssignmentQuestion();
 
-  // Reset lesson when course changes
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setSelectedLessonId('');
-    }
-  }, [selectedCourseId]);
+  // Auto-load books when assignment is loaded and lessonId is available
 
   // Load books when lesson is selected
   useEffect(() => {
@@ -234,61 +233,47 @@ export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: Im
           </div>
         )}
 
-        <div className="space-y-4">
-          {/* Step 1: Course Selection */}
-          <div className="border-b pb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <GraduationCap className="w-5 h-5 text-blue-600" />
-              <h4 className="font-medium text-gray-900">Bước 1: Chọn khóa học và bài học</h4>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Chọn khóa học *
-                </label>
-                <Select
-                  value={selectedCourseId}
-                  onValueChange={setSelectedCourseId}
-                  disabled={loadingCourses}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn khóa học..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courses.map(course => (
-                      <SelectItem key={course.id} value={course.id.toString()}>
-                        {course.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Chọn bài học *
-                </label>
-                <Select
-                  value={selectedLessonId}
-                  onValueChange={setSelectedLessonId}
-                  disabled={!selectedCourseId || loadingLessons}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={!selectedCourseId ? "Chọn khóa học trước..." : "Chọn bài học..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lessons.map(lesson => (
-                      <SelectItem key={lesson.id} value={lesson.id.toString()}>
-                        {lesson.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+        {loadingAssignment ? (
+          <div className="text-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" />
+            <p className="mt-2 text-sm text-gray-600">Đang tải thông tin bài tập...</p>
           </div>
+        ) : !lessonId ? (
+          <div className="text-center py-8">
+            <p className="text-red-600">Không thể lấy thông tin khóa học và bài học từ bài tập này.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Display Course and Lesson Info (Read-only) */}
+            {assignment && (
+              <div className="border-b pb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <GraduationCap className="w-5 h-5 text-blue-600" />
+                  <h4 className="font-medium text-gray-900">Thông tin khóa học và bài học</h4>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Khóa học
+                    </label>
+                    <div className="p-2 bg-gray-50 border rounded text-sm text-gray-700">
+                      {assignment.lesson?.title || 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Bài học
+                    </label>
+                    <div className="p-2 bg-gray-50 border rounded text-sm text-gray-700">
+                      {assignment.lesson?.title || assignment.title || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Step 2: Book and Question Selection - Only show when lesson is selected */}
-          {selectedLessonId && (
+            {/* Step 2: Book and Question Selection - Only show when lesson is selected */}
+            {selectedLessonId && (
             <>
               <div className="border-b pb-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -319,9 +304,9 @@ export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: Im
                 </div>
               </div>
             </>
-          )}
+            )}
 
-          {/* Chapter Selection */}
+            {/* Chapter Selection */}
           {selectedLessonId && selectedBookId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -347,8 +332,8 @@ export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: Im
             </div>
           )}
 
-          {/* Questions List */}
-          {selectedLessonId && selectedBookId && (
+            {/* Questions List */}
+            {selectedLessonId && selectedBookId && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-sm font-medium text-gray-700">
@@ -454,8 +439,9 @@ export function ImportQuestionsFromBook({ assignmentId, onClose, onSuccess }: Im
                 Đã chọn: <span className="font-medium">{selectedQuestionIds.size}</span> câu hỏi
               </div>
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t">

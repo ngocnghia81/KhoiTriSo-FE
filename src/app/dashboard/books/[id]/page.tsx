@@ -17,7 +17,8 @@ import {
   Key,
   FileText,
   BarChart3,
-  Plus
+  Plus,
+  Download
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,8 @@ export default function DashboardBookDetailPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [includeExplanation, setIncludeExplanation] = useState(false);
   const { deleteBook, loading: deleteLoading } = useDeleteBook();
 
   // Load MathJax để render MathML
@@ -224,6 +227,30 @@ export default function DashboardBookDetailPage() {
     } catch (error) {
       console.error('Error deleting book:', error);
       alert('Không thể xóa sách!');
+    }
+  };
+
+  const handleExportToWord = async () => {
+    if (!book) return;
+
+    try {
+      setExporting(true);
+      const blob = await bookApiService.exportToWord(book.id, includeExplanation);
+      
+      // Tạo URL tạm thời và download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${book.title.replace(/[^a-z0-9]/gi, '_')}_${book.id}${includeExplanation ? '_with_explanation' : ''}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Error exporting book:', error);
+      alert(error?.message || 'Không thể xuất file Word!');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -519,7 +546,17 @@ export default function DashboardBookDetailPage() {
                                       Độ khó: {question.difficulty || question.DifficultyLevel || 'N/A'}
                                     </Badge>
                                     <Badge variant="outline" className="text-xs">
-                                      Loại: {question.questionType || question.QuestionType || 'N/A'}
+                                      Loại: {(() => {
+                                        const type = question.questionType || question.QuestionType;
+                                        if (type === undefined || type === null) return 'N/A';
+                                        switch (type) {
+                                          case 0: return 'Trắc nghiệm';
+                                          case 1: return 'Đúng/Sai';
+                                          case 2: return 'Tự luận ngắn';
+                                          case 3: return 'Tiêu đề';
+                                          default: return `Loại ${type}`;
+                                        }
+                                      })()}
                                     </Badge>
                                     {question.chapterId && (
                                       <Badge variant="outline" className="text-xs">
@@ -576,6 +613,30 @@ export default function DashboardBookDetailPage() {
                     <BarChart3 className="w-4 h-4 mr-2" />
                     Thống kê
                   </Button>
+                  <Separator className="my-3" />
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="includeExplanation"
+                        checked={includeExplanation}
+                        onChange={(e) => setIncludeExplanation(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="includeExplanation" className="text-sm text-gray-700">
+                        Bao gồm lời giải
+                      </label>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0"
+                      onClick={handleExportToWord}
+                      disabled={exporting}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {exporting ? 'Đang xuất...' : 'Xuất Word'}
+                    </Button>
+                  </div>
                   <Separator className="my-3" />
                   <Button 
                     variant="outline" 

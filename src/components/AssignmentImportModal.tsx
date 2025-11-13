@@ -1,23 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useCourseLessons } from '@/hooks/useLessons';
 import { useImportAssignment } from '@/hooks/useLessons';
 import { XMarkIcon, DocumentArrowUpIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface AssignmentImportModalProps {
-  lessonId: number;
+  initialLessonId: number;
   onClose: () => void;
   onImported: () => void;
 }
 
-export function AssignmentImportModal({ lessonId, onClose, onImported }: AssignmentImportModalProps) {
+export function AssignmentImportModal({ initialLessonId, onClose, onImported }: AssignmentImportModalProps) {
   const { importAssignment, loading } = useImportAssignment();
+  const [selectedLessonId, setSelectedLessonId] = useState<number>(initialLessonId);
+  const [courseId, setCourseId] = useState<number>();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<{
     success: boolean;
     message: string;
     data?: any;
   } | null>(null);
+
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useCourseLessons(courseId || 0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,9 +41,13 @@ export function AssignmentImportModal({ lessonId, onClose, onImported }: Assignm
       alert('Vui lòng chọn file Word');
       return;
     }
+    if (!selectedLessonId) {
+      alert('Vui lòng chọn bài học');
+      return;
+    }
 
     try {
-      const result = await importAssignment(lessonId, selectedFile);
+      const result = await importAssignment(selectedLessonId, selectedFile);
       
       if (result.success) {
         setImportResult({
@@ -84,6 +93,57 @@ export function AssignmentImportModal({ lessonId, onClose, onImported }: Assignm
         </div>
 
         <div className="space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Bước 1: Chọn khóa học và bài học</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Chọn khóa học *
+                </label>
+                <input
+                  type="number"
+                  placeholder="Nhập ID khóa học"
+                  value={courseId ?? ''}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setCourseId(Number.isNaN(value) ? undefined : value);
+                    setSelectedLessonId(0);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Chọn bài học *
+                </label>
+                {courseId ? (
+                  lessonsLoading ? (
+                    <p className="text-sm text-gray-500">Đang tải danh sách bài học…</p>
+                  ) : lessonsError ? (
+                    <p className="text-sm text-red-600">{lessonsError}</p>
+                  ) : lessons.length > 0 ? (
+                    <select
+                      value={selectedLessonId || ''}
+                      onChange={(e) => setSelectedLessonId(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Chọn bài học...</option>
+                      {lessons.map((lesson) => (
+                        <option key={lesson.id} value={lesson.id}>
+                          {lesson.title}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm text-gray-500">Không tìm thấy bài học nào.</p>
+                  )
+                ) : (
+                  <p className="text-sm text-gray-500">Vui lòng nhập ID khóa học trước.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* File Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -63,6 +63,10 @@ export default function ResizablePanel({
     }
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
+  useEffect(() => {
+    setWidth(Math.min(maxWidth, Math.max(minWidth, initialWidth)));
+  }, [initialWidth, minWidth, maxWidth]);
+
   return (
     <div 
       ref={panelRef}

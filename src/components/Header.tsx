@@ -13,6 +13,9 @@ import {
     MagnifyingGlassIcon,
     ShoppingBagIcon,
     BookOpenIcon,
+    HomeIcon,
+    AcademicCapIcon,
+    MapIcon,
 } from "@heroicons/react/24/outline";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -36,27 +39,30 @@ const navigation = [
     {
         name: "Trang chủ",
         href: "/",
+        icon: HomeIcon,
     },
     {
         name: "Khóa học",
         href: "/courses",
+        icon: AcademicCapIcon,
         children: [
-            { name: "Khóa học miễn phí", href: "/courses/free" },
-            { name: "Khóa học trả phí", href: "/courses/paid" },
-            { name: "Toán học", href: "/courses/math" },
-            { name: "Vật lý", href: "/courses/physics" },
-            { name: "Hóa học", href: "/courses/chemistry" },
+            { name: "Tất cả khóa học", href: "/courses" },
+            { name: "Khóa học miễn phí", href: "/courses?isFree=true" },
+            { name: "Khóa học trả phí", href: "/courses?isFree=false" },
         ],
+    },
+    {
+        name: "Lộ trình học",
+        href: "/learning-paths",
+        icon: MapIcon,
     },
     {
         name: "Sách điện tử",
         href: "/books",
+        icon: BookOpenIcon,
         children: [
             { name: "Danh sách sách", href: "/books" },
             { name: "Kích hoạt sách", href: "/books/activation" },
-            { name: "Sách Toán", href: "/books/math" },
-            { name: "Sách Lý", href: "/books/physics" },
-            { name: "Sách Hóa", href: "/books/chemistry" },
         ],
     },
     {
@@ -121,94 +127,135 @@ export default function Header() {
         }
     };
 
+    const isActive = (href: string) => {
+        if (href === "/") {
+            return pathname === "/";
+        }
+        return pathname?.startsWith(href);
+    };
+
     return (
-        <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-            <nav className="mx-auto flex max-w-7xl items-center justify-between p-4 lg:px-8" aria-label="Global">
+        <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 shadow-sm">
+            <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8" aria-label="Global">
                 {/* Logo */}
                 <div className="flex lg:flex-1">
-                    <Link href="/" className="-m-1.5 p-1.5">
+                    <Link href="/" className="-m-1.5 p-1.5 flex items-center">
                         <Logo size="md" variant="light" showText={true} />
                     </Link>
                 </div>
 
                 {/* Desktop Navigation */}
-                <div className="hidden lg:flex lg:gap-x-8 lg:items-center">
-                    {navigation.map((item) => (
-                        <div 
-                            key={item.name}
-                            className="relative group"
-                        >
-                            {item.children ? (
-                                <div>
+                <div className="hidden lg:flex lg:gap-x-1 lg:items-center">
+                    {navigation.map((item) => {
+                        const active = isActive(item.href);
+                        const Icon = item.icon;
+                        return (
+                            <div 
+                                key={item.name}
+                                className="relative group"
+                            >
+                                {item.children ? (
+                                    <div>
+                                        <Button 
+                                            variant="ghost" 
+                                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all ${
+                                                active 
+                                                    ? "text-blue-600 bg-blue-50 font-medium" 
+                                                    : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                                            }`}
+                                            onMouseEnter={() => handleMouseEnter(item.name)}
+                                        >
+                                            {Icon && <Icon className="h-4 w-4" />}
+                                            {item.name}
+                                            <ChevronDownIcon className="h-4 w-4" />
+                                        </Button>
+                                        <DropdownMenu open={openDropdown === item.name} modal={false}>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className="absolute inset-0 opacity-0 pointer-events-none"></button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent 
+                                                align="start" 
+                                                className="w-56 mt-1 shadow-lg border border-gray-200"
+                                                onMouseEnter={() => handleMouseEnter(item.name)}
+                                                onMouseLeave={handleMouseLeave}
+                                                sideOffset={5}
+                                            >
+                                                {item.children.map((child) => (
+                                                    <DropdownMenuItem 
+                                                        key={child.name} 
+                                                        asChild
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Link 
+                                                            href={child.href} 
+                                                            className="w-full flex items-center px-3 py-2 text-sm hover:bg-gray-50 rounded-md"
+                                                        >
+                                                            {child.name}
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                ) : (
                                     <Button 
                                         variant="ghost" 
-                                        className="flex items-center gap-1 text-gray-700 hover:text-blue-600"
-                                        onMouseEnter={() => handleMouseEnter(item.name)}
+                                        asChild 
+                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all ${
+                                            active 
+                                                ? "text-blue-600 bg-blue-50 font-medium" 
+                                                : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                                        }`}
                                     >
-                                        {item.name}
-                                        <ChevronDownIcon className="h-4 w-4" />
+                                        <Link href={item.href} className="flex items-center gap-1.5">
+                                            {Icon && <Icon className="h-4 w-4" />}
+                                            {item.name}
+                                        </Link>
                                     </Button>
-                                    <DropdownMenu open={openDropdown === item.name} modal={false}>
-                                        <DropdownMenuTrigger asChild>
-                                            <button className="absolute inset-0 opacity-0 pointer-events-none"></button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent 
-                                            align="center" 
-                                            className="w-56"
-                                            onMouseEnter={() => handleMouseEnter(item.name)}
-                                            onMouseLeave={handleMouseLeave}
-                                            sideOffset={5}
-                                        >
-                                            {item.children.map((child) => (
-                                                <DropdownMenuItem key={child.name} asChild>
-                                                    <Link href={child.href} className="w-full">
-                                                        {child.name}
-                                                    </Link>
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            ) : (
-                                <Button variant="ghost" asChild className="text-gray-700 hover:text-blue-600">
-                                    <Link href={item.href}>{item.name}</Link>
-                                </Button>
-                            )}
-                        </div>
-                    ))}
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* Right side actions */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 lg:gap-3">
                     {/* Search */}
                     <div className="relative" ref={searchRef}>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setSearchOpen(!searchOpen)}
-                            className="text-gray-700 hover:text-blue-600"
+                            className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg"
                         >
                             <MagnifyingGlassIcon className="h-5 w-5" />
                         </Button>
                         
                         {searchOpen && (
-                            <Card className="absolute right-0 top-full mt-2 w-80 shadow-lg border-0">
+                            <Card className="absolute right-0 top-full mt-2 w-80 lg:w-96 shadow-xl border border-gray-200 rounded-xl overflow-hidden">
                                 <CardContent className="p-4">
                                     <form onSubmit={handleSearch} className="space-y-3">
-                                        <div className="flex items-center space-x-2">
-                                            <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
+                                        <div className="flex items-center space-x-2 bg-gray-50 rounded-lg px-3 py-2">
+                                            <MagnifyingGlassIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                             <input
                                                 type="text"
-                                                placeholder="Tìm kiếm khóa học, sách..."
+                                                placeholder="Tìm kiếm khóa học, sách, lộ trình..."
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="flex-1 border-0 outline-none text-sm"
+                                                className="flex-1 border-0 outline-none text-sm bg-transparent"
                                                 autoFocus
                                             />
                                         </div>
-                                        <Separator />
-                                        <div className="flex justify-end">
-                                            <Button type="submit" size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
+                                        <div className="flex justify-end gap-2">
+                                            <Button 
+                                                type="button" 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                onClick={() => setSearchOpen(false)}
+                                            >
+                                                Hủy
+                                            </Button>
+                                            <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
                                                 Tìm kiếm
                                             </Button>
                                         </div>
@@ -219,14 +266,21 @@ export default function Header() {
                     </div>
 
                     {/* Cart */}
-                    <Button variant="ghost" size="sm" asChild className="text-gray-700 hover:text-blue-600">
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        asChild 
+                        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative"
+                    >
                         <Link href="/cart">
                             <ShoppingBagIcon className="h-5 w-5" />
                         </Link>
                     </Button>
 
                     {/* Language Switcher */}
-                    <LanguageSwitcher />
+                    <div className="hidden lg:block">
+                        <LanguageSwitcher />
+                    </div>
 
                     {/* User Menu */}
                     {isClient && (
@@ -234,11 +288,14 @@ export default function Header() {
                             {isAuthenticated ? (
                                 <UserMenu />
                             ) : (
-                                <div className="flex items-center gap-2">
-                                    <Button variant="ghost" asChild size="sm">
-                                        <Link href="/auth/login">Đăng nhập</Link>
-                                    </Button>
-                                </div>
+                                <Button 
+                                    variant="ghost" 
+                                    asChild 
+                                    size="sm"
+                                    className="text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                                >
+                                    <Link href="/auth/login">Đăng nhập</Link>
+                                </Button>
                             )}
                         </>
                     )}
@@ -258,36 +315,50 @@ export default function Header() {
                                     <Logo size="md" variant="light" showText={true} />
                                 </div>
                                 
-                                <div className="flex-1 space-y-4">
-                                    {navigation.map((item) => (
-                                        <div key={item.name}>
-                                            {item.children ? (
-                                                <div className="space-y-2">
-                                                    <div className="font-semibold text-gray-900">{item.name}</div>
-                                                    <div className="pl-4 space-y-1">
-                                                        {item.children.map((child) => (
-                                                            <Link
-                                                                key={child.name}
-                                                                href={child.href}
-                                                                className="block py-2 text-sm text-gray-600 hover:text-blue-600"
-                                                                onClick={() => setMobileMenuOpen(false)}
-                                                            >
-                                                                {child.name}
-                                                            </Link>
-                                                        ))}
+                                <div className="flex-1 space-y-2 overflow-y-auto">
+                                    {navigation.map((item) => {
+                                        const active = isActive(item.href);
+                                        const Icon = item.icon;
+                                        return (
+                                            <div key={item.name}>
+                                                {item.children ? (
+                                                    <div className="space-y-2">
+                                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold ${
+                                                            active ? "text-blue-600 bg-blue-50" : "text-gray-900"
+                                                        }`}>
+                                                            {Icon && <Icon className="h-5 w-5" />}
+                                                            {item.name}
+                                                        </div>
+                                                        <div className="pl-4 space-y-1">
+                                                            {item.children.map((child) => (
+                                                                <Link
+                                                                    key={child.name}
+                                                                    href={child.href}
+                                                                    className="block py-2 px-3 text-sm text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors"
+                                                                    onClick={() => setMobileMenuOpen(false)}
+                                                                >
+                                                                    {child.name}
+                                                                </Link>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <Link
-                                                    href={item.href}
-                                                    className="block py-2 font-semibold text-gray-900 hover:text-blue-600"
-                                                    onClick={() => setMobileMenuOpen(false)}
-                                                >
-                                                    {item.name}
-                                                </Link>
-                                            )}
-                                        </div>
-                                    ))}
+                                                ) : (
+                                                    <Link
+                                                        href={item.href}
+                                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
+                                                            active 
+                                                                ? "text-blue-600 bg-blue-50" 
+                                                                : "text-gray-900 hover:text-blue-600 hover:bg-gray-50"
+                                                        }`}
+                                                        onClick={() => setMobileMenuOpen(false)}
+                                                    >
+                                                        {Icon && <Icon className="h-5 w-5" />}
+                                                        {item.name}
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <Separator className="my-4" />

@@ -84,6 +84,17 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
   const [showEditor, setShowEditor] = useState<boolean>(false);
   const [excludedCount, setExcludedCount] = useState<number>(0);
 
+  // Helper function to get question type name
+  const getQuestionTypeName = (type: number): string => {
+    switch (type) {
+      case 0: return 'Trắc nghiệm';
+      case 1: return 'Đúng/Sai';
+      case 2: return 'Tự luận ngắn';
+      case 3: return 'Tiêu đề';
+      default: return `Loại ${type}`;
+    }
+  };
+
   // Helpers to normalize MathML for rendering without mutating user input
   const htmlDecode = (s: string) => {
     if (!s) return s;
@@ -364,11 +375,54 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
     }));
   };
 
+  // Validation function for DefaultPoints (matching backend logic)
+  const validateDefaultPoints = (questions: AIGeneratedQuestion[]): { valid: boolean; error?: string } => {
+    if (questions.length === 0) {
+      return { valid: false, error: 'Không có câu hỏi để import' };
+    }
+
+    const questionsWithPoints = questions.filter(
+      q => q.DefaultPoints != null && q.DefaultPoints > 0
+    );
+    const questionsWithoutPoints = questions.filter(
+      q => q.DefaultPoints == null || q.DefaultPoints <= 0
+    );
+
+    // Rule 3.1: All questions must either all have DefaultPoints OR all don't have DefaultPoints
+    if (questionsWithPoints.length > 0 && questionsWithoutPoints.length > 0) {
+      return {
+        valid: false,
+        error: 'Nếu đã nhập điểm cho một số câu, bạn phải nhập điểm cho tất cả các câu. Hoặc để trống tất cả để hệ thống tự động tính điểm.'
+      };
+    }
+
+    // If all have DefaultPoints, validate that total = 10
+    if (questionsWithPoints.length === questions.length) {
+      const totalPoints = questionsWithPoints.reduce((sum, q) => sum + (q.DefaultPoints || 0), 0);
+      if (Math.abs(totalPoints - 10) > 0.01) {
+        return {
+          valid: false,
+          error: `Tổng điểm của tất cả các câu hỏi phải bằng 10. Hiện tại: ${totalPoints.toFixed(2)}`
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
   const handleImport = async () => {
     if (questions.length === 0) {
       setError('Không có câu hỏi để import');
       return;
     }
+
+    // Validate DefaultPoints before sending
+    const validation = validateDefaultPoints(questions);
+    if (!validation.valid) {
+      setError(validation.error || 'Validation thất bại');
+      return;
+    }
+
     const req = { Questions: questions };
     const res = await batchInsert(assignmentId, req);
     if (res.success) {
@@ -513,7 +567,7 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
                       {showEditor ? (
                         <Input type="number" value={q.QuestionType} onChange={(e) => updateQuestion(qi, { QuestionType: parseInt(e.target.value || '1') })} />
                       ) : (
-                        <div className="text-sm text-gray-700 p-2 border rounded bg-gray-50">{q.QuestionType}</div>
+                        <div className="text-sm text-gray-700 p-2 border rounded bg-gray-50">{getQuestionTypeName(q.QuestionType)}</div>
                       )}
                     </div>
                     <div>

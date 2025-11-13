@@ -608,11 +608,11 @@ export default function CourseDetailPage({ params }: PageProps) {
                                 </div>
 
                                 <div className="space-y-3">
-                                    <button className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                                        {course.isFree
-                                            ? "Đăng ký học miễn phí"
-                                            : "Thêm vào giỏ hàng"}
-                                    </button>
+                                    {!course.isFree && (
+                                        <button className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                                            Thêm vào giỏ hàng
+                                        </button>
+                                    )}
                                     <button className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
                                         Thêm vào yêu thích
                                     </button>

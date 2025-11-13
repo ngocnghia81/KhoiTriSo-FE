@@ -147,34 +147,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const refreshAuthToken = async (): Promise<boolean> => {
-    if (!refreshToken || !token) {
-      console.log('No refresh token or access token available');
+    // Always get from localStorage to ensure we have the latest value
+    const storedRefreshToken = localStorage.getItem('refreshToken') || refreshToken;
+    const storedToken = localStorage.getItem('accessToken') || token;
+    
+    if (!storedRefreshToken) {
+      console.log('❌ No refresh token available in localStorage or state');
       return false;
     }
 
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+      const refreshUrl = `${API_BASE_URL}/api/Auth/refresh?refreshToken=${encodeURIComponent(storedRefreshToken)}`;
       
-      // Gọi API refresh với refreshToken qua query param và old token qua header
-      const response = await fetch(`${API_BASE_URL}/api/auth/refresh?refreshToken=${encodeURIComponent(refreshToken)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`, // Gửi old token để backend verify
-        },
+      console.log('🔄 Attempting to refresh token...', {
+        url: refreshUrl,
+        hasRefreshToken: !!storedRefreshToken,
+        refreshTokenPreview: storedRefreshToken.substring(0, 20) + '...',
+        hasOldToken: !!storedToken
       });
+      
+      // Backend yêu cầu old token trong header để lấy username (dù đã hết hạn)
+      // GetPrincipalFromExpiredToken có ValidateLifetime = false nên có thể parse expired token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+        console.log('🔄 Sending old token in header (even if expired):', storedToken.substring(0, 20) + '...');
+      }
+      
+      // Gọi API refresh với refreshToken qua query param và old token trong header
+      const response = await fetch(refreshUrl, {
+        method: 'POST',
+        headers,
+      });
+      
+      console.log('🔄 Refresh API response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        // Backend trả về: { result: { token, refreshToken, user, expiresAt } }
-        const newToken = data.result?.token || data.token;
-        const newRefreshToken = data.result?.refreshToken || data.refreshToken || refreshToken;
+        console.log('✅ Refresh response received:', { 
+          hasResult: !!data.Result, 
+          hasResultToken: !!data.Result?.Token,
+          hasToken: !!data.token,
+          keys: Object.keys(data),
+          dataPreview: JSON.stringify(data).substring(0, 200)
+        });
+        
+        // Backend trả về: { Result: { Token, RefreshToken, User, ExpiresAt } } hoặc { result: { token, refreshToken, user, expiresAt } }
+        const newToken = data.Result?.Token || data.Result?.token || data.result?.token || data.token;
+        const newRefreshToken = data.Result?.RefreshToken || data.Result?.refreshToken || data.result?.refreshToken || data.refreshToken || storedRefreshToken;
         
         if (!newToken) {
-          console.error('No token in refresh response');
+          console.error('❌ No token in refresh response', data);
           logout();
           return false;
         }
+        
+        console.log('✅ Token refresh successful, updating tokens...', {
+          newTokenPreview: newToken.substring(0, 20) + '...',
+          hasNewRefreshToken: !!newRefreshToken
+        });
         
         // Update tokens
         setToken(newToken);
@@ -186,11 +221,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         document.cookie = `authToken=${newToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         document.cookie = `refreshToken=${newRefreshToken}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
         
-        console.log('Token refreshed successfully');
+        console.log('✅ Token refreshed successfully and saved to localStorage');
         return true;
       } else {
         // Refresh token is invalid, logout user
-        console.error('Token refresh failed with status:', response.status);
+        const errorText = await response.text();
+        console.error('❌ Token refresh failed with status:', response.status, 'Response:', errorText.substring(0, 200));
         logout();
         return false;
       }

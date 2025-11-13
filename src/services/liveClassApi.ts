@@ -3,7 +3,9 @@ import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage } fr
 export interface LiveClassDTO {
   id: number;
   courseId: number;
+  courseTitle?: string;
   instructorId: number;
+  instructorName?: string;
   title: string;
   description: string;
   meetingUrl: string;
@@ -12,7 +14,7 @@ export interface LiveClassDTO {
   scheduledAt: string;
   durationMinutes: number;
   maxParticipants?: number;
-  status: number; // 1: Scheduled, 2: Live, 3: Ended, 4: Cancelled
+  status: number; // 0: Scheduled, 1: Live, 2: Completed, 3: Cancelled
   recordingUrl?: string;
   recordingStatus: number;
   chatEnabled: boolean;
@@ -48,6 +50,29 @@ export interface PagedResult<T> {
 class LiveClassApiService {
   private baseUrl = '/api/live-classes';
 
+  private normalize(item: any): LiveClassDTO {
+    return {
+      id: item.id ?? item.Id,
+      courseId: item.courseId ?? item.CourseId,
+      courseTitle: item.courseTitle ?? item.CourseTitle,
+      instructorId: item.instructorId ?? item.InstructorId,
+      instructorName: item.instructorName ?? item.InstructorName,
+      title: item.title ?? item.Title ?? '',
+      description: item.description ?? item.Description ?? '',
+      meetingUrl: item.meetingUrl ?? item.MeetingUrl ?? '',
+      meetingId: item.meetingId ?? item.MeetingId ?? '',
+      meetingPassword: item.meetingPassword ?? item.MeetingPassword,
+      scheduledAt: item.scheduledAt ?? item.ScheduledAt ?? '',
+      durationMinutes: item.durationMinutes ?? item.DurationMinutes ?? 0,
+      maxParticipants: item.maxParticipants ?? item.MaxParticipants ?? undefined,
+      status: item.status ?? item.Status ?? 0,
+      recordingUrl: item.recordingUrl ?? item.RecordingUrl ?? '',
+      recordingStatus: item.recordingStatus ?? item.RecordingStatus ?? 0,
+      chatEnabled: item.chatEnabled ?? item.ChatEnabled ?? false,
+      recordingEnabled: item.recordingEnabled ?? item.RecordingEnabled ?? false,
+    };
+  }
+
   async getLiveClasses(
     authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
     params?: {
@@ -80,13 +105,17 @@ class LiveClassApiService {
 
     // Backend returns: { Items: [...], Total: number, Page: number, PageSize: number, TotalPages: number }
     const items = extracted.Items || extracted.items || [];
-    const total = extracted.Total || extracted.total || 0;
-    const page = extracted.Page || extracted.page || params?.page || 1;
-    const pageSize = extracted.PageSize || extracted.pageSize || params?.pageSize || 20;
-    const totalPages = extracted.TotalPages || extracted.totalPages || Math.ceil(total / pageSize);
+    const total = extracted.Total ?? extracted.total ?? 0;
+    const page = extracted.Page ?? extracted.page ?? params?.page ?? 1;
+    const pageSize = extracted.PageSize ?? extracted.pageSize ?? params?.pageSize ?? 20;
+    const totalPages = extracted.TotalPages ?? extracted.totalPages ?? Math.ceil(total / pageSize);
+
+    const normalizedItems: LiveClassDTO[] = Array.isArray(items)
+      ? items.map((item) => this.normalize(item))
+      : [];
 
     return {
-      items: Array.isArray(items) ? items : [],
+      items: normalizedItems,
       total,
       page,
       pageSize,
@@ -105,11 +134,11 @@ class LiveClassApiService {
       throw new Error(extractMessage(result) || 'Failed to fetch live class');
     }
 
-    const data = extractResult<LiveClassDTO>(result);
+    const data = extractResult<any>(result);
     if (!data) {
       throw new Error('No data received from API');
     }
-    return data;
+    return this.normalize(data);
   }
 
   async createLiveClass(
@@ -129,11 +158,11 @@ class LiveClassApiService {
       throw new Error(extractMessage(result) || 'Failed to create live class');
     }
 
-    const data = extractResult<LiveClassDTO>(result);
+    const data = extractResult<any>(result);
     if (!data) {
       throw new Error('No data received from API');
     }
-    return data;
+    return this.normalize(data);
   }
 
   async updateLiveClass(
@@ -154,11 +183,11 @@ class LiveClassApiService {
       throw new Error(extractMessage(result) || 'Failed to update live class');
     }
 
-    const data = extractResult<LiveClassDTO>(result);
+    const data = extractResult<any>(result);
     if (!data) {
       throw new Error('No data received from API');
     }
-    return data;
+    return this.normalize(data);
   }
 
   async deleteLiveClass(
@@ -173,6 +202,48 @@ class LiveClassApiService {
     if (!isSuccessfulResponse(result)) {
       throw new Error(extractMessage(result) || 'Failed to delete live class');
     }
+  }
+
+  async startLiveClass(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    id: number
+  ): Promise<LiveClassDTO> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${id}/start`, {
+      method: 'POST',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to start live class');
+    }
+
+    const data = extractResult<any>(result);
+    if (!data) {
+      throw new Error('No data received from API');
+    }
+
+    return this.normalize(data);
+  }
+
+  async endLiveClass(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    id: number
+  ): Promise<LiveClassDTO> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${id}/end`, {
+      method: 'POST',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to end live class');
+    }
+
+    const data = extractResult<any>(result);
+    if (!data) {
+      throw new Error('No data received from API');
+    }
+
+    return this.normalize(data);
   }
 }
 

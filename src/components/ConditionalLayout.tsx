@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import HeaderModern from './HeaderModern';
+import Header from './Header';
 import Footer from './Footer';
 
 interface ConditionalLayoutProps {
@@ -20,8 +20,8 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
   
   return (
     <>
-      <HeaderModern />
-      <main className="pt-20">
+      <Header />
+      <main>
         {children}
       </main>
       <Footer />

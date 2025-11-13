@@ -72,9 +72,10 @@ export function AssignmentList({ assignments, onEdit, onDelete, onView }: Assign
               </div>
               
               {assignment.description && (
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                  {assignment.description}
-                </p>
+                <div
+                  className="text-sm text-gray-600 mb-3 line-clamp-2 prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: assignment.description }}
+                />
               )}
 
               <div className="flex items-center space-x-6 text-sm text-gray-500">

@@ -82,10 +82,43 @@ const mapCoupon = (data: any): Coupon => ({
 class CouponApiService {
   private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+  private getLanguage(): string {
+    if (typeof window === 'undefined') {
+      return 'vi';
+    }
+
+    try {
+      const storedLang = localStorage.getItem('lang');
+      if (storedLang === 'en') {
+        return 'en';
+      }
+
+      if (typeof document !== 'undefined') {
+        const cookieLang = document.cookie
+          .split('; ')
+          .find((row) => row.startsWith('lang='))?.split('=')[1];
+        if (cookieLang === 'en') {
+          return 'en';
+        }
+      }
+    } catch {
+      // ignore storage errors and fall back to default
+    }
+
+    return 'vi';
+  }
+
   private getAuthHeaders() {
+    const headers: Record<string, string> = {
+      'Accept-Language': this.getLanguage(),
+    };
+
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    if (!token) return {} as HeadersInit;
-    return { 'Authorization': `Bearer ${token}` } as HeadersInit;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers as HeadersInit;
   }
 
   async getCoupons(params: {
@@ -136,11 +169,13 @@ class CouponApiService {
   }
 
   async createCoupon(data: CreateCouponRequest): Promise<Coupon> {
-    const response = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/coupons`, {
-      method: 'POST',
-      headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    }));
+    const response = await retryRequest(async () =>
+      fetchWithAutoRefresh(`${this.baseUrl}/api/coupons`, {
+        method: 'POST',
+        headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+    );
 
     const parsed = await safeJsonParse(response);
     if (!isSuccessfulResponse(parsed)) throw new Error(extractMessage(parsed));
@@ -150,11 +185,13 @@ class CouponApiService {
   }
 
   async updateCoupon(id: number, data: UpdateCouponRequest): Promise<Coupon> {
-    const response = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/coupons/${id}`, {
-      method: 'PUT',
-      headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    }));
+    const response = await retryRequest(async () =>
+      fetchWithAutoRefresh(`${this.baseUrl}/api/coupons/${id}`, {
+        method: 'PUT',
+        headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+    );
 
     const parsed = await safeJsonParse(response);
     if (!isSuccessfulResponse(parsed)) throw new Error(extractMessage(parsed));
@@ -164,10 +201,12 @@ class CouponApiService {
   }
 
   async deleteCoupon(id: number): Promise<boolean> {
-    const response = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/coupons/${id}`, {
-      method: 'DELETE',
-      headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
-    }));
+    const response = await retryRequest(async () =>
+      fetchWithAutoRefresh(`${this.baseUrl}/api/coupons/${id}`, {
+        method: 'DELETE',
+        headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
+      })
+    );
 
     const parsed = await safeJsonParse(response);
     if (!isSuccessfulResponse(parsed)) throw new Error(extractMessage(parsed));

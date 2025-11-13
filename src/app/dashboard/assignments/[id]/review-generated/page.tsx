@@ -14,6 +14,7 @@ export default function ReviewGeneratedPage() {
   const storageKey = `generated_questions_assignment_${id}`;
   const { batchInsert, loading: inserting, error } = useBatchInsertQuestions();
   const [advanced, setAdvanced] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const [questions, setQuestions] = useState<AIGeneratedQuestion[]>([]);
   const [showMathKb, setShowMathKb] = useState(false);
@@ -87,7 +88,62 @@ export default function ReviewGeneratedPage() {
     }));
   };
 
+  // Helper function to get question type name
+  const getQuestionTypeName = (type: number): string => {
+    switch (type) {
+      case 0: return 'Trắc nghiệm';
+      case 1: return 'Đúng/Sai';
+      case 2: return 'Tự luận ngắn';
+      case 3: return 'Tiêu đề';
+      default: return `Loại ${type}`;
+    }
+  };
+
+  // Validation function for DefaultPoints (matching backend logic)
+  const validateDefaultPoints = (questions: AIGeneratedQuestion[]): { valid: boolean; error?: string } => {
+    if (questions.length === 0) {
+      return { valid: false, error: 'Không có câu hỏi để import' };
+    }
+
+    const questionsWithPoints = questions.filter(
+      q => q.DefaultPoints != null && q.DefaultPoints > 0
+    );
+    const questionsWithoutPoints = questions.filter(
+      q => q.DefaultPoints == null || q.DefaultPoints <= 0
+    );
+
+    // Rule 3.1: All questions must either all have DefaultPoints OR all don't have DefaultPoints
+    if (questionsWithPoints.length > 0 && questionsWithoutPoints.length > 0) {
+      return {
+        valid: false,
+        error: 'Nếu đã nhập điểm cho một số câu, bạn phải nhập điểm cho tất cả các câu. Hoặc để trống tất cả để hệ thống tự động tính điểm.'
+      };
+    }
+
+    // If all have DefaultPoints, validate that total = 10
+    if (questionsWithPoints.length === questions.length) {
+      const totalPoints = questionsWithPoints.reduce((sum, q) => sum + (q.DefaultPoints || 0), 0);
+      if (Math.abs(totalPoints - 10) > 0.01) {
+        return {
+          valid: false,
+          error: `Tổng điểm của tất cả các câu hỏi phải bằng 10. Hiện tại: ${totalPoints.toFixed(2)}`
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
   const publish = async () => {
+    setValidationError(null);
+    
+    // Validate DefaultPoints before sending
+    const validation = validateDefaultPoints(questions);
+    if (!validation.valid) {
+      setValidationError(validation.error || 'Validation thất bại');
+      return;
+    }
+
     const res = await batchInsert(id, { Questions: questions });
     if (res.success) {
       try { sessionStorage.removeItem(storageKey); } catch {}
@@ -195,6 +251,7 @@ export default function ReviewGeneratedPage() {
             <Button onClick={publish} disabled={inserting}>{inserting ? 'Đang xuất bản...' : 'Xuất bản'}</Button>
           </div>
         </div>
+        {validationError && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-sm text-red-700">{validationError}</div>}
         {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
         {/* One-column, liền mạch: preview + click-to-edit + quick fields */}
@@ -204,8 +261,20 @@ export default function ReviewGeneratedPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Câu {qi+1}</div>
                 <div className="flex items-center gap-2">
-                  <Input className="w-16" type="number" title="Loại" value={q.QuestionType} onChange={e => updateQuestion(qi, { QuestionType: parseInt(e.target.value||'1') } as any)} />
-                  <Input className="w-16" type="number" title="Độ khó" value={q.DifficultyLevel} onChange={e => updateQuestion(qi, { DifficultyLevel: parseInt(e.target.value||'1') } as any)} />
+                  {advanced ? (
+                    <Input className="w-16" type="number" title="Loại" value={q.QuestionType} onChange={e => updateQuestion(qi, { QuestionType: parseInt(e.target.value||'1') } as any)} />
+                  ) : (
+                    <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Loại: ${getQuestionTypeName(q.QuestionType)}`}>
+                      {getQuestionTypeName(q.QuestionType)}
+                    </div>
+                  )}
+                  {advanced ? (
+                    <Input className="w-16" type="number" title="Độ khó" value={q.DifficultyLevel} onChange={e => updateQuestion(qi, { DifficultyLevel: parseInt(e.target.value||'1') } as any)} />
+                  ) : (
+                    <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Độ khó: ${q.DifficultyLevel}`}>
+                      {q.DifficultyLevel}
+                    </div>
+                  )}
                   <Input className="w-20" type="number" step="0.1" title="Điểm" value={q.DefaultPoints} onChange={e => updateQuestion(qi, { DefaultPoints: parseFloat(e.target.value||'1') } as any)} />
                   <Button size="sm" variant="outline" onClick={() => setQuestions(prev => prev.filter((_, i) => i !== qi))}>Xóa</Button>
                 </div>

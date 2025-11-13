@@ -19,9 +19,9 @@ import {
     ChevronDown,
     User,
     LogIn,
-    UserPlus,
     Globe,
-    Sparkles
+    Sparkles,
+    Map
 } from "lucide-react";
 import Logo from "./Logo";
 import UserMenu from "./UserMenu";
@@ -44,9 +44,14 @@ const navigation = [
         icon: GraduationCap,
         children: [
             { name: "Tất cả khóa học", href: "/courses" },
-            { name: "Khóa học miễn phí", href: "/courses/free" },
-            { name: "Khóa học trả phí", href: "/courses/paid" },
+            { name: "Khóa học miễn phí", href: "/courses?isFree=true" },
+            { name: "Khóa học trả phí", href: "/courses?isFree=false" },
         ],
+    },
+    {
+        name: "Lộ trình học",
+        href: "/learning-paths",
+        icon: Map,
     },
     {
         name: "Sách điện tử",
@@ -237,7 +242,7 @@ export default function HeaderModern() {
                                                         <Search className="h-5 w-5 text-slate-400" />
                                                         <Input
                                                             type="text"
-                                                            placeholder="Tìm kiếm khóa học, sách..."
+                                                            placeholder="Tìm kiếm khóa học, sách, lộ trình..."
                                                             value={searchQuery}
                                                             onChange={(e) => setSearchQuery(e.target.value)}
                                                             className="border-0 focus-visible:ring-0 text-base"
@@ -295,27 +300,16 @@ export default function HeaderModern() {
                                 {isAuthenticated ? (
                                     <UserMenu />
                                 ) : (
-                                    <div className="hidden lg:flex items-center space-x-2">
-                                        <Button
-                                            variant="ghost"
-                                            asChild
-                                            className="rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-600"
-                                        >
-                                            <Link href="/auth/login">
-                                                <LogIn className="h-4 w-4 mr-2" />
-                                                Đăng nhập
-                                            </Link>
-                                        </Button>
-                                        <Button
-                                            asChild
-                                            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl shadow-lg"
-                                        >
-                                            <Link href="/auth/register">
-                                                <UserPlus className="h-4 w-4 mr-2" />
-                                                Đăng ký
-                                            </Link>
-                                        </Button>
-                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className="rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-600"
+                                    >
+                                        <Link href="/auth/login">
+                                            <LogIn className="h-4 w-4 mr-2" />
+                                            <span className="hidden lg:inline">Đăng nhập</span>
+                                        </Link>
+                                    </Button>
                                 )}
                             </>
                         )}
@@ -389,27 +383,16 @@ export default function HeaderModern() {
                             <Separator />
 
                             {isClient && !isAuthenticated && (
-                                <div className="space-y-2">
-                                    <Button
-                                        variant="outline"
-                                        asChild
-                                        className="w-full justify-start rounded-xl"
-                                    >
-                                        <Link href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
-                                            <LogIn className="h-4 w-4 mr-2" />
-                                            Đăng nhập
-                                        </Link>
-                                    </Button>
-                                    <Button
-                                        asChild
-                                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl"
-                                    >
-                                        <Link href="/auth/register" onClick={() => setMobileMenuOpen(false)}>
-                                            <UserPlus className="h-4 w-4 mr-2" />
-                                            Đăng ký
-                                        </Link>
-                                    </Button>
-                                </div>
+                                <Button
+                                    variant="outline"
+                                    asChild
+                                    className="w-full justify-start rounded-xl"
+                                >
+                                    <Link href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
+                                        <LogIn className="h-4 w-4 mr-2" />
+                                        Đăng nhập
+                                    </Link>
+                                </Button>
                             )}
                         </div>
                     </motion.div>

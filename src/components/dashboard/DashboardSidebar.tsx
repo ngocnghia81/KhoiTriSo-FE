@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSearch } from '@/contexts/SearchContext';
 import { navigationTranslations } from '@/locales/navigation';
 import ResizablePanel from './ResizablePanel';
 import LanguageSwitcher from '../LanguageSwitcher';
+import { matchesSearch, highlightText } from '@/utils/highlightText';
 import {
   HomeIcon,
   AcademicCapIcon,
@@ -90,11 +92,7 @@ const navigation = [
     name: 'Lớp học trực tuyến',
     icon: VideoCameraIcon,
     children: [
-      { name: 'Danh sách lớp học', href: '/dashboard/live-classes' },
-      { name: 'Tạo lớp học mới', href: '/dashboard/live-classes/create' },
-      { name: 'Lớp học sắp diễn ra', href: '/dashboard/live-classes/upcoming' },
-      { name: 'Lịch sử lớp học', href: '/dashboard/live-classes/history' },
-      { name: 'Điểm danh', href: '/dashboard/live-classes/attendance' },
+      { name: 'Danh sách lớp học', href: '/dashboard/live-classes' }
     ],
   },
   {
@@ -214,6 +212,7 @@ const navigation = [
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const { language } = useLanguage();
+  const { searchQuery } = useSearch();
   const { 
     sidebarOpen, 
     sidebarCollapsed, 
@@ -228,6 +227,33 @@ export default function DashboardSidebar() {
     return require('@/utils/getNavigation').getNavigation(language);
   }, [language]);
   
+  // Filter navigation based on search query
+  const filteredNavigation = useMemo(() => {
+    if (!searchQuery) return navigation;
+    
+    return navigation
+      .map((item: NavigationItem) => {
+        // Check if item name matches
+        const itemMatches = matchesSearch(item.name, searchQuery);
+        
+        // Check if any child matches
+        const matchingChildren = item.children?.filter(child => 
+          matchesSearch(child.name, searchQuery)
+        ) || [];
+        
+        // If item matches or has matching children, include it
+        if (itemMatches || matchingChildren.length > 0) {
+          return {
+            ...item,
+            children: item.children ? (itemMatches ? item.children : matchingChildren) : undefined,
+          };
+        }
+        
+        return null;
+      })
+      .filter((item: NavigationItem | null): item is NavigationItem => item !== null);
+  }, [navigation, searchQuery]);
+  
   const [expandedItems, setExpandedItems] = useState<string[]>([navigation[0]?.name || '']);
 
   const toggleExpanded = (itemName: string) => {
@@ -238,18 +264,25 @@ export default function DashboardSidebar() {
     );
   };
 
-  // Auto-expand parent items that have active children
+  // Auto-expand parent items that have active children or match search
   useEffect(() => {
     const activeParents = navigation
       .filter((item: NavigationItem) => item.children && hasActiveChild(item.children))
       .map((item: NavigationItem) => item.name);
     
-    // Only keep active parents and default items (like 'Tổng quan')
-    const defaultItems = ['Tổng quan'];
-    const newExpandedItems = [...new Set([...defaultItems, ...activeParents])];
-    
-    setExpandedItems(newExpandedItems);
-  }, [pathname]);
+    // If searching, expand all matching items
+    if (searchQuery) {
+      const matchingParents = filteredNavigation
+        .filter((item: NavigationItem) => item.children && item.children.length > 0)
+        .map((item: NavigationItem) => item.name);
+      setExpandedItems(matchingParents);
+    } else {
+      // Only keep active parents and default items (like 'Tổng quan')
+      const defaultItems = ['Tổng quan'];
+      const newExpandedItems = [...new Set([...defaultItems, ...activeParents])];
+      setExpandedItems(newExpandedItems);
+    }
+  }, [pathname, searchQuery, filteredNavigation]);
 
   const isActive = (href: string) => {
     if (!pathname) return false;
@@ -299,13 +332,8 @@ export default function DashboardSidebar() {
       >
         {/* Sidebar header */}
         <div className="flex items-center justify-between h-14 px-4 border-b border-gray-200">
-          <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xs">KT</span>
-            </div>
-            {!sidebarCollapsed && (
-              <div className="text-gray-900 font-semibold text-sm">Khởi Trí Số</div>
-            )}
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center w-full' : 'space-x-2'}`}>
+            <Logo size="sm" variant="light" showText={false} />
           </div>
           <div className="flex items-center space-x-1">
             {/* Language Switcher */}
@@ -338,17 +366,23 @@ export default function DashboardSidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
-            {navigation.map((item: NavigationItem) => (
+            {filteredNavigation.map((item: NavigationItem) => (
               <div key={item.name}>
                 {item.children ? (
                   <div>
                     <button
                       onClick={() => toggleExpanded(item.name)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md group transition-all duration-200 text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 text-sm font-medium rounded-md group transition-all duration-200 text-gray-700 hover:text-gray-900 hover:bg-gray-100`}
                     >
-                      <div className="flex items-center">
-                        <item.icon className={`h-4 w-4 text-gray-500 group-hover:text-blue-600 ${sidebarCollapsed ? 'mx-auto' : 'mr-3'}`} />
-                        {!sidebarCollapsed && item.name}
+                      <div className={`flex items-center ${sidebarCollapsed ? 'justify-center w-full' : ''}`}>
+                        <item.icon className={`h-4 w-4 text-gray-500 group-hover:text-blue-600 ${sidebarCollapsed ? '' : 'mr-3'}`} />
+                        {!sidebarCollapsed && (
+                          <span 
+                            dangerouslySetInnerHTML={{ 
+                              __html: highlightText(item.name, searchQuery) 
+                            }} 
+                          />
+                        )}
                       </div>
                       {!sidebarCollapsed && (
                         <svg
@@ -376,7 +410,11 @@ export default function DashboardSidebar() {
                             }`}
                             onClick={() => setSidebarOpen(false)}
                           >
-                            {child.name}
+                            <span 
+                              dangerouslySetInnerHTML={{ 
+                                __html: highlightText(child.name, searchQuery) 
+                              }} 
+                            />
                           </Link>
                         ))}
                       </div>
@@ -385,15 +423,21 @@ export default function DashboardSidebar() {
                 ) : (
                   <Link
                     href={item.href}
-                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                       isActive(item.href)
                         ? 'text-blue-700 bg-blue-50 border-l-2 border-blue-600'
                         : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <item.icon className={`h-4 w-4 text-gray-500 ${sidebarCollapsed ? 'mx-auto' : 'mr-3'}`} />
-                    {!sidebarCollapsed && item.name}
+                    <item.icon className={`h-4 w-4 text-gray-500 ${sidebarCollapsed ? '' : 'mr-3'}`} />
+                    {!sidebarCollapsed && (
+                      <span 
+                        dangerouslySetInnerHTML={{ 
+                          __html: highlightText(item.name, searchQuery) 
+                        }} 
+                      />
+                    )}
                   </Link>
                 )}
               </div>

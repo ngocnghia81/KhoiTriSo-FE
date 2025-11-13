@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { useCourses } from '@/hooks/useCourses';
@@ -8,14 +8,20 @@ import { Assignment } from '@/hooks/useAssignments';
 import { AssignmentList } from '@/components/AdminAssignmentList';
 import { AssignmentForm } from '@/components/AssignmentForm';
 import { AssignmentImportModal } from '@/components/AssignmentImportModal';
-import { CourseSelector } from '@/components/CourseSelector';
 import { LessonSelector } from '@/components/LessonSelector';
-import { PlusIcon, DocumentArrowUpIcon, FolderIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, DocumentArrowUpIcon, FolderIcon, MagnifyingGlassIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
 interface Course {
   id: number;
   title: string;
   description?: string;
+  instructor?: {
+    id: number;
+    name?: string;
+    avatar?: string | null;
+    bio?: string | null;
+  };
+  totalLessons?: number;
 }
 
 interface Lesson {
@@ -29,14 +35,21 @@ export default function AssignmentsPage() {
   const { authenticatedFetch } = useAuthenticatedApi();
   const router = useRouter();
   
-  // Use courses hook
-  const { courses, loading: coursesLoading, error: coursesError } = useCourses();
+  // Course search/filter state
+  const [courseSearch, setCourseSearch] = useState('');
+  const [courseFilters, setCourseFilters] = useState<{ search?: string; page?: number; pageSize?: number }>({
+    page: 1,
+    pageSize: 30,
+  });
+  const { courses, loading: coursesLoading, error: coursesError } = useCourses(courseFilters);
   
   // State management
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [lessonSearch, setLessonSearch] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -45,13 +58,58 @@ export default function AssignmentsPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
 
-  // Fetch lessons when course is selected
   useEffect(() => {
-    if (selectedCourseId) {
-      fetchLessons(selectedCourseId);
-      setSelectedLessonId(null); // Reset lesson selection
+    const handler = setTimeout(() => {
+      setCourseFilters((prev) => ({
+        ...prev,
+        search: courseSearch.trim() ? courseSearch.trim() : undefined,
+        page: 1,
+      }));
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [courseSearch]);
+
+useEffect(() => {
+  if (selectedCourseId) {
+    const match = courses.find((course) => course.id === selectedCourseId);
+    if (match && match.id === selectedCourseId) {
+      setSelectedCourse((prev) => (prev?.id === match.id ? prev : match));
     }
-  }, [selectedCourseId]);
+  } else if (selectedCourse) {
+    setSelectedCourse(null);
+  }
+}, [courses, selectedCourseId]);
+
+  // Fetch lessons when course is selected
+useEffect(() => {
+  if (selectedCourseId) {
+    fetchLessons(selectedCourseId);
+    setSelectedLessonId(null); // Reset lesson selection
+  } else {
+    setLessons([]);
+    setSelectedLessonId(null);
+  }
+}, [selectedCourseId]);
+
+const displayedCourses = useMemo(() => {
+  if (selectedCourse && !courses.some((course) => course.id === selectedCourse.id)) {
+    return [selectedCourse, ...courses];
+  }
+  return courses;
+}, [courses, selectedCourse]);
+
+const selectedCourseInfo = useMemo(() => {
+  if (selectedCourse) return selectedCourse;
+  if (selectedCourseId) {
+    return courses.find((course) => course.id === selectedCourseId) || null;
+  }
+  return null;
+}, [selectedCourse, selectedCourseId, courses]);
+
+const selectedLessonInfo = useMemo(() => {
+  return lessons.find((lesson) => lesson.id === selectedLessonId) || null;
+}, [lessons, selectedLessonId]);
 
   // Fetch assignments when lesson is selected
   useEffect(() => {
@@ -92,8 +150,6 @@ export default function AssignmentsPage() {
       // Sử dụng API_URLS để đảm bảo đúng base URL
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
       const url = `${baseUrl}/api/assignments?${params.toString()}`;
-      
-      console.log('Fetching assignments from:', url);
       
       const response = await authenticatedFetch(url);
       if (response.ok) {
@@ -148,9 +204,9 @@ export default function AssignmentsPage() {
     }
   };
 
-  const handleCourseSelect = (courseId: number) => {
-    console.log('AssignmentsPage: Course selected:', courseId);
-    setSelectedCourseId(courseId);
+  const handleCourseSelect = (course: Course) => {
+    setSelectedCourseId(course.id);
+    setSelectedCourse(course);
   };
 
   const handleLessonSelect = (lessonId: number) => {
@@ -254,53 +310,158 @@ export default function AssignmentsPage() {
 
         {/* Course and Lesson Selection */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Course Selection */}
+          <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <FolderIcon className="h-4 w-4 inline mr-1" />
-                Chọn Khóa học
+                Tìm kiếm và chọn khóa học
               </label>
-              <CourseSelector
-                courses={courses}
-                selectedCourseId={selectedCourseId}
-                onCourseSelect={handleCourseSelect}
-                loading={coursesLoading}
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={courseSearch}
+                  onChange={(e) => setCourseSearch(e.target.value)}
+                  placeholder="Nhập tên khóa học, giảng viên…"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+            </div>
 
-            {/* Lesson Selection */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {coursesLoading ? (
+                Array.from({ length: 6 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="border border-gray-200 rounded-lg p-4 animate-pulse bg-gray-50 h-32"
+                  />
+                ))
+              ) : displayedCourses.length > 0 ? (
+                displayedCourses.map((course) => {
+                  const isSelected = selectedCourseId === course.id;
+                  const plainDescription = course.description
+                    ? course.description.replace(/<[^>]+>/g, '')
+                    : '';
+                  const preview =
+                    plainDescription.length > 120
+                      ? `${plainDescription.slice(0, 120)}…`
+                      : plainDescription;
+
+                  return (
+                    <button
+                      key={course.id}
+                      type="button"
+                      onClick={() => handleCourseSelect(course)}
+                      className={`text-left border rounded-lg p-4 transition-all ${
+                        isSelected
+                          ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50 shadow-sm'
+                          : 'border-gray-200 hover:border-blue-400 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                          {course.title}
+                        </h3>
+                        {isSelected && (
+                          <CheckCircleIcon className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                        )}
+                      </div>
+                      {course.instructor?.name && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Giảng viên: {course.instructor.name}
+                        </p>
+                      )}
+                      {course.totalLessons !== undefined && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          {course.totalLessons} bài học
+                        </p>
+                      )}
+                      {preview && (
+                        <p className="mt-3 text-xs text-gray-500 line-clamp-3">{preview}</p>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="col-span-full text-center border border-dashed border-gray-300 rounded-lg p-6 text-gray-500">
+                  Không tìm thấy khóa học phù hợp. Thử điều chỉnh từ khóa tìm kiếm.
+                </div>
+              )}
+            </div>
+
+            {selectedCourseInfo && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-900 font-medium">
+                  Khóa học đã chọn: {selectedCourseInfo.title}
+                </p>
+                {selectedCourseInfo.instructor?.name && (
+                  <p className="text-xs text-blue-700 mt-1">
+                    Giảng viên: {selectedCourseInfo.instructor.name}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FolderIcon className="h-4 w-4 inline mr-1" />
-                Chọn Bài học
-              </label>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  <FolderIcon className="h-4 w-4 inline mr-1" />
+                  Chọn Bài học
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedCourseId) {
+                      alert('Vui lòng chọn khóa học trước khi tạo bài học mới.');
+                      return;
+                    }
+                    router.push(`/dashboard/courses/${selectedCourseId}/lessons/create`);
+                  }}
+                  className="inline-flex items-center text-xs px-3 py-1.5 border border-blue-500 text-blue-600 rounded-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <PlusIcon className="h-4 w-4 mr-1" />
+                  Tạo bài học mới
+                </button>
+              </div>
               {selectedCourseId ? (
-                <LessonSelector
-                  courseId={selectedCourseId}
-                  selectedLessonId={selectedLessonId || undefined}
-                  onLessonSelect={handleLessonSelect}
-                />
+                <div className="space-y-3">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={lessonSearch}
+                      onChange={(e) => setLessonSearch(e.target.value)}
+                      placeholder="Tìm kiếm bài học theo tên, mô tả..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <LessonSelector
+                    courseId={selectedCourseId}
+                    selectedLessonId={selectedLessonId || undefined}
+                    onLessonSelect={handleLessonSelect}
+                    searchTerm={lessonSearch}
+                  />
+                </div>
               ) : (
                 <div className="w-full">
                   <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-                    <p className="text-sm text-gray-600">Vui lòng chọn khóa học trước</p>
-            </div>
-          </div>
-              )}
-        </div>
-      </div>
-
-          {/* Selection Status */}
-          {selectedCourseId && selectedLessonId && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-sm text-green-800">
-                ✓ Đã chọn: {courses.find(c => c.id === selectedCourseId)?.title} → 
-                {lessons.find(l => l.id === selectedLessonId)?.title}
-              </p>
-                      </div>
-                    )}
+                    <p className="text-sm text-gray-600">
+                      Vui lòng chọn khóa học trước khi chọn bài học
+                    </p>
                   </div>
+                </div>
+              )}
+            </div>
+
+            {selectedCourseId && selectedLessonId && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800">
+                  ✓ Đã chọn: {selectedCourseInfo?.title} → {selectedLessonInfo?.title || 'Bài học đã chọn'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Error Display */}
         {(error || coursesError) && (
@@ -379,9 +540,9 @@ export default function AssignmentsPage() {
           />
         )}
 
-        {showImportModal && (
+        {showImportModal && selectedLessonId && (
           <AssignmentImportModal
-            lessonId={selectedLessonId!}
+            initialLessonId={selectedLessonId}
             onClose={() => setShowImportModal(false)}
             onImported={handleAssignmentImported}
           />

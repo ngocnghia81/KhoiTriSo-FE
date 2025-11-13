@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
   Select,
@@ -19,10 +18,13 @@ import {
 import { Course } from '@/hooks/useCourses';
 import { liveClassApiService, CreateLiveClassRequest } from '@/services/liveClassApi';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CreateLiveClassPage() {
   const router = useRouter();
   const { authenticatedFetch } = useAuthenticatedFetch();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function CreateLiveClassPage() {
     scheduledAt: '',
     durationMinutes: 60,
     maxParticipants: undefined,
-    status: 1, // Scheduled
+    status: 0, // Scheduled
     recordingStatus: 0,
     chatEnabled: true,
     recordingEnabled: true,
@@ -50,21 +52,70 @@ export default function CreateLiveClassPage() {
   const [scheduledTime, setScheduledTime] = useState('');
 
   useEffect(() => {
+    if (!user) {
+      setCourses([]);
+      setLoadingCourses(false);
+      return;
+    }
     fetchMyCourses();
-  }, []);
+  }, [user]);
 
   const fetchMyCourses = async () => {
+    if (!user) return;
+
     try {
       setLoadingCourses(true);
       // Fetch courses - the API will filter by current user's instructor role
       const response = await authenticatedFetch('/api/courses?page=1&pageSize=100');
       const result = await response.json();
-      
-      if (result.Result && result.Result.Items) {
-        // Filter courses where current user is the instructor
-        // The backend should handle this, but we'll filter on frontend too for safety
-        setCourses(result.Result.Items);
-      }
+
+      const items = result.Result?.Items || result.result?.items || [];
+      const normalizedCourses: Course[] = items.map((course: any) => ({
+        id: course.Id ?? course.id ?? 0,
+        title: course.Title ?? course.title ?? 'Khoá học chưa đặt tên',
+        description: course.Description ?? course.description,
+        thumbnail: course.Thumbnail ?? course.thumbnail,
+        categoryId: course.CategoryId ?? course.categoryId,
+        category: course.Category
+          ? {
+              id: course.Category.Id ?? course.Category.id,
+              name: course.Category.Name ?? course.Category.name,
+            }
+          : undefined,
+        instructorId: course.InstructorId ?? course.instructorId,
+        instructor: course.Instructor
+          ? {
+              id: course.Instructor.Id ?? course.Instructor.id,
+              name: course.Instructor.Name ?? course.Instructor.name,
+              avatar: course.Instructor.Avatar ?? course.Instructor.avatar,
+              bio: course.Instructor.Bio ?? course.Instructor.bio,
+            }
+          : undefined,
+        level: course.Level ?? course.level,
+        isFree: course.IsFree ?? course.isFree,
+        price: course.Price ?? course.price,
+        estimatedDuration: course.EstimatedDuration ?? course.estimatedDuration,
+        totalLessons: course.TotalLessons ?? course.totalLessons,
+        totalStudents: course.TotalStudents ?? course.totalStudents,
+        rating: course.Rating ?? course.rating,
+        totalReviews: course.TotalReviews ?? course.totalReviews,
+        approvalStatus: course.ApprovalStatus ?? course.approvalStatus,
+        isPublished: course.IsPublished ?? course.isPublished,
+        isActive: course.IsActive ?? course.isActive,
+        createdAt: course.CreatedAt ?? course.createdAt ?? new Date().toISOString(),
+        updatedAt: course.UpdatedAt ?? course.updatedAt,
+      })).filter((course: Course) => course.id !== 0);
+
+      const filteredCourses = normalizedCourses.filter((course: Course) => {
+        if (!user) return false;
+        if (user.role === 'admin') return true;
+        const instructorId = course.instructorId ?? course.instructor?.id;
+        return instructorId !== undefined && instructorId !== null
+          ? instructorId.toString() === user.id.toString()
+          : false;
+      });
+
+      setCourses(filteredCourses);
     } catch (err: any) {
       console.error('Error fetching courses:', err);
       setError('Không thể tải danh sách khóa học');
@@ -81,12 +132,18 @@ export default function CreateLiveClassPage() {
       return;
     }
 
+    if (!courses.some((course) => course.id === formData.courseId)) {
+      setError('Bạn chỉ có thể tạo lớp học cho khóa học của mình');
+      return;
+    }
+
     if (!formData.title.trim()) {
       setError('Vui lòng nhập tiêu đề lớp học');
       return;
     }
 
-    if (!formData.description.trim()) {
+    const plainDescription = formData.description.replace(/<[^>]*>/g, '').trim();
+    if (!plainDescription) {
       setError('Vui lòng nhập mô tả lớp học');
       return;
     }
@@ -263,16 +320,16 @@ export default function CreateLiveClassPage() {
               {/* Description */}
               <div>
                 <Label htmlFor="description">Mô tả <span className="text-red-500">*</span></Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  placeholder="Mô tả chi tiết về nội dung lớp học..."
-                  className="mt-1 min-h-[100px]"
-                  disabled={saving}
-                />
+                <div className="mt-1">
+                  <RichTextEditor
+                    value={formData.description}
+                    onChange={(value) =>
+                      setFormData((prev) => ({ ...prev, description: value }))
+                    }
+                    placeholder="Mô tả chi tiết về nội dung lớp học..."
+                    className={saving ? 'pointer-events-none opacity-80' : ''}
+                  />
+                </div>
               </div>
 
               {/* Schedule */}
@@ -474,7 +531,12 @@ export default function CreateLiveClassPage() {
             </Button>
             <Button
               type="submit"
-              disabled={saving || !formData.courseId || !formData.title.trim() || !formData.description.trim()}
+              disabled={
+                saving ||
+                !formData.courseId ||
+                !formData.title.trim() ||
+                !formData.description.replace(/<[^>]*>/g, '').trim()
+              }
               className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             >
               {saving ? (

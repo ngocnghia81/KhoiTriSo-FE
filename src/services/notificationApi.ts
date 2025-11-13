@@ -1,4 +1,4 @@
-import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage, retryRequest, throttleRequest } from '@/utils/apiHelpers';
+import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage, retryRequest, throttleRequest, fetchWithAutoRefresh } from '@/utils/apiHelpers';
 
 export interface NotificationItem {
   id: number;
@@ -36,7 +36,10 @@ class NotificationApiService {
     const url = `${this.baseUrl}/api/Notifications${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
 
     const response = await throttleRequest(`notifications-${JSON.stringify(params)}`, async () => {
-      return await retryRequest(async () => fetch(url, { headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() } }));
+      return await retryRequest(async () => fetchWithAutoRefresh(url, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() } 
+      }));
     });
 
     const parsed = await safeJsonParse(response);
@@ -85,7 +88,7 @@ class NotificationApiService {
   }
 
   async markAsRead(id: number): Promise<boolean> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications/${id}/mark-read`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications/${id}/mark-read`, {
       method: 'PUT',
       headers: this.getAuthHeaders()
     }));
@@ -96,7 +99,7 @@ class NotificationApiService {
   }
 
   async markAllAsRead(): Promise<number> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications/mark-all-read`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications/mark-all-read`, {
       method: 'PUT',
       headers: this.getAuthHeaders()
     }));
@@ -107,7 +110,7 @@ class NotificationApiService {
   }
 
   async createNotification(payload: { userId: number; title: string; content?: string; type?: number; priority?: number }): Promise<any> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications`, {
       method: 'POST',
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -118,7 +121,7 @@ class NotificationApiService {
   }
 
   async broadcastAll(payload: { title: string; message: string; type: number; priority?: number; actionUrl?: string; sendEmail?: boolean }): Promise<any> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications/broadcast/all`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications/broadcast/all`, {
       method: 'POST',
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -129,7 +132,7 @@ class NotificationApiService {
   }
 
   async broadcastRole(role: string, payload: { title: string; message: string; type: number; priority?: number; actionUrl?: string; sendEmail?: boolean }): Promise<any> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications/broadcast/role/${role}`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications/broadcast/role/${role}`, {
       method: 'POST',
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -140,7 +143,8 @@ class NotificationApiService {
   }
 
   async getNotification(id: number): Promise<NotificationItem> {
-    const res = await retryRequest(async () => fetch(`${this.baseUrl}/api/Notifications/${id}`, {
+    const res = await retryRequest(async () => fetchWithAutoRefresh(`${this.baseUrl}/api/Notifications/${id}`, {
+      method: 'GET',
       headers: this.getAuthHeaders()
     }));
     const parsed = await safeJsonParse(res);

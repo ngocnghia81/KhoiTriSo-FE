@@ -247,7 +247,11 @@ export function FileUpload({
       {/* Upload Button */}
       {selectedFiles.length > 0 && !uploading && (
         <button
-          onClick={uploadFiles}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            uploadFiles();
+          }}
           disabled={disabled}
           className="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >

@@ -1,4 +1,5 @@
 import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage, retryRequest, throttleRequest } from '../utils/apiHelpers';
+import { authenticatedFetch } from '../utils/authenticatedFetch';
 
 export interface Book {
   id: number;
@@ -96,6 +97,15 @@ export interface ApiResponse<T> {
 class BookApiService {
   private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   
+  /**
+   * Internal fetch method that uses authenticatedFetch for automatic token refresh
+   */
+  private async authenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
+    // Ensure full URL
+    const fullUrl = url.startsWith('http') ? url : `${this.baseUrl}${url}`;
+    return authenticatedFetch(fullUrl, options);
+  }
+  
   private getAuthHeaders() {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     console.log('BookApi - Token:', token ? 'Present' : 'Missing');
@@ -128,16 +138,12 @@ class BookApiService {
     
     const cacheKey = `books-${JSON.stringify(params)}`;
     const response = await throttleRequest(cacheKey, async () => {
-      return await retryRequest(async () => {
-        const authHeaders = this.getAuthHeaders();
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders
-          } as HeadersInit
-        });
-        return res;
+      // Use authenticatedFetch for automatic token refresh
+      return await authenticatedFetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
     });
     
@@ -185,12 +191,12 @@ class BookApiService {
     const response = await throttleRequest(cacheKey, async () => {
       return await retryRequest(async () => {
         const authHeaders = this.getAuthHeaders();
-        const res = await fetch(url, {
+        // Use authenticatedFetch for automatic token refresh
+        const res = await this.authenticatedRequest(url, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders
-          } as HeadersInit
+          }
         });
         return res;
       });
@@ -237,9 +243,8 @@ class BookApiService {
   async getBookById(id: number): Promise<Book> {
     const response = await throttleRequest(`book-${id}`, async () => {
       return await retryRequest(async () => {
-        const res = await fetch(`${this.baseUrl}/api/books/${id}`, {
+        const res = await this.authenticatedRequest(`/api/books/${id}`, {
           method: 'GET',
-          headers: this.getAuthHeaders() as HeadersInit
         });
         return res;
       });
@@ -343,9 +348,8 @@ class BookApiService {
    */
   async getAllQuestions(page: number = 1, pageSize: number = 20): Promise<{ questions: BookQuestion[]; total: number }> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/questions?page=${page}&pageSize=${pageSize}`, {
+      const res = await this.authenticatedRequest(`/api/questions?page=${page}&pageSize=${pageSize}`, {
         method: 'GET',
-        headers: this.getAuthHeaders() as HeadersInit
       });
       return res;
     });
@@ -375,9 +379,8 @@ class BookApiService {
    */
   async validateActivationCode(code: string): Promise<{ isValid: boolean; bookId?: number; bookTitle?: string }> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/activation-codes/${code}/validate`, {
+      const res = await this.authenticatedRequest(`/api/books/activation-codes/${code}/validate`, {
         method: 'GET',
-        headers: this.getAuthHeaders() as HeadersInit
       });
       return res;
     });
@@ -404,10 +407,9 @@ class BookApiService {
    */
   async activateBook(activationCode: string): Promise<{ success: boolean; message: string }> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/activate`, {
+      const res = await this.authenticatedRequest(`/api/books/activate`, {
         method: 'POST',
         headers: {
-          ...this.getAuthHeaders() as HeadersInit,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ activationCode })
@@ -431,9 +433,8 @@ class BookApiService {
    * Delete a book
    */
   async deleteBook(bookId: number): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${this.baseUrl}/api/books/${bookId}`, {
+    const response = await this.authenticatedRequest(`/api/books/${bookId}`, {
       method: 'DELETE',
-      headers: this.getAuthHeaders() as HeadersInit
     });
     
     if (!response.ok) {
@@ -457,9 +458,8 @@ class BookApiService {
    */
   async getActivationCodes(bookId: number, page: number = 1, pageSize: number = 20): Promise<any[]> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/${bookId}/activation-codes?page=${page}&pageSize=${pageSize}`, {
+      const res = await this.authenticatedRequest(`/api/books/${bookId}/activation-codes?page=${page}&pageSize=${pageSize}`, {
         method: 'GET',
-        headers: this.getAuthHeaders() as HeadersInit
       });
       return res;
     });
@@ -484,10 +484,9 @@ class BookApiService {
    */
   async generateActivationCodes(bookId: number, request: any): Promise<any> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/${bookId}/activation-codes/generate`, {
+      const res = await this.authenticatedRequest(`/api/books/${bookId}/activation-codes/generate`, {
         method: 'POST',
         headers: {
-          ...this.getAuthHeaders() as HeadersInit,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(request)
@@ -513,10 +512,9 @@ class BookApiService {
    */
   async updateBook(bookId: number, request: any): Promise<any> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/${bookId}`, {
+      const res = await this.authenticatedRequest(`/api/books/${bookId}`, {
         method: 'PUT',
         headers: {
-          ...this.getAuthHeaders() as HeadersInit,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(request)
@@ -542,9 +540,8 @@ class BookApiService {
    */
   async getMyBooks(page: number = 1, pageSize: number = 20): Promise<Book[]> {
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/books/my-books?page=${page}&pageSize=${pageSize}`, {
+      const res = await this.authenticatedRequest(`/api/books/my-books?page=${page}&pageSize=${pageSize}`, {
         method: 'GET',
-        headers: this.getAuthHeaders() as HeadersInit
       });
       return res;
     });
@@ -640,6 +637,29 @@ class BookApiService {
       questionId: mapped.id
     });
     return mapped;
+  }
+
+  async exportToWord(bookId: number, includeExplanation: boolean = false): Promise<Blob> {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const url = `${this.baseUrl}/api/books/${bookId}/export-word?includeExplanation=${includeExplanation}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to export book: ${errorText}`);
+    }
+
+    return await response.blob();
   }
 }
 

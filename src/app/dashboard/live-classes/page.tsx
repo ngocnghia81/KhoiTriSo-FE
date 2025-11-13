@@ -25,20 +25,20 @@ import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 
 const getStatusLabel = (status: number) => {
   switch (status) {
-    case 1: return 'Đã lên lịch';
-    case 2: return 'Đang diễn ra';
-    case 3: return 'Đã kết thúc';
-    case 4: return 'Đã hủy';
+    case 0: return 'Đã lên lịch';
+    case 1: return 'Đang diễn ra';
+    case 2: return 'Đã kết thúc';
+    case 3: return 'Đã hủy';
     default: return 'Không xác định';
   }
 };
 
 const getStatusColor = (status: number) => {
   switch (status) {
-    case 1: return 'bg-blue-100 text-blue-800';
-    case 2: return 'bg-green-100 text-green-800';
-    case 3: return 'bg-gray-100 text-gray-800';
-    case 4: return 'bg-red-100 text-red-800';
+    case 0: return 'bg-blue-100 text-blue-800';
+    case 1: return 'bg-green-100 text-green-800';
+    case 2: return 'bg-gray-100 text-gray-800';
+    case 3: return 'bg-red-100 text-red-800';
     default: return 'bg-gray-100 text-gray-800';
   }
 };
@@ -101,6 +101,28 @@ export default function LiveClassesPage() {
     }
   };
 
+  const handleStart = async (id: number) => {
+    if (!confirm('Bắt đầu lớp học này ngay bây giờ?')) return;
+
+    try {
+      await liveClassApiService.startLiveClass(authenticatedFetch, id);
+      await fetchLiveClasses();
+    } catch (err: any) {
+      alert(err.message || 'Không thể bắt đầu lớp học');
+    }
+  };
+
+  const handleEnd = async (id: number) => {
+    if (!confirm('Kết thúc lớp học này? Học viên sẽ không thể tham gia sau khi kết thúc.')) return;
+
+    try {
+      await liveClassApiService.endLiveClass(authenticatedFetch, id);
+      await fetchLiveClasses();
+    } catch (err: any) {
+      alert(err.message || 'Không thể kết thúc lớp học');
+    }
+  };
+
   const filteredClasses = liveClasses.filter(lc => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -112,9 +134,9 @@ export default function LiveClassesPage() {
 
   const stats = {
     total: total,
-    scheduled: liveClasses.filter(lc => lc.status === 1).length,
-    live: liveClasses.filter(lc => lc.status === 2).length,
-    ended: liveClasses.filter(lc => lc.status === 3).length,
+    scheduled: liveClasses.filter(lc => lc.status === 0).length,
+    live: liveClasses.filter(lc => lc.status === 1).length,
+    ended: liveClasses.filter(lc => lc.status === 2).length,
   };
 
   return (
@@ -209,10 +231,10 @@ export default function LiveClassesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="1">Đã lên lịch</SelectItem>
-                  <SelectItem value="2">Đang diễn ra</SelectItem>
-                  <SelectItem value="3">Đã kết thúc</SelectItem>
-                  <SelectItem value="4">Đã hủy</SelectItem>
+                  <SelectItem value="0">Đã lên lịch</SelectItem>
+                  <SelectItem value="1">Đang diễn ra</SelectItem>
+                  <SelectItem value="2">Đã kết thúc</SelectItem>
+                  <SelectItem value="3">Đã hủy</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -280,7 +302,10 @@ export default function LiveClassesPage() {
                             {getStatusLabel(liveClass.status)}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-600 mb-3">{liveClass.description}</p>
+                        <div
+                          className="prose prose-sm text-gray-600 mb-3 max-w-none"
+                          dangerouslySetInnerHTML={{ __html: liveClass.description }}
+                        />
                         <div className="flex flex-wrap gap-4 text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
@@ -304,18 +329,41 @@ export default function LiveClassesPage() {
                             </div>
                           )}
                         </div>
-                        {liveClass.status === 2 && (
-                          <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                            <a
-                              href={liveClass.meetingUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-green-800 hover:underline"
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          {liveClass.status === 0 && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleStart(liveClass.id)}
+                              className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700"
                             >
-                              Tham gia lớp học →
-                            </a>
-                          </div>
-                        )}
+                              Bắt đầu lớp học
+                            </Button>
+                          )}
+                          {liveClass.status === 1 && (
+                            <>
+                              <a
+                                href={liveClass.meetingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-green-700 hover:underline"
+                              >
+                                Tham gia lớp học →
+                              </a>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEnd(liveClass.id)}
+                              >
+                                Kết thúc lớp học
+                              </Button>
+                            </>
+                          )}
+                          {liveClass.status === 2 && (
+                            <span className="text-sm text-gray-500">
+                              Lớp học đã kết thúc. Học viên không thể tham gia nữa.
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -328,7 +376,7 @@ export default function LiveClassesPage() {
                             <Eye className="w-4 h-4 mr-2" />
                             Xem chi tiết
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => router.push(`/dashboard/live-classes/${liveClass.id}/edit`)}>
+                          <DropdownMenuItem onClick={() => router.push(`/dashboard/live-classes/${liveClass.id}?edit=true`)}>
                             <Edit className="w-4 h-4 mr-2" />
                             Chỉnh sửa
                           </DropdownMenuItem>

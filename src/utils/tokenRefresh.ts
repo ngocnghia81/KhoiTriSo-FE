@@ -4,6 +4,7 @@
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshToken(): Promise<boolean> {
+  debugger;
   const refreshTokenValue = localStorage.getItem('refreshToken');
   const currentToken = localStorage.getItem('accessToken');
   
@@ -87,6 +88,7 @@ export async function fetchWithTokenRefresh(
   options: RequestInit = {}
 ): Promise<Response> {
   // Get current token
+  debugger;
   let token = localStorage.getItem('accessToken') || localStorage.getItem('token');
   
   // Prepare headers

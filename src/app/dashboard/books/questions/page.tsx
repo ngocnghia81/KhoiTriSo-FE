@@ -41,10 +41,10 @@ import {
 import { bookApiService, BookQuestion, Book, BookChapter } from '@/services/bookApi';
 
 const questionTypeLabels: Record<number, string> = {
-  1: 'Trắc nghiệm',
-  2: 'Đúng/Sai',
-  3: 'Tự luận',
-  4: 'Điền khuyết'
+  0: 'Trắc nghiệm',
+  1: 'Đúng/Sai',
+  2: 'Tự luận ngắn',
+  3: 'Tiêu đề'
 };
 
 const difficultyConfig: Record<number, { label: string; color: string }> = {

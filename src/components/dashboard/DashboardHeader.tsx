@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSearch } from '@/contexts/SearchContext';
 import {
   MagnifyingGlassIcon,
   BellIcon,
@@ -13,11 +14,13 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
   Bars3Icon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 export default function DashboardHeader() {
   const { toggleSidebar } = useSidebar();
   const { user, logout } = useAuth();
+  const { searchQuery, setSearchQuery, clearSearch } = useSearch();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -73,9 +76,20 @@ export default function DashboardHeader() {
               </div>
               <input
                 type="text"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all duration-200"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all duration-200"
                 placeholder="Tìm kiếm trong hệ thống..."
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              )}
             </div>
           </div>
 

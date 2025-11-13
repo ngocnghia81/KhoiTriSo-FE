@@ -106,7 +106,10 @@ export default function AssignmentDetailPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{assignment.title}</h1>
               {assignment.description && (
-                <p className="mt-2 text-gray-600">{assignment.description}</p>
+                <div
+                  className="mt-2 prose prose-sm text-gray-600 max-w-none"
+                  dangerouslySetInnerHTML={{ __html: assignment.description }}
+                />
               )}
             </div>
             <div className="flex gap-2">
