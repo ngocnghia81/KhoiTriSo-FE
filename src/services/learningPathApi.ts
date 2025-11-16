@@ -392,6 +392,7 @@ class LearningPathApiService {
     pageSize?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    instructorId?: number;
   } = {}): Promise<PagedLearningPathResult> {
     const urlParams = new URLSearchParams();
     if (params.categoryId !== undefined) urlParams.append('category', String(params.categoryId));
@@ -400,6 +401,7 @@ class LearningPathApiService {
     if (params.pageSize) urlParams.append('pageSize', String(params.pageSize));
     if (params.sortBy) urlParams.append('sortBy', params.sortBy);
     if (params.sortOrder) urlParams.append('sortOrder', params.sortOrder);
+    if (params.instructorId !== undefined) urlParams.append('instructorId', String(params.instructorId));
 
     const url = `${this.baseUrl}/api/learning-paths${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
 

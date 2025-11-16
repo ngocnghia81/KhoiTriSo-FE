@@ -52,6 +52,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { learningPathApi, LearningPath } from '@/services/learningPathApi';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCallback } from 'react';
 
 const difficultyColors: Record<string, string> = {
   NhanBiet: 'bg-sky-100 text-sky-700',
@@ -62,6 +64,12 @@ const difficultyColors: Record<string, string> = {
 
 export default function LearningPathsPage() {
   const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  
+  const role = String(user?.role ?? '').toLowerCase();
+  const isTeacher = role === 'instructor' || role === 'teacher';
+  const isValidTeacherId = isAuthenticated && isTeacher && user?.id != null && !isNaN(Number(user.id));
+  const instructorId = isValidTeacherId ? Number(user.id) : undefined;
 
   const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,16 +87,27 @@ export default function LearningPathsPage() {
   const [pathToDelete, setPathToDelete] = useState<LearningPath | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  const fetchLearningPaths = async () => {
+  const fetchLearningPaths = useCallback(async () => {
+    if (!isAuthenticated && user === null) {
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const result = await learningPathApi.getLearningPaths({
+      
+      const params: Parameters<typeof learningPathApi.getLearningPaths>[0] = {
         page,
         pageSize,
         sortBy,
         sortOrder,
-      });
+      };
+      
+      if (instructorId != null && isValidTeacherId) {
+        params.instructorId = instructorId;
+      }
+      
+      const result = await learningPathApi.getLearningPaths(params);
       setLearningPaths(result.items);
       setTotal(result.total);
     } catch (err) {
@@ -98,11 +117,11 @@ export default function LearningPathsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, sortBy, sortOrder, instructorId, isValidTeacherId, isAuthenticated, user]);
 
   useEffect(() => {
     fetchLearningPaths();
-  }, [page, sortBy, sortOrder]);
+  }, [fetchLearningPaths]);
 
   const filteredLearningPaths = useMemo(() => {
     if (!searchTerm) return learningPaths;

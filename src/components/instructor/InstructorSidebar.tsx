@@ -20,7 +20,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardDocumentListIcon,
-  ChatBubbleLeftRightIcon
+  ChatBubbleLeftRightIcon,
+  VideoCameraIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -37,6 +38,14 @@ const navigation = [
       { name: 'Tạo khóa học', href: '/instructor/courses/create' },
       {name: 'Học viên', href: '/instructor/students' },
       {name:" Lộ trình học", href: '/instructor/courses/learning-paths' },
+    ],
+  },
+  
+  {
+    name: 'Lớp học trực tuyến',
+    icon: VideoCameraIcon,
+    children: [
+      { name: 'Danh sách lớp học', href: '/instructor/live-classes' }
     ],
   },
   {

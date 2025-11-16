@@ -47,6 +47,16 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
+export interface LiveClassParticipantDto {
+  id: number;
+  userId: number;
+  username: string;
+  fullName?: string;
+  avatar?: string;
+  joinedAt: string;
+  attendanceDuration: number;
+}
+
 class LiveClassApiService {
   private baseUrl = '/api/live-classes';
 
@@ -81,6 +91,7 @@ class LiveClassApiService {
       upcoming?: boolean;
       page?: number;
       pageSize?: number;
+      instructorId?: number;
     }
   ): Promise<PagedResult<LiveClassDTO>> {
     const queryParams = new URLSearchParams();
@@ -89,6 +100,7 @@ class LiveClassApiService {
     if (params?.upcoming !== undefined) queryParams.append('upcoming', params.upcoming.toString());
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+    if (params?.instructorId) queryParams.append('instructorId', params.instructorId.toString());
 
     const url = `${this.baseUrl}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
     const response = await authenticatedFetch(url);
@@ -244,6 +256,34 @@ class LiveClassApiService {
     }
 
     return this.normalize(data);
+  }
+
+  async getParticipants(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    id: number
+  ): Promise<LiveClassParticipantDto[]> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${id}/participants`);
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to fetch participants');
+    }
+
+    const data = extractResult<any>(result);
+    if (!data) {
+      return [];
+    }
+
+    const participants: any[] = Array.isArray(data) ? data : [];
+    return participants.map((p: any) => ({
+      id: p.id ?? p.Id ?? 0,
+      userId: p.userId ?? p.UserId ?? 0,
+      username: p.username ?? p.Username ?? '',
+      fullName: p.fullName ?? p.FullName,
+      avatar: p.avatar ?? p.Avatar,
+      joinedAt: p.joinedAt ?? p.JoinedAt ?? '',
+      attendanceDuration: p.attendanceDuration ?? p.AttendanceDuration ?? 0,
+    }));
   }
 }
 
