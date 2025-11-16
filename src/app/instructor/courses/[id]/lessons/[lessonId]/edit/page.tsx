@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useUpload } from '@/hooks/useUpload';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { lessonApiService, LessonMaterialDto } from '@/services/lessonApi';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -11,7 +12,7 @@ import {
   PaperClipIcon,
   CloudArrowUpIcon,
   TrashIcon,
-  XMarkIcon
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 function EditLessonClient() {
@@ -29,8 +30,8 @@ function EditLessonClient() {
     lessonOrder: 1,
     isPublished: false,
     videoUrl: '',
-    materialUrls: [] as string[]
   });
+  const [materials, setMaterials] = useState<LessonMaterialDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,10 +41,13 @@ function EditLessonClient() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [loadingDuration, setLoadingDuration] = useState(false);
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
 
   // Load lesson data
   useEffect(() => {
     const loadLesson = async () => {
+      if (!lessonId) return;
+      
       try {
         setLoadingData(true);
         setError(null);
@@ -60,8 +64,18 @@ function EditLessonClient() {
             lessonOrder: lesson.LessonOrder || lesson.lessonOrder || 1,
             isPublished: lesson.IsPublished !== undefined ? lesson.IsPublished : (lesson.isPublished !== undefined ? lesson.isPublished : false),
             videoUrl: lesson.VideoUrl || lesson.videoUrl || '',
-            materialUrls: lesson.Materials ? lesson.Materials.map((m: any) => m.FileUrl || m.FilePath || m.fileUrl || m.filePath).filter((url: string) => url) : []
           });
+          
+          // Load materials từ API
+          try {
+            setLoadingMaterials(true);
+            const materialsData = await lessonApiService.getLessonMaterials(authenticatedFetch, parseInt(lessonId));
+            setMaterials(materialsData);
+          } catch (materialsErr) {
+            console.error('Error loading materials:', materialsErr);
+          } finally {
+            setLoadingMaterials(false);
+          }
         } else {
           setError(data.Message || 'Không thể tải thông tin bài học');
         }
@@ -72,9 +86,7 @@ function EditLessonClient() {
       }
     };
 
-    if (lessonId) {
-      loadLesson();
-    }
+    loadLesson();
   }, [lessonId, authenticatedFetch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -219,11 +231,14 @@ function EditLessonClient() {
   };
 
   const handleUploadMaterial = async (file: File, index: number) => {
+    if (!lessonId) return;
+    
     try {
       setUploadingMaterials(prev => ({ ...prev, [index]: true }));
       console.log('Starting material upload:', { fileName: file.name, size: file.size, type: file.type });
       
-      const result = await uploadFileWithPresign(file, {
+      // Upload file first
+      const uploadResult = await uploadFileWithPresign(file, {
         folder: 'lesson-materials',
         accessRole: 'GUEST',
         onProgress: (progress) => {
@@ -231,17 +246,31 @@ function EditLessonClient() {
         }
       });
 
-      if (result.success && result.url) {
-        console.log('Material uploaded successfully, URL:', result.url);
-        setFormData(prev => ({ 
-          ...prev, 
-          materialUrls: [...prev.materialUrls, result.url!] 
-        }));
-        setMaterialFiles(prev => prev.filter((_, i) => i !== index));
-        alert('Upload tài liệu thành công!');
-      } else {
-        throw new Error(result.error || 'Upload tài liệu thất bại');
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || 'Upload tài liệu thất bại');
       }
+
+      console.log('File uploaded successfully, URL:', uploadResult.url);
+      
+      // Get file extension and type
+      const fileName = file.name;
+      const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+      const fileType = fileExtension || 'application/octet-stream';
+      
+      // Create material via API
+      const materialData = await lessonApiService.createLessonMaterial(authenticatedFetch, parseInt(lessonId), {
+        lessonId: parseInt(lessonId),
+        title: fileName,
+        fileUrl: uploadResult.url,
+        fileName: fileName,
+        fileType: fileType,
+        fileSize: file.size,
+      });
+      
+      console.log('Material created successfully:', materialData);
+      setMaterials(prev => [...prev, materialData]);
+      setMaterialFiles(prev => prev.filter((_, i) => i !== index));
+      alert('Upload tài liệu thành công!');
     } catch (e: any) {
       console.error('Material upload error:', e);
       alert(e?.message || 'Upload tài liệu thất bại');
@@ -250,11 +279,18 @@ function EditLessonClient() {
     }
   };
 
-  const removeMaterialUrl = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      materialUrls: prev.materialUrls.filter((_, i) => i !== index)
-    }));
+  const handleDeleteMaterial = async (materialId: number) => {
+    if (!lessonId) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa tài liệu này?')) return;
+    
+    try {
+      await lessonApiService.deleteLessonMaterial(authenticatedFetch, parseInt(lessonId), materialId);
+      setMaterials(prev => prev.filter(m => m.id !== materialId));
+      alert('Xóa tài liệu thành công!');
+    } catch (e: any) {
+      console.error('Error deleting material:', e);
+      alert(e?.message || 'Xóa tài liệu thất bại');
+    }
   };
 
   const removeMaterialFile = (index: number) => {
@@ -480,40 +516,55 @@ function EditLessonClient() {
                 Tài liệu bài học
               </label>
               
+              {/* Loading materials */}
+              {loadingMaterials && (
+                <div className="mb-3 text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-xs text-gray-500">Đang tải tài liệu...</p>
+                </div>
+              )}
+              
               {/* Uploaded materials */}
-              {formData.materialUrls.length > 0 && (
+              {!loadingMaterials && materials.length > 0 && (
                 <div className="mb-3 space-y-3">
-                  {formData.materialUrls.map((url, index) => {
-                    const fileName = url.split('/').pop() || `Tài liệu ${index + 1}`;
+                  {materials.map((material) => {
+                    const fileUrl = material.fileUrl || material.filePath;
+                    const fileName = material.fileName;
                     const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
                     const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension);
                     const isPdf = fileExtension === 'pdf';
                     
                     return (
-                      <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
+                      <div key={material.id} className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
                         {/* File Preview/Info */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center flex-1 min-w-0">
                             <DocumentTextIcon className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-green-900 truncate">{fileName}</p>
+                              <p className="text-sm font-medium text-green-900 truncate">{material.title}</p>
                               <div className="flex items-center space-x-2 mt-1">
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                                >
-                                  Xem/Tải file
-                                </a>
-                                <span className="text-xs text-gray-400">•</span>
-                                <span className="text-xs text-gray-500 truncate">{url}</span>
+                                {fileUrl && (
+                                  <>
+                                    <a
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                    >
+                                      Xem/Tải file
+                                    </a>
+                                    <span className="text-xs text-gray-400">•</span>
+                                  </>
+                                )}
+                                <span className="text-xs text-gray-500">
+                                  {(material.fileSize / 1024 / 1024).toFixed(2)} MB • {material.downloadCount} lượt tải
+                                </span>
                               </div>
                             </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => removeMaterialUrl(index)}
+                            onClick={() => handleDeleteMaterial(material.id)}
                             className="text-red-600 hover:text-red-800 ml-2 flex-shrink-0"
                           >
                             <XMarkIcon className="h-5 w-5" />
@@ -521,12 +572,12 @@ function EditLessonClient() {
                         </div>
                         
                         {/* Preview for images and PDFs */}
-                        {(isImage || isPdf) && (
+                        {fileUrl && (isImage || isPdf) && (
                           <div className="mt-2 border border-gray-200 rounded overflow-hidden">
                             {isImage ? (
                               <img
-                                src={url}
-                                alt={fileName}
+                                src={fileUrl}
+                                alt={material.title}
                                 className="w-full h-auto max-h-64 object-contain bg-gray-50"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
@@ -537,7 +588,7 @@ function EditLessonClient() {
                                 <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
                                 <p className="text-sm text-gray-600 mb-2">PDF Document</p>
                                 <a
-                                  href={url}
+                                  href={fileUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
@@ -551,6 +602,13 @@ function EditLessonClient() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              
+              {/* Empty state */}
+              {!loadingMaterials && materials.length === 0 && (
+                <div className="mb-3 text-center py-4 text-gray-500 text-sm">
+                  Chưa có tài liệu nào
                 </div>
               )}
               
@@ -646,7 +704,7 @@ function EditLessonClient() {
             </button>
             <button
               type="submit"
-              disabled={loading || uploadingVideo || Object.values(uploadingMaterials).some(v => v)}
+              disabled={loading || uploadingVideo || loadingMaterials || Object.values(uploadingMaterials).some(v => v)}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               {loading 

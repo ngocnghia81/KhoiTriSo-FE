@@ -209,6 +209,13 @@ function LessonsClient() {
                       {(lesson.IsPublished ?? lesson.isPublished ?? false) ? 'Đã xuất bản' : 'Chưa xuất bản'}
                     </span>
                     <button
+                      onClick={() => router.push(`/instructor/courses/${courseId}/lessons/${lesson.id || lesson.Id}`)}
+                      className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <PlayIcon className="h-4 w-4 mr-1" />
+                      Xem
+                    </button>
+                    <button
                       onClick={() => handleEditLesson(lesson.id || lesson.Id)}
                       className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
                     >

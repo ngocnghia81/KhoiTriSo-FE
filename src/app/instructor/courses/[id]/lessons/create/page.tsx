@@ -682,23 +682,6 @@ function CreateLessonClient() {
                 </div>
               </div>
             </div>
-
-            {/* Published */}
-            <div className="md:col-span-2">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isPublished"
-                  name="isPublished"
-                  checked={formData.isPublished}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="isPublished" className="ml-2 block text-sm text-gray-900">
-                  Xuất bản ngay
-                </label>
-              </div>
-            </div>
           </div>
 
           {/* Submit buttons */}
