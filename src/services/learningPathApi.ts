@@ -536,6 +536,23 @@ class LearningPathApiService {
     return result?.Success === true;
   }
 
+  async restoreLearningPath(id: number): Promise<LearningPath> {
+    const response = await retryRequest(async () =>
+      fetchWithAutoRefresh(`${this.baseUrl}/api/admin/learning-paths/${id}/restore`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+      })
+    );
+
+    const parsed = await safeJsonParse(response);
+    if (!isSuccessfulResponse(parsed)) {
+      throw new Error(extractMessage(parsed));
+    }
+
+    const result = extractResult(parsed);
+    return mapLearningPath(result);
+  }
+
   async getLearningPathCourses(id: number): Promise<LearningPathCourse[]> {
     const response = await retryRequest(async () =>
       fetchWithAutoRefresh(`${this.baseUrl}/api/learning-paths/${id}/courses`, {

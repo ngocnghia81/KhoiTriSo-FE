@@ -314,41 +314,41 @@ export default function QuestionsPage() {
               </div>
             ) : (
               <>
-                {/* Books Grid */}
+            {/* Books Grid */}
                 {books.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                     <p className="text-sm">Không tìm thấy sách nào</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1">
                     {books.map((book) => (
-                      <button
-                        key={book.id}
-                        onClick={() => setSelectedBookId(book.id.toString())}
-                        className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
-                          selectedBookId === book.id.toString()
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-blue-300'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{book.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">ID: {book.id}</p>
-                            {book.totalQuestions !== undefined && (
-                              <p className="text-xs text-blue-600 mt-1">
-                                {book.totalQuestions} câu hỏi
-                              </p>
-                            )}
-                          </div>
-                          {selectedBookId === book.id.toString() && (
-                            <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    key={book.id}
+                    onClick={() => setSelectedBookId(book.id.toString())}
+                    className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
+                      selectedBookId === book.id.toString()
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{book.title}</p>
+                        <p className="text-xs text-gray-500 mt-1">ID: {book.id}</p>
+                        {book.totalQuestions !== undefined && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            {book.totalQuestions} câu hỏi
+                          </p>
+                        )}
+                      </div>
+                      {selectedBookId === book.id.toString() && (
+                        <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+            </div>
                 )}
 
                 {/* Book Pagination */}
@@ -375,7 +375,7 @@ export default function QuestionsPage() {
                       Trang sau
                       <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
-                  </div>
+              </div>
                 )}
               </>
             )}
@@ -633,7 +633,7 @@ export default function QuestionsPage() {
                               return (
                                 <Badge className={config?.color || 'bg-gray-100 text-gray-700'}>
                                   {config?.label || 'N/A'}
-                                </Badge>
+                            </Badge>
                               );
                             })()}
                           </TableCell>
