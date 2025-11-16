@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useInstructorDetail } from '@/hooks/useInstructors';
 import ResizablePanel from '../dashboard/ResizablePanel';
 import {
   HomeIcon,
@@ -17,10 +19,8 @@ import {
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  BanknotesIcon,
-  PresentationChartLineIcon
+  ClipboardDocumentListIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -35,38 +35,8 @@ const navigation = [
     children: [
       { name: 'Tất cả khóa học', href: '/instructor/courses' },
       { name: 'Tạo khóa học', href: '/instructor/courses/create' },
-      { name: 'Chờ phê duyệt', href: '/instructor/courses/pending' },
-      { name: 'Đã xuất bản', href: '/instructor/courses/published' },
-    ],
-  },
-  {
-    name: 'Sách điện tử',
-    icon: BookOpenIcon,
-    children: [
-      { name: 'Tất cả sách', href: '/instructor/books' },
-      { name: 'Tạo sách mới', href: '/instructor/books/create' },
-      { name: 'Quản lý mã ID', href: '/instructor/books/activation-codes' },
-      { name: 'Chờ phê duyệt', href: '/instructor/books/pending' },
-    ],
-  },
-  {
-    name: 'Thu nhập',
-    icon: CurrencyDollarIcon,
-    children: [
-      { name: 'Tổng quan thu nhập', href: '/instructor/earnings' },
-      { name: 'Lịch sử giao dịch', href: '/instructor/earnings/transactions' },
-      { name: 'Yêu cầu rút tiền', href: '/instructor/earnings/withdraw' },
-      { name: 'Báo cáo tháng', href: '/instructor/earnings/reports' },
-    ],
-  },
-  {
-    name: 'Phân tích',
-    icon: ChartBarIcon,
-    children: [
-      { name: 'Hiệu suất khóa học', href: '/instructor/analytics/courses' },
-      { name: 'Doanh số bán sách', href: '/instructor/analytics/books' },
-      { name: 'Học viên', href: '/instructor/analytics/students' },
-      { name: 'Đánh giá', href: '/instructor/analytics/reviews' },
+      {name: 'Học viên', href: '/instructor/students' },
+      {name:" Lộ trình học", href: '/instructor/courses/learning-paths' },
     ],
   },
   {
@@ -80,6 +50,35 @@ const navigation = [
     ],
   },
   {
+    name: 'Sách điện tử',
+    icon: BookOpenIcon,
+    children: [
+      { name: 'Tất cả sách', href: '/instructor/books' },
+      { name: 'Tạo sách mới', href: '/instructor/books/create' },
+      { name: 'Quản lý mã ID', href: '/instructor/books/activation-codes' }
+    ],
+  },
+  {
+    name: 'Diễn đàn & Câu hỏi',
+    icon: ChatBubbleLeftRightIcon,
+    children: [
+      { name: 'Danh sách câu hỏi', href: '/instructor/forum/questions' },
+      { name: 'Câu hỏi chưa trả lời', href: '/instructor/forum/unanswered' },
+      { name: 'Câu hỏi nổi bật', href: '/instructor/forum/featured' },
+      { name: 'Moderation', href: '/instructor/forum/moderation' },
+      { name: 'Báo cáo vi phạm', href: '/instructor/forum/reports' },
+      { name: 'Thống kê forum', href: '/instructor/forum/analytics' },
+    ],
+  },
+  {
+    name: 'Thu nhập',
+    icon: CurrencyDollarIcon,
+    children: [
+      { name: 'Tổng quan thu nhập', href: '/instructor/earnings' },
+      
+    ],
+  },
+  {
     name: 'Hồ sơ',
     href: '/instructor/profile',
     icon: UserIcon,
@@ -88,6 +87,9 @@ const navigation = [
 
 export default function InstructorSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const instructorId = user?.id ? Number(user.id) : 0;
+  const { data: instructorDetail, loading: instructorLoading } = useInstructorDetail(instructorId);
   const { 
     sidebarOpen, 
     sidebarCollapsed, 
@@ -97,6 +99,38 @@ export default function InstructorSidebar() {
     toggleCollapse 
   } = useSidebar();
   const [expandedItems, setExpandedItems] = useState<string[]>(['Tổng quan']);
+
+  const avatarContent = useMemo(() => {
+    if (user?.avatar) {
+      return (
+        <img
+          src={user.avatar}
+          alt={user?.name || user?.email || 'Giảng viên'}
+          className="h-8 w-8 rounded-full object-cover"
+        />
+      );
+    }
+
+    const initials = (user?.name || user?.email || 'GV')
+      .split(' ')
+      .map((part) => part.charAt(0))
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+
+    return (
+      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
+        <span className="text-sm font-medium text-white">{initials}</span>
+      </div>
+    );
+  }, [user?.avatar, user?.name, user?.email]);
+
+  const displayName = user?.name || user?.email || 'Giảng viên';
+  const roleLabel = user?.role === 'admin'
+    ? 'Quản trị viên'
+    : user?.role === 'student'
+      ? 'Học viên'
+      : 'Giảng viên';
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems(prev => 
@@ -110,7 +144,7 @@ export default function InstructorSidebar() {
     if (href === '/instructor') {
       return pathname === '/instructor';
     }
-    return pathname.startsWith(href);
+    return pathname?.startsWith(href) ?? false;
   };
 
   const handleWidthChange = (newWidth: number) => {
@@ -188,11 +222,23 @@ export default function InstructorSidebar() {
           <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 border-b border-gray-200">
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="text-center">
-                <div className="font-semibold text-green-600">12</div>
+                <div className="font-semibold text-green-600">
+                  {instructorLoading ? (
+                    <span className="block h-4 bg-green-200 rounded animate-pulse mx-auto w-10" />
+                  ) : (
+                    instructorDetail?.TotalCourses ?? 0
+                  )}
+                </div>
                 <div className="text-gray-600">Khóa học</div>
               </div>
               <div className="text-center">
-                <div className="font-semibold text-blue-600">₫2.5M</div>
+                <div className="font-semibold text-blue-600">
+                  {instructorLoading ? (
+                    <span className="block h-4 bg-blue-200 rounded animate-pulse mx-auto w-12" />
+                  ) : (
+                    `₫${(instructorDetail?.TotalEarnings ?? 0).toLocaleString()}`
+                  )}
+                </div>
                 <div className="text-gray-600">Thu nhập</div>
               </div>
             </div>
@@ -269,14 +315,12 @@ export default function InstructorSidebar() {
         <div className="border-t border-gray-200 p-3">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
-                <UserIcon className="h-4 w-4 text-white" />
-              </div>
+              {avatarContent}
             </div>
             {!sidebarCollapsed && (
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Nguyễn Văn A</p>
-                <p className="text-xs text-gray-500">Giảng viên</p>
+                <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                <p className="text-xs text-gray-500">{roleLabel}</p>
               </div>
             )}
           </div>

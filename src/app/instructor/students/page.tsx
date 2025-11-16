@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { 
   UsersIcon,
   AcademicCapIcon,
@@ -15,6 +15,8 @@ import {
   FunnelIcon
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { useStudents } from '@/hooks/useStudents';
 
 interface Student {
   id: string;
@@ -41,88 +43,7 @@ interface CourseProgress {
   status: 'on_track' | 'behind' | 'completed';
 }
 
-const mockStudents: Student[] = [
-  {
-    id: '1',
-    name: 'Nguyễn Văn An',
-    email: 'an.nguyen@example.com',
-    avatar: '/images/avatars/student1.jpg',
-    enrolledCourses: 3,
-    completedCourses: 1,
-    totalLessons: 45,
-    completedLessons: 32,
-    totalAssignments: 12,
-    completedAssignments: 9,
-    averageScore: 85.5,
-    lastActivity: '2024-02-12T10:30:00',
-    status: 'active',
-    enrollmentDate: '2024-01-15'
-  },
-  {
-    id: '2',
-    name: 'Trần Thị Bình',
-    email: 'binh.tran@example.com',
-    avatar: '/images/avatars/student2.jpg',
-    enrolledCourses: 2,
-    completedCourses: 2,
-    totalLessons: 30,
-    completedLessons: 30,
-    totalAssignments: 8,
-    completedAssignments: 8,
-    averageScore: 92.3,
-    lastActivity: '2024-02-12T15:45:00',
-    status: 'active',
-    enrollmentDate: '2024-01-10'
-  },
-  {
-    id: '3',
-    name: 'Lê Minh Cường',
-    email: 'cuong.le@example.com',
-    avatar: '/images/avatars/student3.jpg',
-    enrolledCourses: 4,
-    completedCourses: 0,
-    totalLessons: 60,
-    completedLessons: 15,
-    totalAssignments: 16,
-    completedAssignments: 4,
-    averageScore: 62.1,
-    lastActivity: '2024-02-08T09:20:00',
-    status: 'at_risk',
-    enrollmentDate: '2024-01-20'
-  },
-  {
-    id: '4',
-    name: 'Phạm Thị Dung',
-    email: 'dung.pham@example.com',
-    avatar: '/images/avatars/student4.jpg',
-    enrolledCourses: 2,
-    completedCourses: 0,
-    totalLessons: 30,
-    completedLessons: 28,
-    totalAssignments: 8,
-    completedAssignments: 7,
-    averageScore: 78.9,
-    lastActivity: '2024-02-11T14:15:00',
-    status: 'active',
-    enrollmentDate: '2024-01-25'
-  },
-  {
-    id: '5',
-    name: 'Hoàng Văn Em',
-    email: 'em.hoang@example.com',
-    avatar: '/images/avatars/student5.jpg',
-    enrolledCourses: 1,
-    completedCourses: 0,
-    totalLessons: 15,
-    completedLessons: 3,
-    totalAssignments: 4,
-    completedAssignments: 0,
-    averageScore: 0,
-    lastActivity: '2024-02-05T16:00:00',
-    status: 'inactive',
-    enrollmentDate: '2024-02-01'
-  }
-];
+// Data is fetched via useStudents; remove mock and map API -> UI locally
 
 const getStatusLabel = (status: Student['status']) => {
   switch (status) {
@@ -152,11 +73,45 @@ const getStatusIcon = (status: Student['status']) => {
 };
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState<Student[]>(mockStudents);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | Student['status']>('all');
+  const { isAuthenticated, user } = useAuth();
+  const isTeacher = user?.role === 'instructor';
+  const instructorId = isTeacher ? Number(user?.id) : undefined;
+
+  const [page] = useState(1);
+  const [pageSize] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | Student['status']>('all');
   const [sortBy, setSortBy] = useState<'name' | 'progress' | 'score' | 'activity'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const { students: apiStudents, loading, error } = useStudents(
+    {
+      instructorId,
+      search: searchQuery || undefined,
+      page,
+      pageSize,
+    },
+    { enabled: !!isAuthenticated && isTeacher && !!instructorId }
+  );
+
+  const students: Student[] = useMemo(() => {
+    return (apiStudents || []).map((s: any) => ({
+      id: String(s.id),
+      name: s.fullName || s.username || 'N/A',
+      email: s.email || '',
+      avatar: s.avatar || '',
+      enrolledCourses: Number(s.enrolledCourses ?? 0),
+      completedCourses: Number(s.completedCourses ?? 0),
+      totalLessons: Number(s.totalLessons ?? 0),
+      completedLessons: Number(s.completedLessons ?? 0),
+      totalAssignments: Number(s.totalAssignments ?? 0),
+      completedAssignments: Number(s.completedAssignments ?? 0),
+      averageScore: Number(s.averageScore ?? 0),
+      lastActivity: s.lastActivity || '',
+      status: (s.status as Student['status']) || 'inactive',
+      enrollmentDate: s.enrollmentDate || '',
+    }));
+  }, [apiStudents]);
 
   const filteredStudents = students.filter(student => {
     const matchesFilter = selectedFilter === 'all' || student.status === selectedFilter;
@@ -210,6 +165,11 @@ export default function StudentsPage() {
 
   return (
     <div className="p-6">
+      {error && (
+        <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
@@ -227,7 +187,7 @@ export default function StudentsPage() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Tổng học sinh</p>
-              <p className="text-2xl font-bold text-gray-900">{students.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{loading ? '...' : students.length}</p>
             </div>
           </div>
         </div>
@@ -338,7 +298,12 @@ export default function StudentsPage() {
           </h2>
         </div>
 
-        {sortedStudents.length === 0 ? (
+        {loading ? (
+          <div className="p-12 text-center">
+            <UsersIcon className="mx-auto h-12 w-12 text-gray-400 animate-pulse" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Đang tải học sinh...</h3>
+          </div>
+        ) : sortedStudents.length === 0 ? (
           <div className="p-12 text-center">
             <UsersIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">Không có học sinh</h3>
