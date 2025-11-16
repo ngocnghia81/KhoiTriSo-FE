@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { TrendingUp, Star, Coins, Key, Search, BookOpen, Loader2 } from 'lucide-react';
 import { useBooks } from '@/hooks/useBooks';
 import { fetchWithAutoRefresh } from '@/utils/apiHelpers';
+import { useAuth } from '@/contexts/AuthContext';
 
 type BookAnalytics = {
   BookId: number;
@@ -20,13 +21,25 @@ type BookAnalytics = {
 };
 
 export default function BooksAnalyticsPage() {
+  const { isAuthenticated, user } = useAuth();
+  const userRole = String(user?.role ?? '').toLowerCase();
+  const isTeacher = userRole === 'instructor';
+  const authorId = isTeacher && user?.id ? Number(user.id) : undefined;
+
   const [bookQuery, setBookQuery] = useState('');
   const [bookPage, setBookPage] = useState(1);
-  const { books: searchBooks, loading: searchLoading } = useBooks({ page: bookPage, pageSize: 10, search: bookQuery });
+  const { books: searchBooks, loading: searchLoading, pagination } = useBooks({ 
+    page: bookPage, 
+    pageSize: 10, 
+    search: bookQuery,
+    authorId
+  }, { enabled: !!isAuthenticated && (!isTeacher || !!authorId) });
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [data, setData] = useState<BookAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const totalPages = pagination?.totalPages || 1;
 
   useEffect(() => {
     if (selectedBookId) {
@@ -116,9 +129,23 @@ export default function BooksAnalyticsPage() {
 
           {/* Pagination */}
           <div className="flex items-center justify-between mt-3">
-            <Button variant="outline" disabled={bookPage === 1 || searchLoading} onClick={() => setBookPage((p) => Math.max(1, p - 1))}>Trang trước</Button>
-            <div className="text-sm text-gray-500">Trang {bookPage}</div>
-            <Button variant="outline" disabled={searchLoading || searchBooks.length < 10} onClick={() => setBookPage((p) => p + 1)}>Trang sau</Button>
+            <Button 
+              variant="outline" 
+              disabled={bookPage === 1 || searchLoading} 
+              onClick={() => setBookPage((p) => Math.max(1, p - 1))}
+            >
+              Trang trước
+            </Button>
+            <div className="text-sm text-gray-500">
+              Trang {bookPage} / {totalPages}
+            </div>
+            <Button 
+              variant="outline" 
+              disabled={searchLoading || bookPage >= totalPages} 
+              onClick={() => setBookPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Trang sau
+            </Button>
           </div>
 
           {selectedBook && (

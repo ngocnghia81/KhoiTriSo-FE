@@ -45,7 +45,8 @@ const navigation = [
     name: 'Lớp học trực tuyến',
     icon: VideoCameraIcon,
     children: [
-      { name: 'Danh sách lớp học', href: '/instructor/live-classes' }
+      { name: 'Danh sách lớp học', href: '/instructor/live-classes' },
+      { name: 'Tạo lớp học', href: '/instructor/live-classes/create' }
     ],
   },
   {
@@ -64,7 +65,10 @@ const navigation = [
     children: [
       { name: 'Tất cả sách', href: '/instructor/books' },
       { name: 'Tạo sách mới', href: '/instructor/books/create' },
-      { name: 'Quản lý mã ID', href: '/instructor/books/activation-codes' }
+      { name: 'Quản lý câu hỏi', href: '/instructor/books/questions' },
+      { name: 'Quản lý lời giải', href: '/instructor/books/solutions' },
+      { name: 'Quản lý mã ID', href: '/instructor/books/activation-codes' },
+      { name: 'Thống kê', href: '/instructor/books/analytics' }
     ],
   },
   {
@@ -72,8 +76,10 @@ const navigation = [
     icon: ChatBubbleLeftRightIcon,
     children: [
       { name: 'Danh sách câu hỏi', href: '/instructor/forum/questions' },
+      { name: 'Tạo câu hỏi', href: '/instructor/forum/questions/create' },
       { name: 'Câu hỏi chưa trả lời', href: '/instructor/forum/unanswered' },
       { name: 'Câu hỏi nổi bật', href: '/instructor/forum/featured' },
+      { name: 'Bài viết', href: '/instructor/forum-posts' },
       { name: 'Moderation', href: '/instructor/forum/moderation' },
       { name: 'Báo cáo vi phạm', href: '/instructor/forum/reports' },
       { name: 'Thống kê forum', href: '/instructor/forum/analytics' },

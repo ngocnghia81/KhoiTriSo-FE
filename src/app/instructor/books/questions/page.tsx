@@ -39,6 +39,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { bookApiService, BookQuestion, Book, BookChapter } from '@/services/bookApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCallback } from 'react';
+import { useBooks } from '@/hooks/useBooks';
 
 const questionTypeLabels: Record<number, string> = {
   0: 'Trắc nghiệm',
@@ -55,10 +58,13 @@ const difficultyConfig: Record<number, { label: string; color: string }> = {
 
 export default function QuestionsPage() {
   const router = useRouter();
-  const [books, setBooks] = useState<Book[]>([]);
+  const { isAuthenticated, user } = useAuth();
+  const userRole = String(user?.role ?? '').toLowerCase();
+  const isTeacher = userRole === 'instructor' ;
+  const authorId = isTeacher && user?.id ? Number(user.id) : undefined;
+  
   const [chapters, setChapters] = useState<BookChapter[]>([]);
   const [questions, setQuestions] = useState<BookQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingChapters, setLoadingChapters] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,41 +79,22 @@ export default function QuestionsPage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   
   // Pagination
+  const [bookPage, setBookPage] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
   const [totalQuestions, setTotalQuestions] = useState(0);
 
-  useEffect(() => {
-    fetchBooks();
-  }, []);
+  // Use useBooks hook for pagination
+  const { books, loading: loadingBooks, pagination: booksPagination } = useBooks({
+    page: bookPage,
+    pageSize: 10,
+    search: bookSearchQuery || undefined,
+    authorId
+  }, { enabled: !!isAuthenticated && (!isTeacher || !!authorId) });
 
-  useEffect(() => {
-    if (selectedBookId) {
-      fetchChapters();
-    }
-  }, [selectedBookId]);
+  const totalBookPages = booksPagination?.totalPages || 1;
 
-  useEffect(() => {
-    if (selectedChapterId) {
-      fetchQuestions();
-    }
-  }, [currentPage, selectedChapterId]);
-
-  const fetchBooks = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const booksData = await bookApiService.getBooks({ page: 1, pageSize: 100 });
-      setBooks(booksData);
-    } catch (err: any) {
-      console.error('Error fetching books:', err);
-      setError(err.message || 'Không thể tải danh sách sách');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchChapters = async () => {
+  const fetchChapters = useCallback(async () => {
     if (!selectedBookId) return;
     
     try {
@@ -124,9 +111,9 @@ export default function QuestionsPage() {
     } finally {
       setLoadingChapters(false);
     }
-  };
+  }, [selectedBookId]);
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     if (!selectedChapterId) return;
     
     try {
@@ -140,7 +127,6 @@ export default function QuestionsPage() {
       // Filter questions by chapter
       const filteredQuestions = allQuestions.filter(q => q.chapterId === chapterId);
       
-      // If no questions found for chapter, show all book questions as fallback
       if (filteredQuestions.length === 0) {
         console.warn('No questions found for chapter, showing all book questions');
         setQuestions(allQuestions);
@@ -156,7 +142,19 @@ export default function QuestionsPage() {
     } finally {
       setLoadingQuestions(false);
     }
-  };
+  }, [selectedChapterId, selectedBookId]);
+
+  useEffect(() => {
+    if (selectedBookId) {
+      fetchChapters();
+    }
+  }, [selectedBookId, fetchChapters]);
+
+  useEffect(() => {
+    if (selectedChapterId) {
+      fetchQuestions();
+    }
+  }, [currentPage, selectedChapterId, fetchQuestions]);
 
   const handleDelete = async (questionId: number) => {
     if (!confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) return;
@@ -171,17 +169,21 @@ export default function QuestionsPage() {
   };
 
   const filteredQuestions = questions.filter(q => {
+    const questionText = q.question || q.QuestionContent || '';
+    const questionType = q.questionType ?? q.QuestionType ?? 0;
+    const difficulty = q.difficulty ?? q.DifficultyLevel ?? 0;
+    
     const matchesSearch = searchQuery === '' || 
-      q.question.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'all' || q.questionType.toString() === selectedType;
-    const matchesDifficulty = selectedDifficulty === 'all' || q.difficulty.toString() === selectedDifficulty;
+      questionText.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = selectedType === 'all' || questionType.toString() === selectedType;
+    const matchesDifficulty = selectedDifficulty === 'all' || difficulty.toString() === selectedDifficulty;
     
     return matchesSearch && matchesType && matchesDifficulty;
   });
 
   const totalPages = Math.ceil(totalQuestions / pageSize);
 
-  if (loading) {
+  if (loadingBooks && books.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -297,57 +299,85 @@ export default function QuestionsPage() {
               <Input
                 placeholder="Tìm kiếm sách theo tên..."
                 value={bookSearchQuery}
-                onChange={(e) => setBookSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setBookSearchQuery(e.target.value);
+                  setBookPage(1);
+                }}
                 className="pl-10"
               />
             </div>
 
-            {/* Books Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1">
-              {books
-                .filter(book => 
-                  bookSearchQuery === '' || 
-                  book.title.toLowerCase().includes(bookSearchQuery.toLowerCase()) ||
-                  book.id.toString().includes(bookSearchQuery)
-                )
-                .slice(0, 50)
-                .map((book) => (
-                  <button
-                    key={book.id}
-                    onClick={() => setSelectedBookId(book.id.toString())}
-                    className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
-                      selectedBookId === book.id.toString()
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{book.title}</p>
-                        <p className="text-xs text-gray-500 mt-1">ID: {book.id}</p>
-                        {book.totalQuestions !== undefined && (
-                          <p className="text-xs text-blue-600 mt-1">
-                            {book.totalQuestions} câu hỏi
-                          </p>
-                        )}
-                      </div>
-                      {selectedBookId === book.id.toString() && (
-                        <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-            </div>
-
-            {books.filter(book => 
-              bookSearchQuery === '' || 
-              book.title.toLowerCase().includes(bookSearchQuery.toLowerCase()) ||
-              book.id.toString().includes(bookSearchQuery)
-            ).length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">Không tìm thấy sách nào</p>
+            {loadingBooks ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Đang tải sách...</p>
               </div>
+            ) : (
+              <>
+                {/* Books Grid */}
+                {books.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">Không tìm thấy sách nào</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1">
+                    {books.map((book) => (
+                      <button
+                        key={book.id}
+                        onClick={() => setSelectedBookId(book.id.toString())}
+                        className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
+                          selectedBookId === book.id.toString()
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{book.title}</p>
+                            <p className="text-xs text-gray-500 mt-1">ID: {book.id}</p>
+                            {book.totalQuestions !== undefined && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                {book.totalQuestions} câu hỏi
+                              </p>
+                            )}
+                          </div>
+                          {selectedBookId === book.id.toString() && (
+                            <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Book Pagination */}
+                {totalBookPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBookPage((p) => Math.max(1, p - 1))}
+                      disabled={bookPage === 1 || loadingBooks}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Trang trước
+                    </Button>
+                    <div className="text-sm text-gray-500">
+                      Trang {bookPage} / {totalBookPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBookPage((p) => Math.min(totalBookPages, p + 1))}
+                      disabled={bookPage >= totalBookPages || loadingBooks}
+                    >
+                      Trang sau
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             {selectedBookId && (
@@ -355,7 +385,7 @@ export default function QuestionsPage() {
                 <CheckCircle2 className="w-5 h-5 text-blue-600" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-blue-900">
-                    Đã chọn: {books.find(b => b.id.toString() === selectedBookId)?.title}
+                    Đã chọn: {books.find(b => b.id.toString() === selectedBookId)?.title || 'Đang tải...'}
                   </p>
                 </div>
                 <Button
@@ -589,17 +619,23 @@ export default function QuestionsPage() {
                         <TableRow key={question.id}>
                           <TableCell className="font-medium">#{question.id}</TableCell>
                           <TableCell className="max-w-md">
-                            <p className="truncate">{question.question}</p>
+                            <p className="truncate">{question.question || question.QuestionContent || 'N/A'}</p>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {questionTypeLabels[question.questionType] || 'Không xác định'}
+                              {questionTypeLabels[question.questionType ?? question.QuestionType ?? 0] || 'Không xác định'}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge className={difficultyConfig[question.difficulty]?.color || 'bg-gray-100 text-gray-700'}>
-                              {difficultyConfig[question.difficulty]?.label || 'N/A'}
-                            </Badge>
+                            {(() => {
+                              const difficulty = question.difficulty ?? question.DifficultyLevel ?? 0;
+                              const config = difficultyConfig[difficulty as keyof typeof difficultyConfig];
+                              return (
+                                <Badge className={config?.color || 'bg-gray-100 text-gray-700'}>
+                                  {config?.label || 'N/A'}
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-gray-600">Book #{question.bookId}</span>

@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { bookApiService, BookQuestion, QuestionOption } from '@/services/bookApi';
+import { bookApiService, BookQuestion, QuestionOption, BookChapter } from '@/services/bookApi';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface OptionForm {
@@ -52,8 +52,29 @@ export default function EditQuestionPage() {
   const [explanation, setExplanation] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [orderIndex, setOrderIndex] = useState('0');
-  const [chapterId, setChapterId] = useState('');
+  const [chapterId, setChapterId] = useState('none');
   const [options, setOptions] = useState<OptionForm[]>([]);
+  const [chapters, setChapters] = useState<BookChapter[]>([]);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+
+  // Load chapters
+  useEffect(() => {
+    const loadChapters = async () => {
+      if (!bookId) return;
+      
+      try {
+        setLoadingChapters(true);
+        const chaptersData = await bookApiService.getBookChapters(bookId);
+        setChapters(chaptersData);
+      } catch (err) {
+        console.error('Error loading chapters:', err);
+      } finally {
+        setLoadingChapters(false);
+      }
+    };
+
+    loadChapters();
+  }, [bookId]);
 
   useEffect(() => {
     if (bookId && questionId) {
@@ -72,13 +93,13 @@ export default function EditQuestionPage() {
       const question = questions.find(q => q.id === questionId);
 
       if (question) {
-        setQuestionText(question.question);
-        setQuestionType(question.questionType.toString());
-        setDifficulty(question.difficulty.toString());
-        setExplanation(question.explanation || '');
+        setQuestionText(question.question || question.QuestionContent || '');
+        setQuestionType((question.questionType ?? question.QuestionType ?? 1).toString());
+        setDifficulty((question.difficulty ?? question.DifficultyLevel ?? 1).toString());
+        setExplanation(question.explanation || question.explanationContent || question.ExplanationContent || '');
         setCorrectAnswer(question.correctAnswer || '');
-        setOrderIndex(question.orderIndex.toString());
-        setChapterId(question.chapterId?.toString() || '');
+        setOrderIndex((question.orderIndex ?? question.OrderIndex ?? 0).toString());
+        setChapterId(question.chapterId?.toString() || 'none');
 
         // Map options
         if (question.options && question.options.length > 0) {
@@ -150,7 +171,7 @@ export default function EditQuestionPage() {
       const requestBody = {
         id: questionId,
         bookId,
-        chapterId: chapterId ? parseInt(chapterId) : null,
+        chapterId: chapterId && chapterId !== 'none' ? parseInt(chapterId) : null,
         question: questionText,
         questionType: parseInt(questionType),
         difficulty: parseInt(difficulty),
@@ -285,6 +306,29 @@ export default function EditQuestionPage() {
                   rows={4}
                   required
                 />
+              </div>
+
+              {/* Chapter Selection */}
+              <div className="grid gap-2">
+                <Label htmlFor="chapterId">Chương (tùy chọn)</Label>
+                <Select value={chapterId} onValueChange={setChapterId} disabled={loadingChapters}>
+                  <SelectTrigger id="chapterId">
+                    <SelectValue placeholder={loadingChapters ? "Đang tải..." : "Chọn chương"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Không chọn chương</SelectItem>
+                    {chapters.map((chapter) => (
+                      <SelectItem key={chapter.id} value={chapter.id.toString()}>
+                        Chương {chapter.orderIndex}: {chapter.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {chapters.length === 0 && !loadingChapters && (
+                  <p className="text-xs text-gray-500">
+                    Sách này chưa có chương nào. Câu hỏi sẽ không gán vào chương cụ thể.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

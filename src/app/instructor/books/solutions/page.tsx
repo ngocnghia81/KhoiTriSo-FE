@@ -23,6 +23,7 @@ import { useBooks } from '@/hooks/useBooks';
 import { bookApiService, Book, BookQuestion, BookChapter } from '@/services/bookApi';
 import { solutionsApi } from '@/services/solutionsApi';
 import LatexPreview from '@/components/LatexPreview';
+import { useAuth } from '@/contexts/AuthContext';
 
 declare global {
   interface Window {
@@ -32,10 +33,22 @@ declare global {
 
 export default function SolutionsPage() {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
+  const userRole = String(user?.role ?? '').toLowerCase();
+  const isTeacher = userRole === 'instructor';
+  const authorId = isTeacher && user?.id ? Number(user.id) : undefined;
+
   const [bookQuery, setBookQuery] = useState('');
   const [bookPage, setBookPage] = useState(1);
-  const { books: searchBooks, loading: searchLoading } = useBooks({ page: bookPage, pageSize: 10, search: bookQuery });
+  const { books: searchBooks, loading: searchLoading, pagination } = useBooks({ 
+    page: bookPage, 
+    pageSize: 10, 
+    search: bookQuery,
+    authorId
+  }, { enabled: !!isAuthenticated && (!isTeacher || !!authorId) });
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
+
+  const totalPages = pagination?.totalPages || 1;
   const [selectedChapterId, setSelectedChapterId] = useState<number | null>(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [chapters, setChapters] = useState<BookChapter[]>([]);
@@ -436,6 +449,27 @@ export default function SolutionsPage() {
                 ))}
                 </ul>
               )}
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-3">
+              <Button 
+                variant="outline" 
+                disabled={bookPage === 1 || searchLoading} 
+                onClick={() => setBookPage((p) => Math.max(1, p - 1))}
+              >
+                Trang trước
+              </Button>
+              <div className="text-sm text-gray-500">
+                Trang {bookPage} / {totalPages}
+              </div>
+              <Button 
+                variant="outline" 
+                disabled={searchLoading || bookPage >= totalPages} 
+                onClick={() => setBookPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Trang sau
+              </Button>
             </div>
 
             {selectedBook && (

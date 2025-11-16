@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
@@ -19,7 +19,7 @@ import {
 import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
 import { isSuccessfulResponse, extractMessage, extractResult } from '@/utils/apiHelpers';
 import { LatexEditor, LatexRenderer } from '@/components/LatexRenderer';
-import LatexPreview from '@/components/LatexPreview';
+import { bookApiService, BookChapter } from '@/services/bookApi';
 
 interface QuestionOption {
   optionText: string;
@@ -33,8 +33,11 @@ export default function CreateQuestionPage() {
   const bookId = parseInt(params?.id as string);
   
   const [loading, setLoading] = useState(false);
+  const [loadingChapters, setLoadingChapters] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const [chapters, setChapters] = useState<BookChapter[]>([]);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('none');
   const [questionContent, setQuestionContent] = useState('');
   const [questionType, setQuestionType] = useState<number>(1);
   const [difficultyLevel, setDifficultyLevel] = useState<number>(0);
@@ -43,6 +46,25 @@ export default function CreateQuestionPage() {
   const [options, setOptions] = useState<QuestionOption[]>([]);
   
   const { authenticatedFetch } = useAuthenticatedFetch();
+
+  // Load chapters
+  useEffect(() => {
+    const loadChapters = async () => {
+      if (!bookId) return;
+      
+      try {
+        setLoadingChapters(true);
+        const chaptersData = await bookApiService.getBookChapters(bookId);
+        setChapters(chaptersData);
+      } catch (err) {
+        console.error('Error loading chapters:', err);
+      } finally {
+        setLoadingChapters(false);
+      }
+    };
+
+    loadChapters();
+  }, [bookId]);
 
   const addOption = () => {
     setOptions([...options, {
@@ -99,7 +121,7 @@ export default function CreateQuestionPage() {
         TimeLimit: 0,
         SubjectType: '',
         OrderIndex: 0,
-        ChapterId: 0,
+        ChapterId: selectedChapterId && selectedChapterId !== 'none' ? parseInt(selectedChapterId) : 0,
         Options: options.map((option, index) => ({
           OptionText: option.optionText,
           IsCorrect: option.isCorrect,
@@ -235,6 +257,33 @@ export default function CreateQuestionPage() {
                 </div>
               </div>
 
+              {/* Chapter Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="chapterId">Chương (tùy chọn)</Label>
+                <Select
+                  value={selectedChapterId}
+                  onValueChange={setSelectedChapterId}
+                  disabled={loadingChapters}
+                >
+                  <SelectTrigger id="chapterId">
+                    <SelectValue placeholder={loadingChapters ? 'Đang tải...' : 'Chọn chương'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Không chọn chương</SelectItem>
+                    {chapters.map((chapter) => (
+                      <SelectItem key={chapter.id} value={chapter.id.toString()}>
+                        Chương {chapter.orderIndex}: {chapter.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {chapters.length === 0 && !loadingChapters && (
+                  <p className="text-xs text-gray-500">
+                    Sách này chưa có chương nào. Câu hỏi sẽ không gán vào chương cụ thể.
+                  </p>
+                )}
+              </div>
+
               {/* Question Type */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -316,7 +365,7 @@ export default function CreateQuestionPage() {
 
                   {options.length === 0 && (
                     <div className="text-center py-6 text-gray-500 text-sm border-2 border-dashed border-gray-300 rounded-lg">
-                      Chưa có đáp án nào. Nhấn "Thêm đáp án" để bắt đầu.
+                        Chưa có đáp án nào. Nhấn &quot;Thêm đáp án&quot; để bắt đầu.
                     </div>
                   )}
 

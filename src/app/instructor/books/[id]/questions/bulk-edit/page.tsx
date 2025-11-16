@@ -17,6 +17,7 @@ import {
 import { useBookQuestions, useCreateBulkBookQuestions } from '@/hooks/useBooks';
 import { BookQuestionDto } from '@/types/book';
 import { LatexEditor, LatexRenderer } from '@/components/LatexRenderer';
+import { bookApiService, BookChapter } from '@/services/bookApi';
 
 interface BulkEditQuestionsPageProps {
   params: Promise<{
@@ -52,9 +53,31 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [chapters, setChapters] = useState<BookChapter[]>([]);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
   
   const { data: existingQuestions, loading, refetch } = useBookQuestions(bookId, 1, 100);
   const { createBulkQuestions, loading: createLoading } = useCreateBulkBookQuestions();
+
+  // Load chapters
+  useEffect(() => {
+    const loadChapters = async () => {
+      try {
+        setLoadingChapters(true);
+        const chaptersData = await bookApiService.getBookChapters(bookId);
+        setChapters(chaptersData);
+      } catch (err) {
+        console.error('Error loading chapters:', err);
+      } finally {
+        setLoadingChapters(false);
+      }
+    };
+
+    if (bookId) {
+      loadChapters();
+    }
+  }, [bookId]);
 
   // Initialize with existing questions or empty template
   useEffect(() => {
@@ -157,7 +180,7 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
           TimeLimit: 0,
           SubjectType: '',
           OrderIndex: index,
-          ChapterId: 0,
+          ChapterId: selectedChapterId ? parseInt(selectedChapterId) : 0,
           Options: question.options.map((option, optIndex) => ({
             OptionText: option.optionText,
             IsCorrect: option.isCorrect,
@@ -322,6 +345,31 @@ export default function BulkEditQuestionsPage({ params }: BulkEditQuestionsPageP
                 placeholder="Nhập nội dung câu hỏi... (Hỗ trợ LaTeX: $x^2 + y^2 = z^2$)"
                 rows={4}
               />
+
+              {/* Chapter Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Chương (áp dụng cho tất cả câu hỏi)
+                </label>
+                <select
+                  value={selectedChapterId}
+                  onChange={(e) => setSelectedChapterId(e.target.value)}
+                  disabled={loadingChapters}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">Không chọn chương</option>
+                  {chapters.map((chapter) => (
+                    <option key={chapter.id} value={chapter.id.toString()}>
+                      Chương {chapter.orderIndex}: {chapter.title}
+                    </option>
+                  ))}
+                </select>
+                {chapters.length === 0 && !loadingChapters && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sách này chưa có chương nào. Tất cả câu hỏi sẽ không gán vào chương cụ thể.
+                  </p>
+                )}
+              </div>
 
               {/* Question Settings */}
               <div className="grid grid-cols-3 gap-4">
