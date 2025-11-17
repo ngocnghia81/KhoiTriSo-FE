@@ -11,10 +11,11 @@ interface ConditionalLayoutProps {
 export default function ConditionalLayout({ children }: ConditionalLayoutProps) {
   const pathname = usePathname();
   
-  // Don't show header/footer on dashboard pages
+  // Don't show header/footer on dashboard pages and lesson player pages
   const isDashboard = pathname?.startsWith('/dashboard') || pathname?.startsWith('/instructor');
+  const isLessonPlayer = pathname?.includes('/lessons/');
   
-  if (isDashboard) {
+  if (isDashboard || isLessonPlayer) {
     return <>{children}</>;
   }
   

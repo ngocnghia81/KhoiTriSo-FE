@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, User, Shield, BookOpen } from 'lucide-react';
@@ -25,6 +25,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const popupRef = useRef<Window | null>(null);
+  const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -32,6 +35,21 @@ export default function LoginPage() {
       router.push(user?.role === 'admin' ? '/dashboard' : '/');
     }
   }, [isAuthenticated, user?.role, router]);
+
+  // Cleanup OAuth popup and listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (popupRef.current && !popupRef.current.closed) {
+        popupRef.current.close();
+      }
+      if (messageHandlerRef.current) {
+        window.removeEventListener('message', messageHandlerRef.current);
+      }
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -62,7 +80,114 @@ export default function LoginPage() {
 
   const handleSocialLogin = (provider: 'google' | 'facebook') => {
     const localRoute = `/api/auth/${provider}`;
-    window.location.href = localRoute;
+    // Open OAuth in a popup window
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    
+    // Close any existing popup
+    if (popupRef.current && !popupRef.current.closed) {
+      popupRef.current.close();
+    }
+    
+    // Remove any existing message handler
+    if (messageHandlerRef.current) {
+      window.removeEventListener('message', messageHandlerRef.current);
+    }
+    
+    // Clear any existing interval
+    if (checkIntervalRef.current) {
+      clearInterval(checkIntervalRef.current);
+    }
+    
+    const popup = window.open(
+      localRoute,
+      `${provider}Login`,
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+    
+    popupRef.current = popup;
+
+    // Listen for postMessage from OAuth callback
+    const handleMessage = async (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
+      if (event.data.error) {
+        toast.error('Đăng nhập thất bại: ' + event.data.error);
+        setErrors({ general: event.data.error });
+        // Cleanup
+        if (popupRef.current && !popupRef.current.closed) {
+          popupRef.current.close();
+        }
+        if (messageHandlerRef.current) {
+          window.removeEventListener('message', messageHandlerRef.current);
+          messageHandlerRef.current = null;
+        }
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+        return;
+      }
+
+      if (event.data.token && event.data.user) {
+        const { token, refreshToken, user } = event.data;
+        
+        // Ensure avatar is included from OAuth provider
+        const userData = {
+          id: user.id?.toString() || '0',
+          name: user.name || user.FullName || 'User',
+          email: user.email || user.Email || '',
+          avatar: user.avatar || user.Avatar || '/images/default-avatar.svg', // Use avatar from OAuth
+          role: user.role === 'admin' || user.role === 2 ? 'admin' as const : 
+                user.role === 'instructor' || user.role === 1 ? 'instructor' as const : 
+                'student' as const
+        };
+
+        console.log('OAuth login - User data with avatar:', userData);
+
+        // Call login from AuthContext with avatar
+        login(userData, token, refreshToken);
+        toast.success('Đăng nhập thành công!');
+        
+        // Cleanup
+        if (popupRef.current && !popupRef.current.closed) {
+          popupRef.current.close();
+        }
+        if (messageHandlerRef.current) {
+          window.removeEventListener('message', messageHandlerRef.current);
+          messageHandlerRef.current = null;
+        }
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+
+        // Redirect based on role
+        router.push(userData.role === 'admin' ? '/dashboard' : '/');
+      }
+    };
+
+    messageHandlerRef.current = handleMessage;
+    window.addEventListener('message', handleMessage);
+
+    // Check if popup is closed and cleanup
+    checkIntervalRef.current = setInterval(() => {
+      if (popupRef.current?.closed) {
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+        if (messageHandlerRef.current) {
+          window.removeEventListener('message', messageHandlerRef.current);
+          messageHandlerRef.current = null;
+        }
+      }
+    }, 1000);
   };
 
   const validateForm = (userType: 'student' | 'staff') => {
@@ -119,7 +244,7 @@ export default function LoginPage() {
             id: (m.Id?.toString?.() ?? '0'),
             name: m.FullName || m.Username || 'User',
             email: m.Email || '',
-            avatar: m.Avatar || '/images/default-avatar.svg',
+            avatar: m.Avatar || m.avatar || '', // Get avatar from backend (may be from OAuth)
             role: m.Role === 2 ? 'admin' as const : m.Role === 1 ? 'instructor' as const : 'student' as const
           };
         } else {

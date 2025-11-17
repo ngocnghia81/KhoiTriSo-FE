@@ -80,9 +80,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = (userData: User, authToken: string, refreshTokenValue?: string) => {
     try {
       // Ensure user has required fields
+      // Use avatar from OAuth providers if available, otherwise fallback to default
       const userWithDefaults = {
         ...userData,
-        avatar: userData.avatar || '/images/default-avatar.svg',
+        avatar: (userData.avatar && userData.avatar.trim()) || '/images/default-avatar.svg',
         role: userData.role || 'student'
       };
       

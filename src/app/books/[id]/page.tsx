@@ -8,25 +8,28 @@ import {
   User,
   Tag,
   DollarSign,
-  CheckCircle,
   XCircle,
-  Clock,
   ArrowLeft,
   ShoppingCart,
   Key,
-  Eye
+  Eye,
+  Lock,
+  Star,
+  Users,
+  FileText,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Download
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { bookApiService, Book } from '@/services/bookApi';
-
-const approvalStatusConfig = {
-  0: { label: 'Chờ duyệt', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  1: { label: 'Đã duyệt', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-  2: { label: 'Từ chối', color: 'bg-red-100 text-red-700', icon: XCircle },
-};
+import { toast } from 'sonner';
 
 export default function BookDetailPage() {
   const params = useParams();
@@ -37,6 +40,8 @@ export default function BookDetailPage() {
   const [chapters, setChapters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [includeExplanation, setIncludeExplanation] = useState(false);
 
   useEffect(() => {
     if (!bookId) {
@@ -50,17 +55,29 @@ export default function BookDetailPage() {
         setLoading(true);
         setError(null);
         
-        // Fetch book details
+        // Fetch book details (đã bao gồm chapters)
         const bookData = await bookApiService.getBookById(bookId);
         setBook(bookData);
         
-        // Fetch chapters
-        try {
-          const chaptersData = await bookApiService.getBookChapters(bookId);
-          setChapters(chaptersData);
-        } catch (err) {
-          console.warn('Could not load chapters:', err);
-          setChapters([]);
+        // Sử dụng chapters từ bookData nếu có, nếu không thì fetch riêng
+        if (bookData.chapters && bookData.chapters.length > 0) {
+          // Sắp xếp theo OrderIndex để đảm bảo thứ tự đúng
+          const sortedChapters = [...bookData.chapters].sort((a, b) => 
+            (a.orderIndex || 0) - (b.orderIndex || 0)
+          );
+          setChapters(sortedChapters);
+        } else {
+          // Fallback: fetch chapters riêng nếu không có trong bookData
+          try {
+            const chaptersData = await bookApiService.getBookChapters(bookId);
+            const sortedChapters = [...chaptersData].sort((a, b) => 
+              (a.orderIndex || 0) - (b.orderIndex || 0)
+            );
+            setChapters(sortedChapters);
+          } catch (err) {
+            console.warn('Could not load chapters:', err);
+            setChapters([]);
+          }
         }
       } catch (err: any) {
         console.error('Error fetching book:', err);
@@ -73,23 +90,81 @@ export default function BookDetailPage() {
     fetchBookData();
   }, [bookId]);
 
-  const StatusBadge = ({ status }: { status: number }) => {
-    const config = approvalStatusConfig[status as keyof typeof approvalStatusConfig];
-    const Icon = config.icon;
-    
-    return (
-      <Badge className={`${config.color} flex items-center gap-1`}>
-        <Icon className="w-3 h-3" />
-        {config.label}
-      </Badge>
-    );
+  const stripHtml = (html: string | undefined | null): string => {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g, '').trim();
+  };
+
+  const formatPrice = (price: number) => {
+    if (price === 0) return 'Miễn phí';
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
+  };
+
+  const handleExportToWord = async () => {
+    if (!book || !bookId) return;
+
+    try {
+      setExporting(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (!token) {
+        toast.error('Vui lòng đăng nhập');
+        return;
+      }
+
+      const response = await fetch(
+        `/api/books/${bookId}/export-word/my-purchase?includeExplanation=${includeExplanation}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.Message || 'Không thể xuất sách');
+      }
+
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition or use default
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `book_${bookId}.docx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Đã xuất sách sang Word thành công');
+    } catch (err: any) {
+      console.error('Error exporting book:', err);
+      toast.error(err.message || 'Không thể xuất sách sang Word');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Đang tải...</p>
         </div>
       </div>
@@ -98,7 +173,7 @@ export default function BookDetailPage() {
 
   if (error || !book) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
             <CardTitle className="text-red-600 flex items-center gap-2">
@@ -119,227 +194,350 @@ export default function BookDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Background decorations */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 -left-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl"
-          animate={{ y: [0, -50, 0], x: [0, 30, 0] }}
-          transition={{ duration: 20, repeat: Infinity }}
-        />
-        <motion.div
-          className="absolute bottom-20 -right-20 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl"
-          animate={{ y: [0, 50, 0], x: [0, -30, 0] }}
-          transition={{ duration: 25, repeat: Infinity }}
-        />
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Button
+            onClick={() => router.back()}
+            variant="ghost"
+            className="mb-6"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Quay lại
+          </Button>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Back button */}
-        <Button
-          onClick={() => router.back()}
-          variant="ghost"
-          className="mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Quay lại
-        </Button>
+          <div className="grid md:grid-cols-2 gap-8 items-start">
+            {/* Book Cover */}
+            <div className="flex justify-center md:justify-start">
+              <div className="relative w-full max-w-sm aspect-[3/4] rounded-lg overflow-hidden shadow-2xl bg-white">
+                {book.coverImage ? (
+                  <Image
+                    src={book.coverImage}
+                    alt={book.title}
+                    fill
+                    className="object-cover"
+                    quality={100}
+                    unoptimized={true}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <BookOpen className="w-24 h-24 text-white opacity-50" />
+                  </div>
+                )}
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content - 2 columns */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Book header card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-purple-50/50" />
-                <CardHeader className="relative">
-                  <div className="flex items-start gap-4">
-                    {book.coverImage ? (
-                      <img
-                        src={book.coverImage}
-                        alt={book.title}
-                        className="w-32 h-48 object-cover rounded-lg shadow-lg"
+            {/* Book Info */}
+            <div className="space-y-6">
+              {/* Title & Category */}
+              <div>
+                {book.categoryName && (
+                  <Badge className="mb-3 bg-blue-100 text-blue-700">
+                    {book.categoryName}
+                  </Badge>
+                )}
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+                  {stripHtml(book.title)}
+                </h1>
+                
+                {/* Author */}
+                {book.authorName && (
+                  <div className="flex items-center gap-2 text-gray-600 mb-4">
+                    <User className="w-5 h-5" />
+                    <span className="text-lg">Tác giả: <span className="font-semibold text-gray-900">{book.authorName}</span></span>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6">
+                  {chapters.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      <span>{chapters.length} chương</span>
+                    </div>
+                  )}
+                  {chapters.reduce((sum, ch) => sum + (ch.questionCount || 0), 0) > 0 && (
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4" />
+                      <span>{chapters.reduce((sum, ch) => sum + (ch.questionCount || 0), 0)} câu hỏi</span>
+                    </div>
+                  )}
+                  {book.rating !== null && book.rating !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <span>{(book.rating || 0).toFixed(1)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Price & Actions */}
+              <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <div className="mb-4">
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-3xl font-bold text-blue-600">
+                      {formatPrice(book.price)}
+                    </span>
+                  </div>
+                  {book.isFree && (
+                    <p className="text-sm text-green-600 font-medium">
+                      ✓ Sách miễn phí - Đọc ngay không cần đăng ký
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {book.isFree ? (
+                    <Button
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      size="lg"
+                      onClick={() => {
+                        toast.info('Sách miễn phí, bạn có thể đọc ngay!');
+                        if (chapters.length > 0 && chapters[0].canView) {
+                          router.push(`/books/${bookId}/chapters/${chapters[0].id}`);
+                        }
+                      }}
+                    >
+                      <BookOpen className="w-5 h-5 mr-2" />
+                      Đọc ngay
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                        size="lg"
+                        onClick={() => {
+                          toast.info('Tính năng mua sách đang được phát triển');
+                        }}
+                      >
+                        <ShoppingCart className="w-5 h-5 mr-2" />
+                        Mua ngay - {formatPrice(book.price)}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        size="lg"
+                        onClick={() => router.push('/books/activation')}
+                      >
+                        <Key className="w-5 h-5 mr-2" />
+                        Kích hoạt bằng mã
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {/* Export to Word - Only for owned books */}
+                {(book.isOwned || book.isFree) && (
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleExportToWord}
+                      disabled={exporting}
+                    >
+                      {exporting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                          Đang xuất...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Xuất sách sang Word
+                        </>
+                      )}
+                    </Button>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="includeExplanation"
+                        checked={includeExplanation}
+                        onChange={(e) => setIncludeExplanation(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                    ) : (
-                      <div className="w-32 h-48 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                        <BookOpen className="w-16 h-16 text-white" />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <CardTitle className="text-3xl mb-2">{book.title}</CardTitle>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        <StatusBadge status={book.approvalStatus} />
-                        {book.isFree ? (
-                          <Badge className="bg-green-100 text-green-700">Miễn phí</Badge>
-                        ) : (
-                          <Badge className="bg-blue-100 text-blue-700">
-                            {book.price.toLocaleString('vi-VN')} đ
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4" />
-                          <span>Tác giả: {book.authorName || 'N/A'}</span>
-                        </div>
-                        {book.categoryName && (
-                          <div className="flex items-center gap-2">
-                            <Tag className="w-4 h-4" />
-                            <span>Danh mục: {book.categoryName}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="w-4 h-4" />
-                          <span>{book.totalChapters || 0} chương</span>
-                          <span className="text-gray-400">•</span>
-                          <span>{book.totalQuestions || 0} câu hỏi</span>
-                        </div>
-                      </div>
+                      <label htmlFor="includeExplanation" className="text-sm text-gray-600 cursor-pointer">
+                        Bao gồm lời giải
+                      </label>
                     </div>
                   </div>
-                </CardHeader>
-                {book.description && (
-                  <CardContent className="relative">
-                    <h3 className="font-semibold text-lg mb-2">Mô tả</h3>
-                    <p className="text-gray-700 whitespace-pre-line">{book.description}</p>
-                  </CardContent>
                 )}
+
+                {/* Features */}
+                <div className="mt-6 pt-6 border-t border-gray-200 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span>Truy cập trọn đời</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span>Đọc trên mọi thiết bị</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span>Cập nhật miễn phí</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Left Column - Main Content */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Description */}
+            {book.description && (
+              <Card className="bg-white border border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-xl">Mô tả sách</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div 
+                    className="prose prose-lg max-w-none text-gray-700"
+                    dangerouslySetInnerHTML={{ 
+                      __html: book.description 
+                    }}
+                  />
+                </CardContent>
               </Card>
-            </motion.div>
+            )}
 
             {/* Chapters */}
-            {chapters.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BookOpen className="w-6 h-6 text-blue-600" />
-                      Danh sách chương ({chapters.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {chapters.map((chapter, index) => (
-                        <div
+            {chapters && chapters.length > 0 && (
+              <Card className="bg-white border border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <BookOpen className="w-6 h-6 text-blue-600" />
+                    Mục lục ({chapters.length} chương)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {chapters.map((chapter, index) => {
+                      const canView = chapter.canView !== false;
+                      const chapterNumber = chapter.orderIndex || index + 1;
+                      
+                      return (
+                        <Link
                           key={chapter.id}
-                          className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg hover:shadow-md transition-shadow"
+                          href={canView ? `/books/${bookId}/chapters/${chapter.id}` : '#'}
+                          onClick={(e) => {
+                            if (!canView) {
+                              e.preventDefault();
+                              toast.info('Vui lòng mua sách hoặc kích hoạt mã để xem chương này');
+                            }
+                          }}
+                          className={`flex items-center gap-4 p-4 rounded-lg border transition-all ${
+                            canView
+                              ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer'
+                              : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                          }`}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                              {chapter.orderIndex || index + 1}
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-gray-900">{chapter.title}</h4>
-                              {chapter.content && (
-                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                  {chapter.content}
-                                </p>
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
+                            canView
+                              ? 'bg-blue-600'
+                              : 'bg-gray-400'
+                          }`}>
+                            {chapterNumber}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className={`font-semibold ${canView ? 'text-gray-900' : 'text-gray-500'}`}>
+                                {stripHtml(chapter.title)}
+                              </h4>
+                              {!canView && (
+                                <Lock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               )}
                             </div>
+                            {chapter.questionCount > 0 && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {chapter.questionCount} câu hỏi
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                          {canView && (
+                            <ArrowRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
-          {/* Sidebar - 1 column */}
-          <div className="space-y-6">
-            {/* Actions card */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md sticky top-6">
+          {/* Right Column - Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-6 space-y-6">
+              {/* Book Info Card */}
+              <Card className="bg-white border border-gray-200 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl">Thao tác</CardTitle>
+                  <CardTitle className="text-lg">Thông tin sách</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {!book.isFree && (
-                    <Button 
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                      size="lg"
-                    >
-                      <ShoppingCart className="w-4 h-4 mr-2" />
-                      Mua ngay - {book.price.toLocaleString('vi-VN')} đ
-                    </Button>
-                  )}
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => router.push(`/books/${book.id}/activation`)}
-                  >
-                    <Key className="w-4 h-4 mr-2" />
-                    Kích hoạt mã
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => router.push(`/books/${book.id}/preview`)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Xem trước
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Info card */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md">
-                <CardHeader>
-                  <CardTitle className="text-xl">Thông tin chi tiết</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">ID:</span>
-                    <span className="font-semibold">{book.id}</span>
+                <CardContent className="space-y-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">ID sách:</span>
+                    <p className="font-mono font-semibold text-gray-900 mt-1">{book.id}</p>
                   </div>
                   <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tổng chương:</span>
-                    <span className="font-semibold">{book.totalChapters || 0}</span>
+                  <div>
+                    <span className="text-gray-600">Danh mục:</span>
+                    <p className="font-semibold text-gray-900 mt-1">{book.categoryName || 'N/A'}</p>
                   </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tổng câu hỏi:</span>
-                    <span className="font-semibold">{book.totalQuestions || 0}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Ngày tạo:</span>
-                    <span className="font-semibold">
-                      {new Date(book.createdAt).toLocaleDateString('vi-VN')}
-                    </span>
-                  </div>
-                  {book.updatedAt && (
+                  {book.isbn && (
                     <>
                       <Separator />
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Cập nhật:</span>
-                        <span className="font-semibold">
-                          {new Date(book.updatedAt).toLocaleDateString('vi-VN')}
-                        </span>
+                      <div>
+                        <span className="text-gray-600">ISBN:</span>
+                        <p className="font-semibold text-gray-900 mt-1">{book.isbn}</p>
                       </div>
                     </>
                   )}
+                  <Separator />
+                  <div>
+                    <span className="text-gray-600">Số chương:</span>
+                    <p className="font-semibold text-gray-900 mt-1">{chapters.length}</p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <span className="text-gray-600">Số câu hỏi:</span>
+                    <p className="font-semibold text-gray-900 mt-1">
+                      {chapters.reduce((sum, ch) => sum + (ch.questionCount || 0), 0)}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
+
+              {/* Quick Actions */}
+              <Card className="bg-white border border-gray-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg">Thao tác nhanh</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => router.push('/books/activation')}
+                  >
+                    <Key className="w-4 h-4 mr-2" />
+                    Kích hoạt sách
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => router.push(`/answer-search`)}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    Tìm đáp án
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

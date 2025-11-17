@@ -88,7 +88,6 @@ export async function fetchWithTokenRefresh(
   options: RequestInit = {}
 ): Promise<Response> {
   // Get current token
-  debugger;
   let token = localStorage.getItem('accessToken') || localStorage.getItem('token');
   
   // Prepare headers

@@ -17,12 +17,15 @@ import {
     AcademicCapIcon,
     MapIcon,
 } from "@heroicons/react/24/outline";
+import { Key } from "lucide-react";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import LanguageSwitcher from "./LanguageSwitcher";
 import Logo from "./Logo";
 import BackdropBlur from "./BackdropBlur";
 import UserMenu from "./UserMenu";
+import NotificationBell from "./NotificationBell";
 import { useCategories } from "@/hooks/useCategories";
+import { useCart } from "@/hooks/useCart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +90,9 @@ export default function Header() {
     const pathname = usePathname();
     const isClient = useClientOnly();
     const { categories, loading: categoriesLoading } = useCategories();
+    const { cart } = useCart();
+    // Calculate cart count from actual CartItems array to ensure accuracy
+    const cartCount = cart?.CartItems?.length || 0;
 
     const handleMouseEnter = (itemName: string) => {
         if (timeoutRef.current) {
@@ -265,6 +271,22 @@ export default function Header() {
                         )}
                     </div>
 
+                    {/* Book Activation */}
+                    {/* <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        asChild 
+                        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg"
+                    >
+                        <Link href="/books/activation" className="flex items-center gap-1.5">
+                            <Key className="h-4 w-4" />
+                            <span className="hidden lg:inline">Kích hoạt sách</span>
+                        </Link>
+                    </Button> */}
+
+                    {/* Notifications */}
+                    {isClient && isAuthenticated && <NotificationBell />}
+
                     {/* Cart */}
                     <Button 
                         variant="ghost" 
@@ -272,8 +294,19 @@ export default function Header() {
                         asChild 
                         className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative"
                     >
-                        <Link href="/cart">
-                            <ShoppingBagIcon className="h-5 w-5" />
+                        <Link href="/cart" className="relative">
+                            <ShoppingBagIcon className={`h-5 w-5 transition-transform ${cartCount > 0 ? 'animate-pulse-once' : ''}`} />
+                            {cartCount > 0 && (
+                                <span 
+                                    className="absolute -top-1.5 -right-1.5 h-5 min-w-[24px] px-1.5 flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 rounded-full border-2 border-white shadow-lg"
+                                    style={{
+                                        animation: 'cart-badge-pulse 2s ease-in-out infinite',
+                                        boxShadow: '0 6px 18px rgba(249, 115, 22, 0.45)',
+                                    }}
+                                >
+                                    {cartCount > 99 ? '99+' : cartCount > 9 ? '9+' : cartCount}
+                                </span>
+                            )}
                         </Link>
                     </Button>
 
@@ -364,10 +397,22 @@ export default function Header() {
                                 <Separator className="my-4" />
 
                                 <div className="space-y-4">
-                                    <Button variant="ghost" asChild className="w-full justify-start">
-                                        <Link href="/cart" onClick={() => setMobileMenuOpen(false)}>
-                                            <ShoppingBagIcon className="mr-2 h-4 w-4" />
-                                            Giỏ hàng
+                                    {isClient && isAuthenticated && (
+                                        <div className="px-3">
+                                            <NotificationBell />
+                                        </div>
+                                    )}
+                                    <Button variant="ghost" asChild className="w-full justify-start relative">
+                                        <Link href="/cart" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between w-full">
+                                            <div className="flex items-center">
+                                                <ShoppingBagIcon className="mr-2 h-4 w-4" />
+                                                Giỏ hàng
+                                            </div>
+                                            {cartCount > 0 && (
+                                                <span className="ml-auto h-5 min-w-[20px] px-1.5 flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-full border border-white shadow-md">
+                                                    {cartCount > 99 ? '99+' : cartCount > 9 ? '9+' : cartCount}
+                                                </span>
+                                            )}
                                         </Link>
                                     </Button>
                                     

@@ -39,7 +39,7 @@ interface HeroSlide {
     link: string;
     icon: React.ElementType;
   };
-  bgGradient: string;
+  bgColor: string;
 }
 
 const heroSlides: HeroSlide[] = [
@@ -63,7 +63,7 @@ const heroSlides: HeroSlide[] = [
       link: "/books",
       icon: BookOpen
     },
-    bgGradient: "from-blue-600 via-purple-600 to-pink-600",
+    bgColor: "bg-blue-600",
   },
   {
     image: "/images/hero/home-5/hero-img.png",
@@ -85,7 +85,7 @@ const heroSlides: HeroSlide[] = [
       link: "/about",
       icon: ArrowRight
     },
-    bgGradient: "from-purple-600 via-pink-600 to-rose-600",
+    bgColor: "bg-purple-600",
   },
   {
     image: "/images/hero/home-4/hero-img-1.png",
@@ -107,7 +107,7 @@ const heroSlides: HeroSlide[] = [
       link: "/courses",
       icon: Play
     },
-    bgGradient: "from-green-600 via-teal-600 to-cyan-600",
+    bgColor: "bg-emerald-600",
   },
   {
     image: "/images/hero/home-4/hero-img-2.png",
@@ -129,7 +129,7 @@ const heroSlides: HeroSlide[] = [
       link: "/courses",
       icon: Play
     },
-    bgGradient: "from-orange-600 via-amber-600 to-yellow-600",
+    bgColor: "bg-orange-600",
   },
 ];
 
@@ -209,25 +209,10 @@ export default function HomeHeroCarouselModern() {
   }, [isClient]);
   return (
     <section className="relative overflow-hidden">
-      {/* Animated Background with Gradient Mesh */}
+      {/* Subtle Background Pattern */}
       <div className="absolute inset-0 pointer-events-none">
         <motion.div 
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.1) 0%, transparent 50%), radial-gradient(circle at 40% 20%, rgba(236, 72, 153, 0.1) 0%, transparent 50%)'
-          }}
-          animate={{
-            scale: [1, 1.1, 1],
-            rotate: [0, 5, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div 
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 opacity-5"
           style={{
             backgroundImage: `radial-gradient(circle at 2px 2px, rgba(255,255,255,0.3) 1px, transparent 0)`,
             backgroundSize: '50px 50px',
@@ -297,12 +282,12 @@ export default function HomeHeroCarouselModern() {
         <CarouselContent>
           {heroSlides.map((slide, index) => (
             <CarouselItem key={index}>
-              <div className={`relative overflow-hidden bg-gradient-to-r ${slide.bgGradient} min-h-[600px] md:min-h-[700px]`}>
-                {/* Animated Gradient Overlay */}
+              <div className={`relative overflow-hidden ${slide.bgColor} min-h-[600px] md:min-h-[700px]`}>
+                {/* Subtle Light Overlay */}
                 <motion.div
-                  className="absolute inset-0"
+                  className="absolute inset-0 opacity-10"
                   style={{
-                    background: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.1) 0%, transparent 60%)'
+                    background: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.3) 0%, transparent 60%)'
                   }}
                   animate={{
                     scale: [1, 1.2, 1],
@@ -375,10 +360,10 @@ export default function HomeHeroCarouselModern() {
                         transition={{ type: "spring", stiffness: 300 }}
                       >
                         <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-3xl blur-xl opacity-50"
+                          className="absolute inset-0 bg-white/20 rounded-3xl blur-xl"
                           animate={{
-                            scale: [1, 1.2, 1],
-                            opacity: [0.3, 0.6, 0.3],
+                            scale: [1, 1.1, 1],
+                            opacity: [0.2, 0.4, 0.2],
                           }}
                           transition={{
                             duration: 3,
@@ -410,27 +395,14 @@ export default function HomeHeroCarouselModern() {
                         bounce: 0.4
                       }}
                     >
-                      <motion.span
-                        className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent"
-                        animate={{
-                          backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-                        }}
-                        transition={{
-                          duration: 5,
-                          repeat: Infinity,
-                          ease: "linear"
-                        }}
-                        style={{
-                          backgroundSize: '200% 200%',
-                        }}
-                      >
+                      <span className="text-white">
                         {language === 'vi' ? slide.titleVi : slide.titleEn}
-                      </motion.span>
+                      </span>
                     </motion.h1>
                     
                     {/* Subtitle */}
                     <motion.p 
-                      className="text-xl md:text-2xl lg:text-3xl text-blue-100 mb-6 font-medium"
+                      className="text-xl md:text-2xl lg:text-3xl text-white/90 mb-6 font-medium"
                       initial={{ opacity: 0, x: -50 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ 
@@ -444,7 +416,7 @@ export default function HomeHeroCarouselModern() {
                     
                     {/* Description */}
                     <motion.p 
-                      className="text-base md:text-lg lg:text-xl text-blue-200 mb-10 leading-relaxed max-w-2xl"
+                      className="text-base md:text-lg lg:text-xl text-white/80 mb-10 leading-relaxed max-w-2xl"
                       initial={{ opacity: 0, x: -50 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ 
@@ -472,14 +444,8 @@ export default function HomeHeroCarouselModern() {
                         whileTap={{ scale: 0.95 }}
                         transition={{ type: "spring", stiffness: 400 }}
                       >
-                        <Button asChild size="lg" className="relative overflow-hidden bg-white text-blue-600 hover:bg-blue-50 font-bold px-8 py-6 text-lg rounded-2xl shadow-2xl group">
+                        <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-slate-100 font-bold px-8 py-6 text-lg rounded-xl shadow-xl group">
                           <Link href={slide.primaryButton.link} className="flex items-center">
-                            <motion.div
-                              className="absolute inset-0 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 opacity-0 group-hover:opacity-20"
-                              initial={false}
-                              animate={{ x: ['-100%', '100%'] }}
-                              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                            />
                             <slide.primaryButton.icon className="mr-2 h-5 w-5" />
                             {language === 'vi' ? slide.primaryButton.textVi : slide.primaryButton.textEn}
                             <motion.div

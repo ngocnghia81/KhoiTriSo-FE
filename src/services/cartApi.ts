@@ -37,7 +37,8 @@ class CartApiService {
     console.log('CartApi - Getting cart');
     
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/cart`, {
+      // Use Next.js API route instead of direct backend call
+      const res = await fetch('/api/cart', {
         method: 'GET',
         headers: this.getAuthHeaders() as HeadersInit,
       });
@@ -48,14 +49,34 @@ class CartApiService {
     
     const result = await safeJsonParse(response);
     console.log('CartApi - Parsed result:', result);
+    console.log('CartApi - Result type:', typeof result);
+    console.log('CartApi - Has Result field:', 'Result' in result);
+    console.log('CartApi - Has result field:', 'result' in result);
     
     if (isSuccessfulResponse(result)) {
       const extracted = extractResult(result);
+      console.log('CartApi - Extracted result:', extracted);
+      console.log('CartApi - Extracted type:', typeof extracted);
+      console.log('CartApi - Has CartItems:', extracted && 'CartItems' in extracted);
+      console.log('CartApi - CartItems value:', extracted?.CartItems);
+      console.log('CartApi - CartItems length:', extracted?.CartItems?.length);
+      
       if (!extracted) {
         throw new Error('No cart data received');
       }
       
-      console.log('CartApi - Cart data:', extracted);
+      // Ensure CartItems is an array
+      if (extracted.CartItems && !Array.isArray(extracted.CartItems)) {
+        console.warn('CartApi - CartItems is not an array, converting...', extracted.CartItems);
+        extracted.CartItems = [];
+      }
+      
+      console.log('CartApi - Final cart data:', {
+        cartItems: extracted.CartItems,
+        cartItemsLength: extracted.CartItems?.length,
+        totalItems: extracted.TotalItems,
+        totalAmount: extracted.TotalAmount
+      });
       return extracted;
     } else {
       console.error('CartApi - Unsuccessful response:', result);
@@ -70,7 +91,8 @@ class CartApiService {
     console.log('CartApi - Adding to cart:', request);
     
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/cart`, {
+      // Use Next.js API route instead of direct backend call
+      const res = await fetch('/api/cart', {
         method: 'POST',
         headers: this.getAuthHeaders() as HeadersInit,
         body: JSON.stringify(request)
@@ -104,7 +126,8 @@ class CartApiService {
     console.log(`CartApi - Removing item ${itemId} from cart`);
     
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/cart/${itemId}`, {
+      // Use Next.js API route instead of direct backend call
+      const res = await fetch(`/api/cart/${itemId}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders() as HeadersInit,
       });
@@ -133,7 +156,8 @@ class CartApiService {
     console.log('CartApi - Clearing cart');
     
     const response = await retryRequest(async () => {
-      const res = await fetch(`${this.baseUrl}/api/cart/clear`, {
+      // Use Next.js API route instead of direct backend call
+      const res = await fetch('/api/cart/clear', {
         method: 'DELETE',
         headers: this.getAuthHeaders() as HeadersInit,
       });

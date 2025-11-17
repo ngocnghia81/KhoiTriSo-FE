@@ -37,6 +37,16 @@ npm run dev
 
 Mở [http://localhost:3000](http://localhost:3000) để xem ứng dụng.
 
+### ⚠️ Lưu ý khi cài đặt
+
+Nếu gặp lỗi `ERESOLVE` về peer dependencies (ví dụ: `react-quill` không tương thích với React 19), project đã được cấu hình với file `.npmrc` để tự động bỏ qua các xung đột này. Nếu vẫn gặp lỗi, bạn có thể chạy:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+**Lý do**: Project sử dụng React 19, nhưng một số packages như `react-quill@2.0.0` chưa chính thức hỗ trợ React 19. Tuy nhiên, các packages này vẫn hoạt động bình thường với React 19.
+
 ## 📁 Cấu trúc project
 
 ```

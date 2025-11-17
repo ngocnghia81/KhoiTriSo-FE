@@ -12,9 +12,11 @@ export interface Book {
   coverImage?: string;
   price: number;
   isFree: boolean;
+  isOwned?: boolean; // User đã mua/kích hoạt sách này chưa
   approvalStatus: number;
   totalQuestions?: number;
   totalChapters?: number;
+  chapters?: BookChapter[]; // Chapters từ GetBookById
   createdAt: string;
   updatedAt?: string;
 }
@@ -24,9 +26,14 @@ export interface BookChapter {
   bookId: number;
   title: string;
   content?: string;
+  description?: string;
   orderIndex: number;
   isPublished: boolean;
+  canView?: boolean; // Chương này có thể xem không
+  questionCount?: number;
+  questions?: any[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface QuestionOption {
@@ -293,6 +300,39 @@ class BookApiService {
       const chapters = Array.isArray(chaptersData) ? chaptersData : [];
       console.log(`BookApi - Found ${chapters.length} chapters`);
       return chapters.map(this.mapBookChapter);
+    } else {
+      console.error('BookApi - Unsuccessful response:', result);
+      throw new Error(extractMessage(result));
+    }
+  }
+
+  /**
+   * Get book chapter by ID
+   */
+  async getBookChapterById(bookId: number, chapterId: number): Promise<BookChapter> {
+    console.log(`BookApi - Getting chapter ${chapterId} for book ${bookId}`);
+    
+    const { fetchWithAutoRefresh } = await import('../utils/apiHelpers');
+    const { retryRequest } = await import('../utils/apiHelpers');
+    
+    const response = await retryRequest(async () => {
+      return await fetchWithAutoRefresh(`${this.baseUrl}/api/books/${bookId}/chapters/${chapterId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders() as HeadersInit
+      });
+    });
+    
+    const result = await safeJsonParse(response);
+    console.log('BookApi - Parsed result:', result);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No chapter data received');
+      }
+      
+      console.log(`BookApi - Found chapter:`, extracted);
+      return this.mapBookChapter(extracted);
     } else {
       console.error('BookApi - Unsuccessful response:', result);
       throw new Error(extractMessage(result));
@@ -578,34 +618,50 @@ class BookApiService {
   }
 
   private mapBook(book: any): Book {
+    const chapters = book.chapters || book.Chapters;
+    const mappedChapters = chapters && Array.isArray(chapters) 
+      ? chapters.map((ch: any) => this.mapBookChapter(ch))
+      : undefined;
+    
     return {
       id: book.id || book.Id,
       title: book.title || book.Title,
       description: book.description || book.Description,
       authorId: book.authorId || book.AuthorId,
-      authorName: book.authorName || book.AuthorName,
-      categoryId: book.categoryId || book.CategoryId,
-      categoryName: book.categoryName || book.CategoryName,
+      authorName: book.authorName || book.AuthorName || (book.Author?.FullName || book.author?.fullName),
+      categoryId: book.categoryId || book.CategoryId || (book.Category?.Id || book.category?.id),
+      categoryName: book.categoryName || book.CategoryName || (book.Category?.Name || book.category?.name),
       coverImage: book.coverImage || book.CoverImage,
       price: book.price || book.Price || 0,
-      isFree: book.isFree || book.IsFree || false,
+      isFree: (book.price || book.Price || 0) === 0,
+      isOwned: book.isOwned !== undefined ? book.isOwned : (book.IsOwned !== undefined ? book.IsOwned : false),
       approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
       totalQuestions: book.totalQuestions || book.TotalQuestions,
-      totalChapters: book.totalChapters || book.TotalChapters,
+      totalChapters: book.totalChapters || book.TotalChapters || (mappedChapters?.length || 0),
+      chapters: mappedChapters,
       createdAt: book.createdAt || book.CreatedAt,
       updatedAt: book.updatedAt || book.UpdatedAt
     };
   }
 
   private mapBookChapter(chapter: any): BookChapter {
+    const questions = chapter.questions || chapter.Questions || [];
+    console.log('mapBookChapter - Questions:', questions);
+    console.log('mapBookChapter - Questions length:', Array.isArray(questions) ? questions.length : 0);
+    
     return {
       id: chapter.id || chapter.Id,
       bookId: chapter.bookId || chapter.BookId,
       title: chapter.title || chapter.Title,
       content: chapter.content || chapter.Content || chapter.Description || chapter.description,
+      description: chapter.description || chapter.Description || chapter.content || chapter.Content,
       orderIndex: chapter.orderIndex || chapter.OrderIndex || 0,
       isPublished: chapter.isPublished || chapter.IsPublished || true,
-      createdAt: chapter.createdAt || chapter.CreatedAt
+      canView: chapter.canView !== undefined ? chapter.canView : (chapter.CanView !== undefined ? chapter.CanView : true),
+      questionCount: chapter.questionCount || chapter.QuestionCount || 0,
+      questions: Array.isArray(questions) ? questions : [],
+      createdAt: chapter.createdAt || chapter.CreatedAt,
+      updatedAt: chapter.updatedAt || chapter.UpdatedAt
     };
   }
 

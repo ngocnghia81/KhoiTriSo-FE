@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
                   id: data.Result?.User?.Id?.toString() || '1',
                   name: data.Result?.User?.FullName || 'Google User',
                   email: data.Result?.User?.Email || 'user@gmail.com',
-                  avatar: data.Result?.User?.Avatar || 'https://via.placeholder.com/40',
+                  avatar: data.Result?.User?.Avatar || data.Result?.User?.avatar || '',
                   role: data.Result?.User?.Role === 0 ? 'student' : 
                         data.Result?.User?.Role === 1 ? 'instructor' : 'admin'
                 })}

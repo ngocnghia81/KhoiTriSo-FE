@@ -3,7 +3,10 @@ export interface CartItem {
   ItemId: number;
   ItemType: number;
   AddedAt: string;
-  Item: {
+  CoverImage?: string;  // Backend returns this directly on CartItemDTO
+  Title?: string;       // Backend returns this directly on CartItemDTO
+  Price?: number;       // Backend returns this directly on CartItemDTO
+  Item?: {
     Id: number;
     Title: string;
     Description?: string;
@@ -41,7 +44,7 @@ export interface CartItem {
 
 export interface AddToCartRequest {
   ItemId: number;  // Backend expects ItemId instead of bookId
-  ItemType: number; // Backend expects ItemType (1 = book)
+  ItemType: number; // Backend expects ItemType (0 = Book, 1 = Course)
 }
 
 export interface CartResponse {

@@ -49,7 +49,7 @@ function AuthCallbackClient() {
           id: data.Result?.Id?.toString() || '0',
           name: data.Result?.FullName || data.Result?.Username || 'User',
           email: data.Result?.Email || '',
-          avatar: data.Result?.Avatar || '/images/default-avatar.svg',
+          avatar: data.Result?.Avatar || data.Result?.avatar || '', // Get avatar from OAuth provider
           role: data.Result?.Role === 0 ? 'student' as const : 
                 data.Result?.Role === 1 ? 'instructor' as const : 
                 'admin' as const

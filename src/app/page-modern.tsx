@@ -1,15 +1,17 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { vi } from "@/locales/vi";
-import { en } from "@/locales/en";
+import { useAuthenticatedFetch } from "@/hooks/useAuthenticatedFetch";
 import { useCategories } from "@/hooks/useCategories";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   BookOpen,
   Users,
@@ -24,246 +26,564 @@ import {
   Shield,
   Zap,
   CheckCircle,
+  Search,
+  Map,
+  ShoppingCart,
 } from "lucide-react";
-import HomeHeroCarouselModern from "@/components/home/HomeHeroCarouselModern";
-import UserNotificationsWidget from "@/components/notifications/UserNotificationsWidget";
+import { 
+  StarIcon,
+  BookOpenIcon,
+  AcademicCapIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
+import { StarIcon as StarIconSolidHero } from "@heroicons/react/24/solid";
 
-// Icon mapping cho categories
-const categoryIcons: { [key: string]: string } = {
-  "Toán học": "📐",
-  "Mathematics": "📐",
-  "Vật lý": "⚛️",
-  "Physics": "⚛️",
-  "Hóa học": "🧪",
-  "Chemistry": "🧪",
-  "Sinh học": "🧬",
-  "Biology": "🧬",
-  "Văn học": "📚",
-  "Literature": "📚",
-  "Tiếng Anh": "🗣️",
-  "English": "🗣️",
-  "Lịch sử": "📜",
-  "History": "📜",
-  "Địa lý": "🌍",
-  "Geography": "🌍",
+interface Course {
+  id: number;
+  title: string;
+  description?: string;
+  thumbnail?: string;
+  price: number;
+  rating?: number;
+  totalReviews?: number;
+  totalStudents?: number;
+  totalLessons?: number;
+  instructor?: {
+    id: number;
+    name: string;
+    avatar?: string;
+  };
+  category?: {
+    id: number;
+    name: string;
+  };
+  isFree?: boolean;
+}
+
+interface LearningPath {
+  id: number;
+  title: string;
+  description?: string;
+  thumbnail?: string;
+  price: number;
+  courseCount: number;
+  enrollmentCount: number;
+  instructor?: {
+    id: number;
+    name: string;
+    avatar?: string;
+  };
+  category?: {
+    id: number;
+    name: string;
+  };
+}
+
+interface Book {
+  id: number;
+  title: string;
+  description?: string;
+  coverImage?: string;
+  price: number;
+  totalChapters?: number;
+  totalQuestions?: number;
+  authorName?: string;
+  categoryName?: string;
+}
+
+const stripHtml = (html: string | undefined | null) => {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').trim();
 };
 
-// Color mapping cho categories
-const categoryColors: { [key: string]: string } = {
-  "Toán học": "from-blue-500 to-cyan-500",
-  "Mathematics": "from-blue-500 to-cyan-500",
-  "Vật lý": "from-purple-500 to-pink-500",
-  "Physics": "from-purple-500 to-pink-500",
-  "Hóa học": "from-green-500 to-emerald-500",
-  "Chemistry": "from-green-500 to-emerald-500",
-  "Sinh học": "from-red-500 to-orange-500",
-  "Biology": "from-red-500 to-orange-500",
-  "Văn học": "from-yellow-500 to-amber-500",
-  "Literature": "from-yellow-500 to-amber-500",
-  "Tiếng Anh": "from-indigo-500 to-blue-500",
-  "English": "from-indigo-500 to-blue-500",
-  "Lịch sử": "from-pink-500 to-rose-500",
-  "History": "from-pink-500 to-rose-500",
-  "Địa lý": "from-teal-500 to-cyan-500",
-  "Geography": "from-teal-500 to-cyan-500",
+const formatPrice = (price: number | undefined | null) => {
+  if (price === null || price === undefined || isNaN(price)) return 'Miễn phí';
+  if (price === 0) return 'Miễn phí';
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND'
+  }).format(price);
 };
 
 export default function HomePageModern() {
+  const router = useRouter();
   const { language } = useLanguage();
-  const t = language === 'vi' ? vi : en;
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const { categories, loading: categoriesLoading } = useCategories();
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [featuredCourses, setFeaturedCourses] = useState<Course[]>([]);
+  const [featuredPaths, setFeaturedPaths] = useState<LearningPath[]>([]);
+  const [featuredBooks, setFeaturedBooks] = useState<Book[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchHomeData();
+  }, []);
+
+  const fetchHomeData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch featured courses (top rated, most students)
+      const coursesRes = await authenticatedFetch('/api/courses?page=1&pageSize=6&sortBy=totalStudents&sortOrder=desc');
+      const coursesData = await coursesRes.json();
+      if (coursesData.Result?.Items) {
+        const courses = coursesData.Result.Items.map((c: any) => ({
+          id: c.Id || c.id,
+          title: c.Title || c.title,
+          description: c.Description || c.description,
+          thumbnail: c.Thumbnail || c.thumbnail,
+          price: c.Price || c.price || 0,
+          rating: c.Rating || c.rating,
+          totalReviews: c.TotalReviews || c.totalReviews || 0,
+          totalStudents: c.TotalStudents || c.totalStudents || 0,
+          totalLessons: c.TotalLessons || c.totalLessons || 0,
+          instructor: c.Instructor || c.instructor ? {
+            id: (c.Instructor || c.instructor).Id || (c.Instructor || c.instructor).id,
+            name: (c.Instructor || c.instructor).Name || (c.Instructor || c.instructor).name,
+            avatar: (c.Instructor || c.instructor).Avatar || (c.Instructor || c.instructor).avatar,
+          } : undefined,
+          category: c.Category || c.category ? {
+            id: (c.Category || c.category).Id || (c.Category || c.category).id,
+            name: (c.Category || c.category).Name || (c.Category || c.category).name,
+          } : undefined,
+          isFree: (c.Price || c.price || 0) === 0,
+        }));
+        setFeaturedCourses(courses);
+      }
+
+      // Fetch featured learning paths
+      const pathsRes = await authenticatedFetch('/api/learning-paths?page=1&pageSize=4&sortBy=enrollmentCount&sortOrder=desc');
+      const pathsData = await pathsRes.json();
+      if (pathsData.Result?.Items) {
+        const paths = pathsData.Result.Items.map((p: any) => ({
+          id: p.Id || p.id,
+          title: p.Title || p.title,
+          description: p.Description || p.description,
+          thumbnail: p.Thumbnail || p.thumbnail,
+          price: p.Price || p.price || 0,
+          courseCount: p.CourseCount || p.courseCount || 0,
+          enrollmentCount: p.EnrollmentCount || p.enrollmentCount || 0,
+          instructor: p.Instructor || p.instructor ? {
+            id: (p.Instructor || p.instructor).Id || (p.Instructor || p.instructor).id,
+            name: (p.Instructor || p.instructor).Name || (p.Instructor || p.instructor).name,
+            avatar: (p.Instructor || p.instructor).Avatar || (p.Instructor || p.instructor).avatar,
+          } : undefined,
+          category: p.Category || p.category ? {
+            id: (p.Category || p.category).Id || (p.Category || p.category).id,
+            name: (p.Category || p.category).Name || (p.Category || p.category).name,
+          } : undefined,
+        }));
+        setFeaturedPaths(paths);
+      }
+
+      // Fetch featured books
+      const booksRes = await authenticatedFetch('/api/books?page=1&pageSize=6&sortBy=createdAt&sortOrder=desc');
+      const booksData = await booksRes.json();
+      if (booksData.Result?.Items) {
+        const books = booksData.Result.Items.map((b: any) => ({
+          id: b.Id || b.id,
+          title: b.Title || b.title,
+          description: b.Description || b.description,
+          coverImage: b.CoverImage || b.coverImage,
+          price: b.Price || b.price || 0,
+          totalChapters: b.TotalChapters || b.totalChapters || 0,
+          totalQuestions: b.TotalQuestions || b.totalQuestions || 0,
+          authorName: b.Author?.FullName || b.author?.fullName || b.AuthorName || b.authorName,
+          categoryName: b.Category?.Name || b.category?.name || b.CategoryName || b.categoryName,
+        }));
+        setFeaturedBooks(books);
+      }
+    } catch (error) {
+      console.error('Error fetching home data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/courses?search=${encodeURIComponent(searchQuery)}`);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-      {/* Floating Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
-
-      {/* Hero Carousel */}
-      <HomeHeroCarouselModern />
-
-      {/* Notifications for signed-in users */}
-      <section className="relative -mt-10 z-10">
-        <div className="container mx-auto px-4 max-w-7xl">
-          <div className="grid grid-cols-1">
-            <UserNotificationsWidget />
-          </div>
+    <div className="min-h-screen bg-white">
+      {/* Hero Section - Udemy Style */}
+      <section className="relative bg-slate-900 text-white py-20 lg:py-32 overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500 rounded-full blur-3xl"></div>
         </div>
-      </section>
 
-      {/* Stats Section */}
-      <section className="relative py-20 bg-white">
-        <div className="container mx-auto px-4 max-w-7xl">
+        <div className="container mx-auto px-4 max-w-7xl relative z-10">
           <motion.div
-            className="grid grid-cols-2 md:grid-cols-4 gap-8"
+            className="text-center max-w-4xl mx-auto"
             initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
           >
-            {[
-              { icon: Users, value: "15K+", label: t.home.stats.students, color: "from-blue-500 to-cyan-500" },
-              { icon: BookOpen, value: "500+", label: t.home.stats.courses, color: "from-green-500 to-emerald-500" },
-              { icon: Award, value: "50+", label: t.home.stats.instructors, color: "from-purple-500 to-pink-500" },
-              { icon: Star, value: "98%", label: t.home.stats.satisfaction, color: "from-orange-500 to-red-500" },
-            ].map((stat, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <Card className="text-center border-0 shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden group">
-                  <CardContent className="p-8">
-                    <div className={`w-20 h-20 bg-gradient-to-br ${stat.color} rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                      <stat.icon className="h-10 w-10 text-white" />
-                    </div>
-                    <div className={`text-4xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent mb-2`}>
-                      {stat.value}
-                    </div>
-                    <div className="text-slate-600 font-medium">{stat.label}</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
+              Học tập không giới hạn với Khởi Trí Số
+            </h1>
+            <p className="text-xl md:text-2xl text-slate-300 mb-8">
+              Khám phá hàng nghìn khóa học, lộ trình học tập và sách điện tử chất lượng cao
+            </p>
+
+            {/* Search Bar */}
+            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
+              <div className="flex gap-2 bg-white rounded-lg p-2 shadow-xl">
+                <Search className="h-6 w-6 text-slate-400 ml-3 my-auto" />
+                <Input
+                  type="text"
+                  placeholder="Tìm kiếm khóa học, sách, lộ trình..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 border-0 focus-visible:ring-0 text-slate-900"
+                />
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-8">
+                  Tìm kiếm
+                </Button>
+              </div>
+            </form>
+
+            {/* Trust Indicators */}
+            <div className="mt-12 flex flex-wrap justify-center gap-8 text-slate-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <span>15K+ Học viên</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <span>500+ Khóa học</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <span>50+ Giảng viên</span>
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>
 
+      {/* Featured Learning Paths */}
+      {featuredPaths.length > 0 && (
+        <section className="py-16 bg-slate-50">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                  Lộ trình học tập nổi bật
+                </h2>
+                <p className="text-slate-600">Combo khóa học được yêu thích nhất</p>
+              </div>
+              <Button asChild variant="ghost" className="hidden md:flex">
+                <Link href="/learning-paths">
+                  Xem tất cả <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredPaths.map((path) => (
+                <motion.div
+                  key={path.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -4 }}
+                >
+                  <Link href={`/learning-paths/${path.id}`}>
+                    <Card className="h-full border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group">
+                      <div className="relative h-48 bg-slate-200 overflow-hidden">
+                        {path.thumbnail && path.thumbnail.startsWith('http') ? (
+                          <Image
+                            src={path.thumbnail}
+                            alt={path.title}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                            <Map className="h-16 w-16 text-white opacity-50" />
+                          </div>
+                        )}
+                        <Badge className="absolute top-3 right-3 bg-blue-600 text-white">
+                          {path.courseCount} khóa học
+                        </Badge>
+                      </div>
+                      <CardHeader>
+                        <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
+                          {stripHtml(path.title)}
+                        </CardTitle>
+                        {path.instructor && (
+                          <p className="text-sm text-slate-600">{path.instructor.name}</p>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xl font-bold text-blue-600">
+                            {formatPrice(path.price)}
+                          </span>
+                          <div className="flex items-center gap-1 text-sm text-slate-600">
+                            <Users className="h-4 w-4" />
+                            <span>{path.enrollmentCount}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Featured Courses */}
+      {featuredCourses.length > 0 && (
+        <section className="py-16 bg-white">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                  Khóa học phổ biến
+                </h2>
+                <p className="text-slate-600">Được nhiều học viên lựa chọn nhất</p>
+              </div>
+              <Button asChild variant="ghost" className="hidden md:flex">
+                <Link href="/courses">
+                  Xem tất cả <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredCourses.map((course) => (
+                <motion.div
+                  key={course.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -4 }}
+                >
+                  <Link href={`/courses/${course.id}`}>
+                    <Card className="h-full border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group">
+                      <div className="relative h-48 bg-slate-200 overflow-hidden">
+                        {course.thumbnail && course.thumbnail.startsWith('http') ? (
+                          <Image
+                            src={course.thumbnail}
+                            alt={course.title}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                            <Play className="h-16 w-16 text-white opacity-50" />
+                          </div>
+                        )}
+                        {course.isFree && (
+                          <Badge className="absolute top-3 right-3 bg-green-600 text-white">
+                            Miễn phí
+                          </Badge>
+                        )}
+                      </div>
+                      <CardHeader>
+                        <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
+                          {stripHtml(course.title)}
+                        </CardTitle>
+                        {course.instructor && (
+                          <p className="text-sm text-slate-600">{course.instructor.name}</p>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-4 text-sm text-slate-600 mb-3">
+                          {course.rating && (
+                            <div className="flex items-center gap-1">
+                              <StarIconSolidHero className="h-4 w-4 text-yellow-400" />
+                              <span className="font-medium">{course.rating.toFixed(1)}</span>
+                              <span>({course.totalReviews})</span>
+                            </div>
+                          )}
+                          {course.totalStudents !== undefined && course.totalStudents > 0 && (
+                            <div className="flex items-center gap-1">
+                              <UserGroupIcon className="h-4 w-4" />
+                              <span>{(course.totalStudents || 0).toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xl font-bold text-blue-600">
+                            {formatPrice(course.price)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Featured Books */}
+      {featuredBooks.length > 0 && (
+        <section className="py-16 bg-slate-50">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                  Sách điện tử mới nhất
+                </h2>
+                <p className="text-slate-600">Tài liệu học tập chất lượng cao</p>
+              </div>
+              <Button asChild variant="ghost" className="hidden md:flex">
+                <Link href="/books">
+                  Xem tất cả <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredBooks.map((book) => (
+                <motion.div
+                  key={book.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -4 }}
+                >
+                  <Link href={`/books/${book.id}`}>
+                    <Card className="h-full border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group">
+                      <div className="flex gap-4 p-4">
+                        <div className="relative w-24 h-32 bg-slate-200 rounded overflow-hidden flex-shrink-0">
+                          {book.coverImage && book.coverImage.startsWith('http') ? (
+                            <Image
+                              src={book.coverImage}
+                              alt={book.title}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                              <BookOpen className="h-12 w-12 text-white opacity-50" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base line-clamp-2 group-hover:text-blue-600 transition-colors mb-2">
+                            {stripHtml(book.title)}
+                          </CardTitle>
+                          {book.authorName && (
+                            <p className="text-sm text-slate-600 mb-2">{book.authorName}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
+                            {book.totalChapters && book.totalChapters > 0 && (
+                              <span>{book.totalChapters} chương</span>
+                            )}
+                            {book.totalQuestions && book.totalQuestions > 0 && (
+                              <span>{book.totalQuestions} câu hỏi</span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-bold text-blue-600">
+                              {formatPrice(book.price)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Categories Section */}
-      <section className="relative py-20">
+      <section className="py-16 bg-white">
         <div className="container mx-auto px-4 max-w-7xl">
           <motion.div
-            className="text-center mb-16"
+            className="text-center mb-12"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
             viewport={{ once: true }}
           >
-            <Badge className="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4 mr-2 inline" />
-              {t.home.categories.title}
-            </Badge>
-            <h2 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-              {t.home.categories.title}
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+              Khám phá theo danh mục
             </h2>
-            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-              {t.home.categories.subtitle}
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Tìm khóa học phù hợp với môn học bạn yêu thích
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
             {categoriesLoading ? (
-              // Loading skeleton
               Array.from({ length: 8 }).map((_, index) => (
-                <Card key={index} className="border-0 shadow-lg rounded-2xl overflow-hidden">
-                  <CardContent className="p-6 text-center">
-                    <div className="w-16 h-16 bg-slate-200 rounded-2xl mx-auto mb-4 animate-pulse"></div>
-                    <div className="h-4 bg-slate-200 rounded mb-2 animate-pulse"></div>
-                    <div className="h-3 bg-slate-200 rounded animate-pulse"></div>
+                <Card key={index} className="border border-slate-200">
+                  <CardContent className="p-4 text-center">
+                    <div className="w-12 h-12 bg-slate-200 rounded-lg mx-auto mb-2 animate-pulse"></div>
+                    <div className="h-4 bg-slate-200 rounded animate-pulse"></div>
                   </CardContent>
                 </Card>
               ))
             ) : (
-              categories.map((category, index) => {
-                const categoryName = language === 'vi' ? category.name : category.nameEn || category.name;
-                const icon = categoryIcons[categoryName] || categoryIcons[category.name] || "📚";
-                const color = categoryColors[categoryName] || categoryColors[category.name] || "from-blue-500 to-cyan-500";
-                
-                return (
-                  <motion.div
-                    key={category.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    viewport={{ once: true }}
-                    whileHover={{ y: -10, scale: 1.05 }}
-                  >
-                    <Card className="border-0 shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl overflow-hidden group cursor-pointer">
-                      <CardContent className="p-6 text-center">
-                        <div className={`w-16 h-16 bg-gradient-to-br ${color} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 text-3xl`}>
-                          {icon}
+              categories.slice(0, 8).map((category, index) => (
+                <motion.div
+                  key={category.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  whileHover={{ scale: 1.05, y: -4 }}
+                >
+                  <Link href={`/courses?category=${category.id}`}>
+                    <Card className="border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all duration-300 cursor-pointer h-full">
+                      <CardContent className="p-4 text-center">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                          <BookOpen className="h-6 w-6 text-blue-600" />
                         </div>
-                        <h3 className="font-bold text-slate-800 mb-1">
-                          {categoryName}
+                        <h3 className="font-semibold text-sm text-slate-900">
+                          {category.name}
                         </h3>
-                        <p className="text-sm text-slate-600">
-                          {(category as any).courseCount || 0} {language === 'vi' ? 'khóa học' : 'courses'}
-                        </p>
                       </CardContent>
                     </Card>
-                  </motion.div>
-                );
-              })
+                  </Link>
+                </motion.div>
+              ))
             )}
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="relative py-20 bg-white">
+      {/* Stats Section */}
+      <section className="py-16 bg-slate-900 text-white">
         <div className="container mx-auto px-4 max-w-7xl">
-          <motion.div
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-              {t.home.features.title}
-            </h2>
-            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-              {t.home.features.subtitle}
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              {
-                icon: Zap,
-                title: t.home.features.support247,
-                description: t.home.features.supportDesc,
-                color: "from-blue-500 to-cyan-500",
-              },
-              {
-                icon: Shield,
-                title: t.home.features.topQuality,
-                description: t.home.features.qualityDesc,
-                color: "from-purple-500 to-pink-500",
-              },
-              {
-                icon: Clock,
-                title: t.home.features.flexible,
-                description: t.home.features.flexibleDesc,
-                color: "from-green-500 to-emerald-500",
-              },
-              {
-                icon: Award,
-                title: t.home.features.certificate,
-                description: t.home.features.certificateDesc,
-                color: "from-orange-500 to-red-500",
-              },
-            ].map((feature, index) => (
+              { icon: UserGroupIcon, value: "15K+", label: "Học viên" },
+              { icon: AcademicCapIcon, value: "500+", label: "Khóa học" },
+              { icon: BookOpenIcon, value: "200+", label: "Sách điện tử" },
+              { icon: Award, value: "50+", label: "Giảng viên" },
+            ].map((stat, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
                 viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className="text-center"
               >
-                <Card className="border-0 shadow-xl hover:shadow-2xl transition-all duration-300 rounded-3xl overflow-hidden group h-full">
-                  <CardContent className="p-8 text-center">
-                    <div className={`w-20 h-20 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                      <feature.icon className="h-10 w-10 text-white" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-4">{feature.title}</h3>
-                    <p className="text-slate-600 leading-relaxed">{feature.description}</p>
-                  </CardContent>
-                </Card>
+                <stat.icon className="h-12 w-12 mx-auto mb-4 text-blue-400" />
+                <div className="text-4xl font-bold mb-2">{stat.value}</div>
+                <div className="text-slate-300">{stat.label}</div>
               </motion.div>
             ))}
           </div>
@@ -271,120 +591,23 @@ export default function HomePageModern() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-32 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600"></div>
-        <div className="absolute inset-0 bg-[url('/images/pattern.svg')] opacity-10"></div>
-        
-        <div className="container mx-auto px-4 max-w-7xl relative z-10">
-          <motion.div
-            className="text-center"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-5xl md:text-6xl font-bold text-white mb-6">
-              {t.home.cta.title}
-            </h2>
-            <p className="text-2xl text-blue-100 mb-12 max-w-3xl mx-auto">
-              {t.home.cta.subtitle}
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                asChild
-                size="lg"
-                className="bg-white text-blue-600 hover:bg-blue-50 px-10 py-7 text-lg font-bold rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-1"
-              >
-                <Link href="/auth/register">
-                  <GraduationCap className="mr-3 h-6 w-6" />
-                  {t.home.cta.registerNow}
-                  <ArrowRight className="ml-3 h-5 w-5" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 hover:bg-white/20 px-10 py-7 text-lg font-bold rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:-translate-y-1"
-              >
-                <Link href="/courses">
-                  <BookOpen className="mr-3 h-6 w-6" />
-                  {t.home.hero.exploreCourses}
-                </Link>
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Floating elements */}
-        <motion.div
-          className="absolute top-10 left-10 w-20 h-20 bg-white/20 rounded-full blur-xl"
-          animate={{
-            y: [0, -20, 0],
-            x: [0, 10, 0],
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        <motion.div
-          className="absolute bottom-10 right-10 w-32 h-32 bg-white/20 rounded-full blur-xl"
-          animate={{
-            y: [0, 20, 0],
-            x: [0, -10, 0],
-          }}
-          transition={{
-            duration: 7,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      </section>
-
-      {/* Trust Badges */}
-      <section className="relative py-16 bg-slate-50">
-        <div className="container mx-auto px-4 max-w-7xl">
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: CheckCircle,
-                title: language === 'vi' ? 'Đảm bảo chất lượng' : 'Quality Guaranteed',
-                description: language === 'vi' ? 'Nội dung được kiểm duyệt kỹ lưỡng' : 'Thoroughly reviewed content',
-              },
-              {
-                icon: Shield,
-                title: language === 'vi' ? 'Bảo mật thông tin' : 'Secure Information',
-                description: language === 'vi' ? 'Dữ liệu được mã hóa và bảo vệ' : 'Encrypted and protected data',
-              },
-              {
-                icon: TrendingUp,
-                title: language === 'vi' ? 'Cập nhật liên tục' : 'Continuous Updates',
-                description: language === 'vi' ? 'Nội dung mới được thêm hàng tuần' : 'New content added weekly',
-              },
-            ].map((badge, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl">
-                  <CardContent className="p-6 flex items-start space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <badge.icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 mb-1">{badge.title}</h3>
-                      <p className="text-sm text-slate-600">{badge.description}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+      <section className="py-20 bg-blue-600 text-white">
+        <div className="container mx-auto px-4 max-w-4xl text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Sẵn sàng bắt đầu hành trình học tập?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Tham gia cùng hàng nghìn học viên đã thành công với Khởi Trí Số
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg" className="bg-white text-blue-600 hover:bg-blue-50">
+              <Link href="/auth/register">
+                Đăng ký ngay <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+              <Link href="/courses">Khám phá khóa học</Link>
+            </Button>
           </div>
         </div>
       </section>

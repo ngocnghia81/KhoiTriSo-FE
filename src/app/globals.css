@@ -405,6 +405,26 @@
   }
 }
 
+@keyframes cart-badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes cart-badge-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
 @keyframes rotate {
   0% {
     transform: rotate(0deg);
@@ -743,4 +763,158 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Forum Rich Text Content Styles */
+.forum-content {
+  @apply text-gray-900;
+}
+
+.forum-content h1,
+.forum-content h2,
+.forum-content h3,
+.forum-content h4,
+.forum-content h5,
+.forum-content h6 {
+  @apply font-bold text-gray-900 mt-4 mb-2;
+}
+
+.forum-content h1 {
+  @apply text-2xl;
+}
+
+.forum-content h2 {
+  @apply text-xl;
+}
+
+.forum-content h3 {
+  @apply text-lg;
+}
+
+.forum-content p {
+  @apply mb-3 leading-relaxed;
+}
+
+.forum-content ul,
+.forum-content ol {
+  @apply mb-3 ml-6;
+}
+
+.forum-content ul {
+  @apply list-disc;
+}
+
+.forum-content ol {
+  @apply list-decimal;
+}
+
+.forum-content li {
+  @apply mb-1;
+}
+
+.forum-content blockquote {
+  @apply border-l-4 border-gray-300 pl-4 italic my-3 text-gray-700;
+}
+
+.forum-content code {
+  @apply bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono text-gray-800;
+}
+
+.forum-content pre {
+  @apply bg-gray-100 p-4 rounded-lg overflow-x-auto my-3;
+}
+
+.forum-content pre code {
+  @apply bg-transparent p-0;
+}
+
+.forum-content a {
+  @apply text-blue-600 hover:text-blue-800 underline;
+}
+
+.forum-content img {
+  @apply max-w-full h-auto rounded-lg my-3;
+}
+
+.forum-content table {
+  @apply w-full border-collapse border border-gray-300 my-3;
+}
+
+.forum-content th,
+.forum-content td {
+  @apply border border-gray-300 px-4 py-2;
+}
+
+.forum-content th {
+  @apply bg-gray-100 font-semibold;
+}
+
+.forum-content strong,
+.forum-content b {
+  @apply font-bold;
+}
+
+.forum-content em,
+.forum-content i {
+  @apply italic;
+}
+
+.forum-content u {
+  @apply underline;
+}
+
+.forum-content s,
+.forum-content strike {
+  @apply line-through;
+}
+
+/* Rich Text Editor Content Styles */
+.rich-text-editor-content {
+  @apply text-gray-900;
+}
+
+.rich-text-editor-content h1,
+.rich-text-editor-content h2,
+.rich-text-editor-content h3,
+.rich-text-editor-content h4,
+.rich-text-editor-content h5,
+.rich-text-editor-content h6 {
+  @apply font-bold text-gray-900 mt-2 mb-1;
+}
+
+.rich-text-editor-content h1 {
+  @apply text-xl;
+}
+
+.rich-text-editor-content h2 {
+  @apply text-lg;
+}
+
+.rich-text-editor-content h3 {
+  @apply text-base;
+}
+
+.rich-text-editor-content p {
+  @apply mb-2 leading-relaxed;
+}
+
+.rich-text-editor-content ul,
+.rich-text-editor-content ol {
+  @apply mb-2 ml-6;
+}
+
+.rich-text-editor-content ul {
+  @apply list-disc;
+}
+
+.rich-text-editor-content ol {
+  @apply list-decimal;
+}
+
+.rich-text-editor-content li {
+  @apply mb-1;
+}
+
+.rich-text-editor-content a {
+  @apply text-blue-600 hover:text-blue-800 underline;
 }

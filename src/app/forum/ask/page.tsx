@@ -14,6 +14,7 @@ import {
   PlusIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import { RichTextEditor } from '@/components/RichTextEditor';
 
 interface FormData {
   title: string;
@@ -52,7 +53,6 @@ export default function AskQuestionPage() {
   
   const [currentTag, setCurrentTag] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
@@ -97,9 +97,11 @@ export default function AskQuestionPage() {
       newErrors.title = 'Tiêu đề phải có ít nhất 10 ký tự';
     }
 
-    if (!formData.content.trim()) {
+    // Strip HTML tags for validation
+    const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
+    if (!textContent) {
       newErrors.content = 'Vui lòng mô tả chi tiết câu hỏi của bạn';
-    } else if (formData.content.length < 20) {
+    } else if (textContent.length < 20) {
       newErrors.content = 'Mô tả phải có ít nhất 20 ký tự';
     }
 
@@ -243,52 +245,26 @@ export default function AskQuestionPage() {
                 )}
               </div>
 
-              {/* Content */}
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-                    Mô tả chi tiết <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    <EyeIcon className="w-4 h-4 inline mr-1" />
-                    {showPreview ? 'Chỉnh sửa' : 'Xem trước'}
-                  </button>
-                </div>
-                
-                {!showPreview ? (
-                  <textarea
-                    id="content"
-                    rows={8}
-                    value={formData.content}
-                    onChange={(e) => handleInputChange('content', e.target.value)}
-                    placeholder="Mô tả chi tiết câu hỏi của bạn. Bạn có thể:&#10;- Giải thích bối cảnh và những gì bạn đã thử&#10;- Đính kèm hình ảnh nếu cần&#10;- Chỉ ra phần nào bạn không hiểu&#10;- Chia sẻ kết quả mong đợi"
-                    className={`w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.content ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                  />
-                ) : (
-                  <div className="min-h-[200px] p-3 border rounded-md bg-gray-50">
-                    <div className="prose prose-sm max-w-none">
-                      {formData.content ? (
-                        <div className="whitespace-pre-wrap">{formData.content}</div>
-                      ) : (
-                        <p className="text-gray-500 italic">Chưa có nội dung...</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {errors.content && (
-                  <p className="mt-1 text-sm text-red-600">{errors.content}</p>
-                )}
-                <p className="mt-1 text-sm text-gray-500">
-                  Mô tả càng chi tiết, bạn càng có khả năng nhận được câu trả lời chính xác
-                </p>
-              </div>
+               {/* Content */}
+               <div className="bg-white rounded-lg shadow-sm p-6">
+                 <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
+                   Mô tả chi tiết <span className="text-red-500">*</span>
+                 </label>
+                 
+                 <RichTextEditor
+                   value={formData.content}
+                   onChange={(value) => handleInputChange('content', value)}
+                   placeholder="Mô tả chi tiết câu hỏi của bạn. Bạn có thể:&#10;- Giải thích bối cảnh và những gì bạn đã thử&#10;- Đính kèm hình ảnh nếu cần&#10;- Chỉ ra phần nào bạn không hiểu&#10;- Chia sẻ kết quả mong đợi"
+                   className={errors.content ? 'border-red-300' : ''}
+                 />
+                 
+                 {errors.content && (
+                   <p className="mt-1 text-sm text-red-600">{errors.content}</p>
+                 )}
+                 <p className="mt-1 text-sm text-gray-500">
+                   Mô tả càng chi tiết, bạn càng có khả năng nhận được câu trả lời chính xác. Bạn có thể sử dụng định dạng văn bản, danh sách, và các công cụ chỉnh sửa khác.
+                 </p>
+               </div>
 
               {/* Tags */}
               <div className="bg-white rounded-lg shadow-sm p-6">

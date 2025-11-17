@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CartItem, CartResponse, AddToCartRequest } from '../types/cart';
 import { cartApiService } from '../services/cartApi';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface UseCartReturn {
   cart: CartResponse | null;
@@ -13,26 +14,54 @@ export interface UseCartReturn {
 }
 
 export function useCart(): UseCartReturn {
+  const { isAuthenticated } = useAuth();
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCart = useCallback(async () => {
+    // Only fetch cart if user is authenticated
+    if (!isAuthenticated) {
+      setCart(null);
+      setError(null);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
+      console.log('useCart - Fetching cart...');
       const cartData = await cartApiService.getCart();
+      console.log('useCart - Cart data received:', {
+        hasCartData: !!cartData,
+        cartItems: cartData?.CartItems,
+        cartItemsLength: cartData?.CartItems?.length,
+        totalItems: cartData?.TotalItems,
+        totalAmount: cartData?.TotalAmount,
+        fullData: cartData
+      });
       setCart(cartData);
-    } catch (err) {
+      console.log('useCart - Cart state updated');
+    } catch (err: any) {
+      // Silently handle 401 errors (user not authenticated)
+      if (err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+        setCart(null);
+        setError(null);
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch cart';
       setError(errorMessage);
       console.error('useCart - Error fetching cart:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const addToCart = useCallback(async (request: AddToCartRequest) => {
+    if (!isAuthenticated) {
+      throw new Error('Vui lòng đăng nhập để thêm vào giỏ hàng');
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -46,9 +75,13 @@ export function useCart(): UseCartReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const removeFromCart = useCallback(async (itemId: number) => {
+    if (!isAuthenticated) {
+      throw new Error('Vui lòng đăng nhập');
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -63,9 +96,13 @@ export function useCart(): UseCartReturn {
     } finally {
       setLoading(false);
     }
-  }, [fetchCart]);
+  }, [fetchCart, isAuthenticated]);
 
   const clearCart = useCallback(async () => {
+    if (!isAuthenticated) {
+      throw new Error('Vui lòng đăng nhập');
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -79,13 +116,13 @@ export function useCart(): UseCartReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const refreshCart = useCallback(async () => {
     await fetchCart();
   }, [fetchCart]);
 
-  // Load cart on mount
+  // Load cart on mount and when auth state changes
   useEffect(() => {
     fetchCart();
   }, [fetchCart]);
