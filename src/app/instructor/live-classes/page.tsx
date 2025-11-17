@@ -1,426 +1,446 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-  PlusIcon,
-  VideoCameraIcon,
-  CalendarDaysIcon,
-  ClockIcon,
-  UsersIcon,
-  PlayIcon,
-  StopIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  LinkIcon,
-  EyeIcon
-} from '@heroicons/react/24/outline';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, Video, Calendar, Clock, Users, Search, Filter, MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { liveClassApiService, LiveClassDTO } from '@/services/liveClassApi';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface LiveClass {
-  id: string;
-  title: string;
-  description: string;
-  courseTitle: string;
-  scheduledAt: string;
-  durationMinutes: number;
-  maxParticipants: number;
-  currentParticipants: number;
-  meetingUrl: string;
-  meetingId: string;
-  meetingPassword: string;
-  status: 'scheduled' | 'live' | 'ended' | 'cancelled';
-  recordingUrl?: string;
-  createdAt: string;
-}
-
-const mockLiveClasses: LiveClass[] = [
-  {
-    id: '1',
-    title: 'Ôn tập Chương 1: Hàm số',
-    description: 'Ôn tập tổng hợp các dạng bài tập về hàm số, đồ thị hàm số',
-    courseTitle: 'Toán học lớp 12',
-    scheduledAt: '2024-02-15T19:00:00',
-    durationMinutes: 90,
-    maxParticipants: 100,
-    currentParticipants: 0,
-    meetingUrl: 'https://zoom.us/j/123456789',
-    meetingId: '123-456-789',
-    meetingPassword: 'math2024',
-    status: 'scheduled',
-    createdAt: '2024-02-10'
-  },
-  {
-    id: '2',
-    title: 'Giải đề thi thử THPT QG 2024',
-    description: 'Giải chi tiết đề thi thử THPT Quốc gia môn Toán 2024',
-    courseTitle: 'Toán học lớp 12',
-    scheduledAt: '2024-02-12T20:00:00',
-    durationMinutes: 120,
-    maxParticipants: 150,
-    currentParticipants: 89,
-    meetingUrl: 'https://zoom.us/j/987654321',
-    meetingId: '987-654-321',
-    meetingPassword: 'exam2024',
-    status: 'live',
-    createdAt: '2024-02-08'
-  },
-  {
-    id: '3',
-    title: 'Q&A Session - Đạo hàm nâng cao',
-    description: 'Buổi hỏi đáp về các bài tập đạo hàm khó',
-    courseTitle: 'Toán học lớp 12',
-    scheduledAt: '2024-02-10T19:30:00',
-    durationMinutes: 60,
-    maxParticipants: 80,
-    currentParticipants: 67,
-    meetingUrl: 'https://zoom.us/j/456789123',
-    meetingId: '456-789-123',
-    meetingPassword: 'qa2024',
-    status: 'ended',
-    recordingUrl: 'https://zoom.us/rec/share/recording123',
-    createdAt: '2024-02-05'
-  }
-];
-
-const getStatusLabel = (status: LiveClass['status']) => {
+const getStatusLabel = (status: number) => {
   switch (status) {
-    case 'scheduled': return 'Đã lên lịch';
-    case 'live': return 'Đang diễn ra';
-    case 'ended': return 'Đã kết thúc';
-    case 'cancelled': return 'Đã hủy';
+    case 0: return 'Đã lên lịch';
+    case 1: return 'Đang diễn ra';
+    case 2: return 'Đã kết thúc';
+    case 3: return 'Đã hủy';
     default: return 'Không xác định';
   }
 };
 
-const getStatusColor = (status: LiveClass['status']) => {
+const getStatusColor = (status: number) => {
   switch (status) {
-    case 'scheduled': return 'bg-blue-100 text-blue-800';
-    case 'live': return 'bg-green-100 text-green-800';
-    case 'ended': return 'bg-gray-100 text-gray-800';
-    case 'cancelled': return 'bg-red-100 text-red-800';
+    case 0: return 'bg-blue-100 text-blue-800';
+    case 1: return 'bg-green-100 text-green-800';
+    case 2: return 'bg-gray-100 text-gray-800';
+    case 3: return 'bg-red-100 text-red-800';
     default: return 'bg-gray-100 text-gray-800';
   }
 };
 
 export default function LiveClassesPage() {
-  const [liveClasses, setLiveClasses] = useState<LiveClass[]>(mockLiveClasses);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | LiveClass['status']>('all');
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  
+  const role = String(user?.role ?? '').toLowerCase();
+  const isTeacher = role === 'instructor' ;
+  const isValidTeacherId = isAuthenticated && isTeacher && user?.id != null && !isNaN(Number(user.id));
+  const instructorId = isValidTeacherId ? Number(user.id) : undefined;
+  
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  const [liveClasses, setLiveClasses] = useState<LiveClassDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
+  const [upcomingFilter, setUpcomingFilter] = useState<boolean | 'all'>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const filteredClasses = liveClasses.filter(liveClass => {
-    const matchesFilter = selectedFilter === 'all' || liveClass.status === selectedFilter;
-    const matchesSearch = liveClass.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      liveClass.courseTitle.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesFilter && matchesSearch;
-  });
+  const fetchLiveClasses = useCallback(async () => {
+    if (!isAuthenticated && user === null) {
+      return;
+    }
 
-  const startClass = (id: string) => {
-    setLiveClasses(prev => prev.map(liveClass => 
-      liveClass.id === id 
-        ? { ...liveClass, status: 'live' as const }
-        : liveClass
-    ));
-  };
+    try {
+      setLoading(true);
+      setError(null);
 
-  const endClass = (id: string) => {
-    setLiveClasses(prev => prev.map(liveClass => 
-      liveClass.id === id 
-        ? { ...liveClass, status: 'ended' as const, recordingUrl: 'https://zoom.us/rec/share/recording' + id }
-        : liveClass
-    ));
-  };
+      const params: Parameters<typeof liveClassApiService.getLiveClasses>[1] = {
+        page,
+        pageSize: 20,
+      };
 
-  const deleteClass = (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa lớp học này?')) {
-      setLiveClasses(prev => prev.filter(liveClass => liveClass.id !== id));
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+
+      if (upcomingFilter !== 'all') {
+        params.upcoming = upcomingFilter;
+      }
+
+      if (instructorId != null && isValidTeacherId) {
+        params.instructorId = instructorId;
+      }
+
+      const result = await liveClassApiService.getLiveClasses(authenticatedFetch, params);
+      setLiveClasses(result.items);
+      setTotal(result.total);
+      setTotalPages(result.totalPages || Math.ceil(result.total / result.pageSize));
+    } catch (err: any) {
+      console.error('Error fetching live classes:', err);
+      setError(err.message || 'Không thể tải danh sách lớp học');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, statusFilter, upcomingFilter, instructorId, isValidTeacherId, isAuthenticated, user, authenticatedFetch]);
+
+  useEffect(() => {
+    fetchLiveClasses();
+  }, [fetchLiveClasses]);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa lớp học này?')) return;
+
+    try {
+      await liveClassApiService.deleteLiveClass(authenticatedFetch, id);
+      await fetchLiveClasses();
+    } catch (err: any) {
+      alert(err.message || 'Không thể xóa lớp học');
     }
   };
 
-  const copyMeetingInfo = (liveClass: LiveClass) => {
-    const meetingInfo = `
-Thông tin lớp học trực tuyến:
-📚 Tiêu đề: ${liveClass.title}
-📅 Thời gian: ${new Date(liveClass.scheduledAt).toLocaleString('vi-VN')}
-🔗 Link tham gia: ${liveClass.meetingUrl}
-🆔 Meeting ID: ${liveClass.meetingId}
-🔑 Mật khẩu: ${liveClass.meetingPassword}
-    `.trim();
-    
-    navigator.clipboard.writeText(meetingInfo);
-    alert('Đã sao chép thông tin lớp học!');
+  const handleStart = async (id: number) => {
+    if (!confirm('Bắt đầu lớp học này ngay bây giờ?')) return;
+
+    try {
+      await liveClassApiService.startLiveClass(authenticatedFetch, id);
+      await fetchLiveClasses();
+    } catch (err: any) {
+      alert(err.message || 'Không thể bắt đầu lớp học');
+    }
+  };
+
+  const handleEnd = async (id: number) => {
+    if (!confirm('Kết thúc lớp học này? Học viên sẽ không thể tham gia sau khi kết thúc.')) return;
+
+    try {
+      await liveClassApiService.endLiveClass(authenticatedFetch, id);
+      await fetchLiveClasses();
+    } catch (err: any) {
+      alert(err.message || 'Không thể kết thúc lớp học');
+    }
+  };
+
+  const filteredClasses = liveClasses.filter(lc => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return lc.title.toLowerCase().includes(query) || 
+             lc.description.toLowerCase().includes(query);
+    }
+    return true;
+  });
+
+  const stats = {
+    total: total,
+    scheduled: liveClasses.filter(lc => lc.status === 0).length,
+    live: liveClasses.filter(lc => lc.status === 1).length,
+    ended: liveClasses.filter(lc => lc.status === 2).length,
   };
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lớp học trực tuyến</h1>
-          <p className="text-gray-600 mt-1">Quản lý các buổi học trực tuyến của bạn</p>
-        </div>
-        
-        <div className="mt-4 sm:mt-0">
-          <Link 
-            href="/instructor/live-classes/create"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Tạo lớp học mới
-          </Link>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="md:col-span-2">
-            <input
-              type="text"
-              placeholder="Tìm kiếm lớp học..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <select
-              value={selectedFilter}
-              onChange={(e) => setSelectedFilter(e.target.value as 'all' | LiveClass['status'])}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Quản lý lớp học trực tuyến
+              </h1>
+              <p className="text-gray-600 mt-2">Quản lý các buổi học trực tuyến của bạn</p>
+            </div>
+            <Button
+              onClick={() => router.push('/instructor/live-classes/create')}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="scheduled">Đã lên lịch</option>
-              <option value="live">Đang diễn ra</option>
-              <option value="ended">Đã kết thúc</option>
-              <option value="cancelled">Đã hủy</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <VideoCameraIcon className="h-8 w-8 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Tổng lớp học</p>
-              <p className="text-2xl font-bold text-gray-900">{liveClasses.length}</p>
-            </div>
+              <Plus className="w-4 h-4 mr-2" />
+              Tạo lớp học mới
+            </Button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <CalendarDaysIcon className="h-8 w-8 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Đã lên lịch</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {liveClasses.filter(c => c.status === 'scheduled').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <PlayIcon className="h-8 w-8 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Đang diễn ra</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {liveClasses.filter(c => c.status === 'live').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <UsersIcon className="h-8 w-8 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Tổng học viên</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {liveClasses.reduce((sum, c) => sum + c.currentParticipants, 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Live Classes List */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            Danh sách lớp học ({filteredClasses.length})
-          </h2>
-        </div>
-
-        {filteredClasses.length === 0 ? (
-          <div className="p-12 text-center">
-            <VideoCameraIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Không có lớp học</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Bắt đầu bằng cách tạo lớp học trực tuyến đầu tiên của bạn.
-            </p>
-            <div className="mt-6">
-              <Link
-                href="/instructor/live-classes/create"
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Tạo lớp học mới
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {filteredClasses.map((liveClass) => (
-              <div key={liveClass.id} className="p-6 hover:bg-gray-50">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {liveClass.title}
-                      </h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(liveClass.status)}`}>
-                        {getStatusLabel(liveClass.status)}
-                      </span>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 mb-3">
-                      {liveClass.description}
-                    </p>
-                    
-                    <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <CalendarDaysIcon className="h-4 w-4 mr-1" />
-                        {new Date(liveClass.scheduledAt).toLocaleDateString('vi-VN')}
-                      </div>
-                      <div className="flex items-center">
-                        <ClockIcon className="h-4 w-4 mr-1" />
-                        {new Date(liveClass.scheduledAt).toLocaleTimeString('vi-VN', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })} ({liveClass.durationMinutes} phút)
-                      </div>
-                      <div className="flex items-center">
-                        <UsersIcon className="h-4 w-4 mr-1" />
-                        {liveClass.currentParticipants}/{liveClass.maxParticipants} học viên
-                      </div>
-                    </div>
-
-                    {liveClass.status === 'live' && (
-                      <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-green-800">
-                              Lớp học đang diễn ra
-                            </p>
-                            <p className="text-xs text-green-600">
-                              {liveClass.currentParticipants} học viên đang tham gia
-                            </p>
-                          </div>
-                          <a
-                            href={liveClass.meetingUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"
-                          >
-                            <PlayIcon className="h-3 w-3 mr-1" />
-                            Tham gia
-                          </a>
-                        </div>
-                      </div>
-                    )}
-
-                    {liveClass.status === 'ended' && liveClass.recordingUrl && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-blue-800">
-                              Bản ghi có sẵn
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              Xem lại buổi học đã kết thúc
-                            </p>
-                          </div>
-                          <a
-                            href={liveClass.recordingUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
-                          >
-                            <EyeIcon className="h-3 w-3 mr-1" />
-                            Xem bản ghi
-                          </a>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-2 ml-4">
-                    {liveClass.status === 'scheduled' && (
-                      <button
-                        onClick={() => startClass(liveClass.id)}
-                        className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-                        title="Bắt đầu lớp học"
-                      >
-                        <PlayIcon className="h-5 w-5" />
-                      </button>
-                    )}
-
-                    {liveClass.status === 'live' && (
-                      <button
-                        onClick={() => endClass(liveClass.id)}
-                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                        title="Kết thúc lớp học"
-                      >
-                        <StopIcon className="h-5 w-5" />
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => copyMeetingInfo(liveClass)}
-                      className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
-                      title="Sao chép thông tin lớp học"
-                    >
-                      <LinkIcon className="h-5 w-5" />
-                    </button>
-
-                    <Link
-                      href={`/instructor/live-classes/${liveClass.id}/edit`}
-                      className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg"
-                      title="Chỉnh sửa"
-                    >
-                      <PencilSquareIcon className="h-5 w-5" />
-                    </Link>
-
-                    <button
-                      onClick={() => deleteClass(liveClass.id)}
-                      className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                      title="Xóa lớp học"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
-                  </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Video className="w-8 h-8 text-blue-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Tổng lớp học</p>
+                  <p className="text-2xl font-bold">{stats.total}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Calendar className="w-8 h-8 text-green-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Đã lên lịch</p>
+                  <p className="text-2xl font-bold">{stats.scheduled}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Video className="w-8 h-8 text-red-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Đang diễn ra</p>
+                  <p className="text-2xl font-bold">{stats.live}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center">
+                <Users className="w-8 h-8 text-purple-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Đã kết thúc</p>
+                  <p className="text-2xl font-bold">{stats.ended}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Tìm kiếm lớp học..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select
+                value={statusFilter === 'all' ? 'all' : statusFilter.toString()}
+                onValueChange={(value) => setStatusFilter(value === 'all' ? 'all' : parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Lọc theo trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="0">Đã lên lịch</SelectItem>
+                  <SelectItem value="1">Đang diễn ra</SelectItem>
+                  <SelectItem value="2">Đã kết thúc</SelectItem>
+                  <SelectItem value="3">Đã hủy</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={upcomingFilter === 'all' ? 'all' : upcomingFilter.toString()}
+                onValueChange={(value) => setUpcomingFilter(value === 'all' ? 'all' : value === 'true')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Lọc theo thời gian" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="true">Sắp diễn ra</SelectItem>
+                  <SelectItem value="false">Đã qua</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Live Classes List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Danh sách lớp học</CardTitle>
+            <CardDescription>
+              {loading ? 'Đang tải...' : `Hiển thị ${filteredClasses.length} lớp học`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Đang tải...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-red-600">{error}</p>
+                <Button onClick={fetchLiveClasses} className="mt-4" variant="outline">
+                  Thử lại
+                </Button>
+              </div>
+            ) : filteredClasses.length === 0 ? (
+              <div className="text-center py-12">
+                <Video className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600 mb-4">Chưa có lớp học nào</p>
+                <Button
+                  onClick={() => router.push('/instructor/live-classes/create')}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tạo lớp học đầu tiên
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredClasses.map((liveClass) => (
+                  <div
+                    key={liveClass.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold">{liveClass.title}</h3>
+                          <Badge className={getStatusColor(liveClass.status)}>
+                            {getStatusLabel(liveClass.status)}
+                          </Badge>
+                        </div>
+                        <div
+                          className="prose prose-sm text-gray-600 mb-3 max-w-none"
+                          dangerouslySetInnerHTML={{ __html: liveClass.description }}
+                        />
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(liveClass.scheduledAt).toLocaleDateString('vi-VN', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            {new Date(liveClass.scheduledAt).toLocaleTimeString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })} ({liveClass.durationMinutes} phút)
+                          </div>
+                          {liveClass.maxParticipants && (
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              Tối đa {liveClass.maxParticipants} học viên
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          {liveClass.status === 0 && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleStart(liveClass.id)}
+                              className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700"
+                            >
+                              Bắt đầu lớp học
+                            </Button>
+                          )}
+                          {liveClass.status === 1 && (
+                            <>
+                              <a
+                                href={liveClass.meetingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-green-700 hover:underline"
+                              >
+                                Tham gia lớp học →
+                              </a>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEnd(liveClass.id)}
+                              >
+                                Kết thúc lớp học
+                              </Button>
+                            </>
+                          )}
+                          {liveClass.status === 2 && (
+                            <span className="text-sm text-gray-500">
+                              Lớp học đã kết thúc. Học viên không thể tham gia nữa.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => router.push(`/instructor/live-classes/${liveClass.id}`)}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Xem chi tiết
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => router.push(`/instructor/live-classes/${liveClass.id}?edit=true`)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Chỉnh sửa
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(liveClass.id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Xóa
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {!loading && totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <p className="text-sm text-gray-600">
+                  Trang {page} / {totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Trước
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
+

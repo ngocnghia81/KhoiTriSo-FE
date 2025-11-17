@@ -13,6 +13,9 @@ import {
   CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCourses } from '@/hooks/useCourses';
+import { useCourseLessons } from '@/hooks/useLessons';
 
 interface Question {
   id: string;
@@ -41,20 +44,10 @@ interface AssignmentFormData {
   isPublished: boolean;
 }
 
-const mockCourses = [
-  { id: '1', title: 'Toán học lớp 12' },
-  { id: '2', title: 'Vật lý lớp 12' },
-  { id: '3', title: 'Hóa học lớp 12' }
-];
-
-const mockLessons = [
-  { id: '1', title: 'Chương 1: Hàm số', courseId: '1' },
-  { id: '2', title: 'Chương 2: Đạo hàm', courseId: '1' },
-  { id: '3', title: 'Chương 1: Động học', courseId: '2' },
-  { id: '4', title: 'Chương 2: Động lực học', courseId: '2' }
-];
-
 export default function CreateAssignmentPage() {
+  const { isAuthenticated, user } = useAuth();
+  const isTeacher = user?.role === 'instructor' ;
+  const instructorId = isTeacher ? Number(user?.id) : undefined;
   const [formData, setFormData] = useState<AssignmentFormData>({
     title: '',
     description: '',
@@ -72,7 +65,18 @@ export default function CreateAssignmentPage() {
   const [currentStep, setCurrentStep] = useState<'basic' | 'questions' | 'settings'>('basic');
   const [importMethod, setImportMethod] = useState<'manual' | 'file'>('manual');
 
-  const filteredLessons = mockLessons.filter(lesson => lesson.courseId === formData.courseId);
+  // Fetch real courses for this instructor
+  const { courses, loading: coursesLoading, error: coursesError } = useCourses({
+    page: 1,
+    pageSize: 1000,
+    sortBy: 'updatedAt',
+    sortOrder: 'desc',
+    instructorId: instructorId,
+  }, { enabled: !!isAuthenticated && !!instructorId });
+
+  // Fetch lessons for selected course
+  const selectedCourseIdNum = formData.courseId ? Number(formData.courseId) : 0;
+  const { lessons, loading: lessonsLoading, error: lessonsError } = useCourseLessons(selectedCourseIdNum);
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -188,8 +192,10 @@ export default function CreateAssignmentPage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Chọn khóa học</option>
-            {mockCourses.map(course => (
-              <option key={course.id} value={course.id}>{course.title}</option>
+            {coursesLoading && <option value="" disabled>Đang tải...</option>}
+            {coursesError && <option value="" disabled>Lỗi tải khóa học</option>}
+            {!coursesLoading && !coursesError && courses.map(course => (
+              <option key={course.id} value={String(course.id)}>{course.title}</option>
             ))}
           </select>
         </div>
@@ -205,8 +211,10 @@ export default function CreateAssignmentPage() {
             disabled={!formData.courseId}
           >
             <option value="">Chọn bài học</option>
-            {filteredLessons.map(lesson => (
-              <option key={lesson.id} value={lesson.id}>{lesson.title}</option>
+            {lessonsLoading && <option value="" disabled>Đang tải...</option>}
+            {lessonsError && <option value="" disabled>Lỗi tải bài học</option>}
+            {!lessonsLoading && !lessonsError && lessons.map(lesson => (
+              <option key={lesson.id} value={String(lesson.id)}>{lesson.title}</option>
             ))}
           </select>
         </div>
@@ -504,18 +512,6 @@ export default function CreateAssignmentPage() {
         </select>
       </div>
 
-      <div className="flex items-center">
-        <input
-          id="is-published"
-          type="checkbox"
-          checked={formData.isPublished}
-          onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-        />
-        <label htmlFor="is-published" className="ml-2 block text-sm text-gray-900">
-          Xuất bản ngay sau khi tạo
-        </label>
-      </div>
     </div>
   );
 

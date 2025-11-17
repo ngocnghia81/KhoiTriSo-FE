@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -15,6 +15,9 @@ import {
   Trash2,
   Info,
   Layers,
+  CheckCircle,
+  XCircle,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Card,
@@ -67,6 +70,7 @@ export default function LearningPathsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive'>('all');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -79,7 +83,7 @@ export default function LearningPathsPage() {
   const [pathToDelete, setPathToDelete] = useState<LearningPath | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  const fetchLearningPaths = async () => {
+  const fetchLearningPaths = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -98,23 +102,59 @@ export default function LearningPathsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchLearningPaths();
-  }, [page, sortBy, sortOrder]);
+  }, [fetchLearningPaths]);
 
+  // Filter by active tab (client-side filter)
   const filteredLearningPaths = useMemo(() => {
-    if (!searchTerm) return learningPaths;
-    const term = searchTerm.toLowerCase();
-    return learningPaths.filter((lp) => {
-      return (
-        lp.title.toLowerCase().includes(term) ||
-        lp.instructor?.name?.toLowerCase().includes(term) ||
-        lp.category?.name?.toLowerCase().includes(term)
-      );
-    });
-  }, [learningPaths, searchTerm]);
+    let filtered = learningPaths;
+
+    // Filter by isActive
+    if (activeTab === 'active') {
+      filtered = filtered.filter(lp => lp.isActive === true);
+    } else if (activeTab === 'inactive') {
+      filtered = filtered.filter(lp => lp.isActive === false);
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((lp) => {
+        return (
+          lp.title.toLowerCase().includes(term) ||
+          lp.instructor?.name?.toLowerCase().includes(term) ||
+          lp.category?.name?.toLowerCase().includes(term)
+        );
+      });
+    }
+
+    return filtered;
+  }, [learningPaths, searchTerm, activeTab]);
+
+  const handleTabChange = (tab: 'all' | 'active' | 'inactive') => {
+    setActiveTab(tab);
+    setPage(1); // Reset to first page when changing tab
+  };
+
+  const handleRestore = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn khôi phục lộ trình học này?')) return;
+
+    try {
+      setProcessing(true);
+      await learningPathApi.restoreLearningPath(id);
+      await fetchLearningPaths();
+      alert('Khôi phục lộ trình học thành công!');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Không thể khôi phục lộ trình học';
+      alert(message);
+      console.error('Restore learning path', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const analytics = useMemo(() => {
     if (!learningPaths.length) {
@@ -320,9 +360,52 @@ export default function LearningPathsPage() {
         </CardContent>
       </Card>
 
+      {/* Tabs */}
+      <Card>
+        <CardHeader className="pb-0">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px overflow-x-auto">
+              <button
+                onClick={() => handleTabChange('all')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'all'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Layers className="h-5 w-5 mr-2" />
+                Tất cả
+              </button>
+              <button
+                onClick={() => handleTabChange('active')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'active'
+                    ? 'border-green-500 text-green-600 bg-green-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Đang hoạt động
+              </button>
+              <button
+                onClick={() => handleTabChange('inactive')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'inactive'
+                    ? 'border-red-500 text-red-600 bg-red-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5 mr-2" />
+                Đã vô hiệu
+              </button>
+            </nav>
+          </div>
+        </CardHeader>
+      </Card>
+
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách lộ trình học ({total})</CardTitle>
+          <CardTitle>Danh sách lộ trình học ({filteredLearningPaths.length})</CardTitle>
           <CardDescription>Quản lý nội dung, trạng thái và hiệu suất lộ trình</CardDescription>
         </CardHeader>
         <CardContent>
@@ -445,16 +528,26 @@ export default function LearningPathsPage() {
                               Chỉnh sửa
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => {
-                                setPathToDelete(path);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Xóa lộ trình
-                            </DropdownMenuItem>
+                            {path.isActive === false ? (
+                              <DropdownMenuItem
+                                onClick={() => handleRestore(path.id)}
+                                className="text-green-600 focus:text-green-600"
+                              >
+                                <RotateCcw className="w-4 h-4 mr-2" />
+                                Khôi phục
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => {
+                                  setPathToDelete(path);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Xóa lộ trình
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -465,10 +558,10 @@ export default function LearningPathsPage() {
             </div>
           )}
 
-          {total > pageSize && (
+          {filteredLearningPaths.length > pageSize && (
             <div className="flex items-center justify-between mt-4">
               <div className="text-sm text-gray-500">
-                Trang {page} / {Math.ceil(total / pageSize)}
+                Trang {page} / {Math.ceil(filteredLearningPaths.length / pageSize)}
               </div>
               <div className="flex gap-2">
                 <Button

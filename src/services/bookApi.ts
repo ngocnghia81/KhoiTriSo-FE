@@ -453,6 +453,28 @@ class BookApiService {
     }
   }
 
+  async restoreBook(bookId: number): Promise<Book> {
+    const response = await this.authenticatedRequest(`/api/admin/books/${bookId}/restore`, {
+      method: 'PUT',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await safeJsonParse(response);
+    
+    if (isSuccessfulResponse(result)) {
+      const extracted = extractResult(result);
+      if (!extracted) {
+        throw new Error('No book data received');
+      }
+      return this.mapBook(extracted);
+    } else {
+      throw new Error(extractMessage(result));
+    }
+  }
+
   /**
    * Get activation codes for a book
    */
@@ -590,6 +612,7 @@ class BookApiService {
       price: book.price || book.Price || 0,
       isFree: book.isFree || book.IsFree || false,
       approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
+      isActive: book.isActive !== undefined ? book.isActive : (book.IsActive !== undefined ? book.IsActive : true),
       totalQuestions: book.totalQuestions || book.TotalQuestions,
       totalChapters: book.totalChapters || book.TotalChapters,
       createdAt: book.createdAt || book.CreatedAt,

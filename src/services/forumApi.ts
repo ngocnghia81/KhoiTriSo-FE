@@ -17,6 +17,7 @@ export interface ForumQuestion {
   isSolved: boolean;
   isPinned: boolean;
   isClosed: boolean;
+  isDeleted?: boolean;
   viewCount: number;
   voteCount: number;
   answerCount: number;
@@ -35,6 +36,7 @@ export interface ForumAnswer {
   userName: string;
   userAvatar?: string;
   isAccepted: boolean;
+  isDeleted?: boolean;
   voteCount: number;
   commentCount: number;
   createdAt: string;
@@ -86,6 +88,13 @@ export interface ForumVote {
   voteType: number; // -1 = downvote, 1 = upvote
 }
 
+export interface ForumBookmark {
+  questionId: string;
+  userId: number;
+  question?: ForumQuestion;
+  createdAt: string;
+}
+
 export interface PagedResult<T> {
   items: T[];
   total: number;
@@ -125,6 +134,7 @@ class ForumApiService {
       isSolved: item.IsSolved || item.isSolved || false,
       isPinned: item.IsPinned || item.isPinned || false,
       isClosed: item.IsClosed || item.isClosed || false,
+      isDeleted: item.IsDeleted || item.isDeleted || false,
       viewCount: item.ViewCount || item.viewCount || 0,
       voteCount: item.VoteCount || item.voteCount || 0,
       answerCount: item.AnswerCount || item.answerCount || 0,
@@ -145,6 +155,7 @@ class ForumApiService {
       userName: item.UserName || item.userName || '',
       userAvatar: item.UserAvatar || item.userAvatar,
       isAccepted: item.IsAccepted || item.isAccepted || false,
+      isDeleted: item.IsDeleted || item.isDeleted || false,
       voteCount: item.VoteCount || item.voteCount || 0,
       commentCount: item.CommentCount || item.commentCount || 0,
       createdAt: item.CreatedAt || item.createdAt || '',
@@ -242,6 +253,8 @@ class ForumApiService {
   async updateQuestion(id: string, request: {
     title?: string;
     content?: string;
+    userName?: string;
+    userAvatar?: string;
     tags?: string[];
     categoryId?: string;
     categoryName?: string;
@@ -257,6 +270,8 @@ class ForumApiService {
       body: JSON.stringify({
         Title: request.title,
         Content: request.content,
+        UserName: request.userName,
+        UserAvatar: request.userAvatar,
         Tags: request.tags,
         CategoryId: request.categoryId,
         CategoryName: request.categoryName,
@@ -330,7 +345,12 @@ class ForumApiService {
     return this.normalizeAnswer(data);
   }
 
-  async updateAnswer(id: string, request: { content: string }): Promise<ForumAnswer> {
+  async updateAnswer(id: string, request: { 
+    content?: string;
+    userName?: string;
+    userAvatar?: string;
+    attachments?: ForumAttachment[];
+  }): Promise<ForumAnswer> {
     const url = `${this.baseUrl}/api/forum/answers/${id}`;
     const response = await authenticatedFetch(url, {
       method: 'PUT',
@@ -339,6 +359,9 @@ class ForumApiService {
       },
       body: JSON.stringify({
         Content: request.content,
+        UserName: request.userName,
+        UserAvatar: request.userAvatar,
+        Attachments: request.attachments,
       }),
     });
 
@@ -372,6 +395,18 @@ class ForumApiService {
     const result = await safeJsonParse(response);
     if (!isSuccessfulResponse(result)) {
       throw new Error(extractMessage(result) || 'Failed to accept answer');
+    }
+  }
+
+  async unacceptAnswer(id: string): Promise<void> {
+    const url = `${this.baseUrl}/api/forum/answers/${id}/unaccept`;
+    const response = await authenticatedFetch(url, {
+      method: 'POST',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to unaccept answer');
     }
   }
 
@@ -485,6 +520,107 @@ class ForumApiService {
     };
   }
 
+  async getUserVote(targetType: number, targetId: string, userId: number): Promise<{ voteType: number | null }> {
+    const url = `${this.baseUrl}/api/forum/${targetType}/${targetId}/user-vote?userId=${userId}`;
+    const response = await authenticatedFetch(url);
+    const result = await safeJsonParse(response);
+
+    if (!isSuccessfulResponse(result)) {
+      return { voteType: null };
+    }
+
+    const data = extractResult(result);
+    return {
+      voteType: data?.VoteType !== undefined ? data.VoteType : (data?.voteType !== undefined ? data.voteType : null),
+    };
+  }
+
+  async getUserVotes(userId: number, targetType?: number, page: number = 1, pageSize: number = 20): Promise<PagedResult<ForumVote>> {
+    const params = new URLSearchParams();
+    if (targetType !== undefined) {
+      params.append('targetType', targetType.toString());
+    }
+    params.append('page', page.toString());
+    params.append('pageSize', pageSize.toString());
+    
+    const url = `${this.baseUrl}/api/forum/users/${userId}/votes?${params.toString()}`;
+    const response = await authenticatedFetch(url);
+    const result = await safeJsonParse(response);
+
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to fetch user votes');
+    }
+
+    const data = extractResult(result);
+    const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
+    const total = data?.Total || data?.total || items.length;
+
+    return {
+      items: items.map((item: any) => ({
+        targetId: item.TargetId || item.targetId || '',
+        targetType: item.TargetType || item.targetType || 0,
+        userId: item.UserId || item.userId || 0,
+        voteType: item.VoteType || item.voteType || 0,
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  async getUserQuestions(userId: number, page: number = 1, pageSize: number = 20): Promise<PagedResult<ForumQuestion>> {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('pageSize', pageSize.toString());
+    
+    const url = `${this.baseUrl}/api/forum/users/${userId}/questions?${params.toString()}`;
+    const response = await authenticatedFetch(url);
+    const result = await safeJsonParse(response);
+
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to fetch user questions');
+    }
+
+    const data = extractResult(result);
+    const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
+    const total = data?.Total || data?.total || items.length;
+
+    return {
+      items: items.map((item: any) => this.normalizeQuestion(item)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  async getUserAnswers(userId: number, page: number = 1, pageSize: number = 20): Promise<PagedResult<ForumAnswer>> {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    params.append('pageSize', pageSize.toString());
+    
+    const url = `${this.baseUrl}/api/forum/users/${userId}/answers?${params.toString()}`;
+    const response = await authenticatedFetch(url);
+    const result = await safeJsonParse(response);
+
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to fetch user answers');
+    }
+
+    const data = extractResult(result);
+    const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
+    const total = data?.Total || data?.total || items.length;
+
+    return {
+      items: items.map((item: any) => this.normalizeAnswer(item)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
   // Bookmarks
   async addBookmark(questionId: string, userId: number): Promise<void> {
     const url = `${this.baseUrl}/api/forum/bookmarks`;
@@ -530,8 +666,40 @@ class ForumApiService {
     return data?.IsBookmarked || data?.isBookmarked || false;
   }
 
+  async getBookmarks(userId: number, page: number = 1, pageSize: number = 20): Promise<PagedResult<ForumBookmark>> {
+    const params = new URLSearchParams();
+    params.append('userId', userId.toString());
+    params.append('page', page.toString());
+    params.append('pageSize', pageSize.toString());
+    
+    const url = `${this.baseUrl}/api/forum/bookmarks?${params.toString()}`;
+    const response = await authenticatedFetch(url);
+    const result = await safeJsonParse(response);
+
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to fetch bookmarks');
+    }
+
+    const data = extractResult(result);
+    const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
+    const total = data?.Total || data?.total || items.length;
+
+    return {
+      items: items.map((item: any) => ({
+        questionId: item.QuestionId || item.questionId || '',
+        userId: item.UserId || item.userId || 0,
+        question: item.Question ? this.normalizeQuestion(item.Question) : undefined,
+        createdAt: item.CreatedAt || item.createdAt || '',
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
   // Categories
-  async getCategories(): Promise<ForumCategory[]> {
+  async getCategories(includeInactive: boolean = false): Promise<ForumCategory[]> {
     const url = `${this.baseUrl}/api/forum/categories`;
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
@@ -542,7 +710,7 @@ class ForumApiService {
 
     const data = extractResult(result);
     const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
-    return items.map((item: any) => ({
+    const categories = items.map((item: any) => ({
       id: item.Id || item.id || '',
       name: item.Name || item.name || '',
       description: item.Description || item.description,
@@ -551,11 +719,109 @@ class ForumApiService {
       isActive: item.IsActive !== undefined ? item.IsActive : item.isActive !== undefined ? item.isActive : true,
       sortOrder: item.SortOrder || item.sortOrder || 0,
     }));
+    
+    // Backend already filters by role, but we can double-check if needed
+    return categories;
+  }
+
+  async createCategory(request: {
+    name: string;
+    description?: string;
+    color?: string;
+    icon?: string;
+    sortOrder?: number;
+  }): Promise<ForumCategory> {
+    const url = `${this.baseUrl}/api/forum/categories`;
+    const response = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Name: request.name,
+        Description: request.description,
+        Color: request.color,
+        Icon: request.icon,
+        SortOrder: request.sortOrder || 0,
+      }),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to create category');
+    }
+
+    const data = extractResult(result);
+    return {
+      id: data.Id || data.id || '',
+      name: data.Name || data.name || '',
+      description: data.Description || data.description,
+      color: data.Color || data.color,
+      icon: data.Icon || data.icon,
+      isActive: data.IsActive !== undefined ? data.IsActive : true,
+      sortOrder: data.SortOrder || data.sortOrder || 0,
+    };
+  }
+
+  async updateCategory(id: string, request: {
+    name?: string;
+    description?: string;
+    color?: string;
+    icon?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+  }): Promise<ForumCategory> {
+    const url = `${this.baseUrl}/api/forum/categories/${id}`;
+    const response = await authenticatedFetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Name: request.name,
+        Description: request.description,
+        Color: request.color,
+        Icon: request.icon,
+        IsActive: request.isActive,
+        SortOrder: request.sortOrder,
+      }),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to update category');
+    }
+
+    const data = extractResult(result);
+    return {
+      id: data.Id || data.id || '',
+      name: data.Name || data.name || '',
+      description: data.Description || data.description,
+      color: data.Color || data.color,
+      icon: data.Icon || data.icon,
+      isActive: data.IsActive !== undefined ? data.IsActive : true,
+      sortOrder: data.SortOrder || data.sortOrder || 0,
+    };
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    const url = `${this.baseUrl}/api/forum/categories/${id}`;
+    const response = await authenticatedFetch(url, {
+      method: 'DELETE',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to delete category');
+    }
   }
 
   // Tags
-  async getTags(limit: number = 20): Promise<ForumTag[]> {
-    const url = `${this.baseUrl}/api/forum/tags?limit=${limit}`;
+  async getTags(limit: number = 20, includeInactive: boolean = false): Promise<ForumTag[]> {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    
+    const url = `${this.baseUrl}/api/forum/tags?${params.toString()}`;
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -565,13 +831,101 @@ class ForumApiService {
 
     const data = extractResult(result);
     const items = Array.isArray(data) ? data : (data?.Items || data?.items || []);
-    return items.map((item: any) => ({
+    const tags = items.map((item: any) => ({
       id: item.Id || item.id || '',
       name: item.Name || item.name || '',
       description: item.Description || item.description,
       color: item.Color || item.color,
       isActive: item.IsActive !== undefined ? item.IsActive : item.isActive !== undefined ? item.isActive : true,
     }));
+    
+    // Backend already filters by role, so we return all tags from backend
+    return tags;
+  }
+
+  async getAllTags(includeInactive: boolean = false): Promise<ForumTag[]> {
+    // Get all tags (no limit)
+    return this.getTags(1000, includeInactive);
+  }
+
+  async createTag(request: {
+    name: string;
+    description?: string;
+    color?: string;
+  }): Promise<ForumTag> {
+    const url = `${this.baseUrl}/api/forum/tags`;
+    const response = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Name: request.name,
+        Description: request.description,
+        Color: request.color,
+      }),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to create tag');
+    }
+
+    const data = extractResult(result);
+    return {
+      id: data.Id || data.id || '',
+      name: data.Name || data.name || '',
+      description: data.Description || data.description,
+      color: data.Color || data.color,
+      isActive: data.IsActive !== undefined ? data.IsActive : true,
+    };
+  }
+
+  async updateTag(id: string, request: {
+    name?: string;
+    description?: string;
+    color?: string;
+    isActive?: boolean;
+  }): Promise<ForumTag> {
+    const url = `${this.baseUrl}/api/forum/tags/${id}`;
+    const response = await authenticatedFetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Name: request.name,
+        Description: request.description,
+        Color: request.color,
+        IsActive: request.isActive,
+      }),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to update tag');
+    }
+
+    const data = extractResult(result);
+    return {
+      id: data.Id || data.id || '',
+      name: data.Name || data.name || '',
+      description: data.Description || data.description,
+      color: data.Color || data.color,
+      isActive: data.IsActive !== undefined ? data.IsActive : true,
+    };
+  }
+
+  async deleteTag(id: string): Promise<void> {
+    const url = `${this.baseUrl}/api/forum/tags/${id}`;
+    const response = await authenticatedFetch(url, {
+      method: 'DELETE',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to delete tag');
+    }
   }
 
   // Analytics

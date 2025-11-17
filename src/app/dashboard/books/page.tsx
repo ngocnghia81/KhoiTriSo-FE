@@ -15,7 +15,8 @@ import {
   XCircle,
   Clock,
   Download,
-  MoreVertical
+  MoreVertical,
+  RotateCcw
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,7 @@ interface Book {
   price: number;
   isFree: boolean;
   approvalStatus: number;
+  isActive?: boolean;
   totalQuestions?: number;
   totalChapters?: number;
   createdAt: string;
@@ -87,6 +89,7 @@ export default function BooksManagementPage() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive'>('all');
   const [page, setPage] = useState(1);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -99,14 +102,27 @@ export default function BooksManagementPage() {
     categoryId: undefined as number | undefined,
   });
 
-  // Use hooks for books data
-  const { books, pagination, loading, error, refetch } = useBooks({
+  // Use hooks for books data - fetch all books (Admin can see inactive)
+  const { books: allBooks, pagination, loading, error, refetch } = useBooks({
     page,
     pageSize: 10,
     search: search || undefined,
     categoryId: categoryFilter !== 'all' ? parseInt(categoryFilter) : undefined,
     approvalStatus: statusFilter !== 'all' ? parseInt(statusFilter) : undefined,
   });
+
+  // Filter books by active tab (client-side filter)
+  const books = React.useMemo(() => {
+    if (activeTab === 'active') {
+      // Chỉ hiển thị books có isActive === true
+      return allBooks.filter(b => b.isActive === true);
+    } else if (activeTab === 'inactive') {
+      // Chỉ hiển thị books có isActive === false
+      return allBooks.filter(b => b.isActive === false);
+    }
+    // Tab "Tất cả": hiển thị tất cả
+    return allBooks;
+  }, [allBooks, activeTab]);
 
   // Update totalPages from pagination
   const totalPages = pagination?.totalPages || 1;
@@ -115,7 +131,7 @@ export default function BooksManagementPage() {
   useEffect(() => {
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, categoryFilter, statusFilter]);
+  }, [search, categoryFilter, statusFilter, activeTab]);
 
   // Force enable Select components
   useEffect(() => {
@@ -198,6 +214,24 @@ export default function BooksManagementPage() {
       console.error('Error deleting book:', error);
       alert('Không thể xóa sách!');
     }
+  };
+
+  const handleRestore = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn khôi phục sách này?')) return;
+
+    try {
+      await bookApiService.restoreBook(id);
+      alert('Khôi phục sách thành công!');
+      refetch();
+    } catch (error) {
+      console.error('Error restoring book:', error);
+      const message = error instanceof Error ? error.message : 'Không thể khôi phục sách!';
+      alert(message);
+    }
+  };
+
+  const handleTabChange = (tab: 'all' | 'active' | 'inactive') => {
+    setActiveTab(tab);
   };
 
   const handleEditClick = (book: Book) => {
@@ -330,6 +364,54 @@ export default function BooksManagementPage() {
             </motion.div>
           ))}
         </div>
+      </motion.div>
+
+      {/* Tabs */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="mb-6"
+      >
+        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md overflow-hidden">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px overflow-x-auto">
+              <button
+                onClick={() => handleTabChange('all')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'all'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <BookOpen className="h-5 w-5 mr-2" />
+                Tất cả
+              </button>
+              <button
+                onClick={() => handleTabChange('active')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'active'
+                    ? 'border-green-500 text-green-600 bg-green-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Đang hoạt động
+              </button>
+              <button
+                onClick={() => handleTabChange('inactive')}
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'inactive'
+                    ? 'border-red-500 text-red-600 bg-red-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <XCircle className="h-5 w-5 mr-2" />
+                Đã vô hiệu
+              </button>
+            </nav>
+          </div>
+        </Card>
       </motion.div>
 
       {/* Filters and Search */}
@@ -505,13 +587,23 @@ export default function BooksManagementPage() {
                                   Mã Kích Hoạt
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={() => handleDelete(book.id)}
-                                  className="text-red-600 focus:text-red-600"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Xóa
-                                </DropdownMenuItem>
+                                {book.isActive === false ? (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleRestore(book.id)}
+                                    className="text-green-600 focus:text-green-600"
+                                  >
+                                    <RotateCcw className="w-4 h-4 mr-2" />
+                                    Khôi phục
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDelete(book.id)}
+                                    className="text-red-600 focus:text-red-600"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Xóa
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>

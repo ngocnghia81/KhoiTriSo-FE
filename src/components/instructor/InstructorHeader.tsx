@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import Image from 'next/image';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
 import {
   MagnifyingGlassIcon,
@@ -17,11 +19,17 @@ import {
   ExclamationTriangleIcon,
   CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
+import { useAuth } from '@/contexts/AuthContext';
+import { useInstructorDetail } from '@/hooks/useInstructors';
 
 export default function InstructorHeader() {
+  const router = useRouter();
   const { toggleSidebar } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const { user, logout } = useAuth();
+  const instructorId = user?.id ? Number(user.id) : 0;
+  const { data: instructorDetail, loading: instructorLoading } = useInstructorDetail(instructorId);
 
   const notifications = [
     {
@@ -51,6 +59,38 @@ export default function InstructorHeader() {
   ];
 
   const unreadCount = notifications.filter(n => n.unread).length;
+  const displayName = useMemo(() => {
+    if (!user) return 'Giảng viên';
+    return user.name || user.email || 'Giảng viên';
+  }, [user]);
+
+  const roleLabel = useMemo(() => {
+    switch (user?.role) {
+      case 'admin':
+        return 'Quản trị viên';
+      case 'instructor':
+        return 'Giảng viên';
+      case 'student':
+        return 'Học viên';
+      default:
+        return 'Người dùng';
+    }
+  }, [user?.role]);
+
+  const avatarContent = useMemo(() => {
+    if (user?.avatar) {
+      return user.avatar;
+    }
+
+    const initials = displayName
+      .split(' ')
+      .map((part) => part.charAt(0))
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+
+    return { initials };
+  }, [user?.avatar, displayName]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -86,6 +126,7 @@ export default function InstructorHeader() {
             <button
               type="button"
               className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              onClick={() => router.push('/instructor/courses/create')}
             >
               <PlusIcon className="h-4 w-4 mr-1" />
               Tạo khóa học
@@ -104,7 +145,11 @@ export default function InstructorHeader() {
             {/* Earnings quick view */}
             <div className="hidden md:flex items-center px-3 py-1.5 bg-green-50 rounded-lg">
               <CurrencyDollarIcon className="h-4 w-4 text-green-600 mr-1" />
-              <span className="text-sm font-medium text-green-800">₫2,450,000</span>
+              <span className="text-sm font-medium text-green-800">
+                {instructorLoading
+                  ? <span className="inline-block w-16 h-3 bg-green-200 rounded animate-pulse" />
+                  : `₫${(instructorDetail?.TotalEarnings ?? 0).toLocaleString()}`}
+              </span>
             </div>
 
             {/* Theme toggle */}
@@ -192,12 +237,22 @@ export default function InstructorHeader() {
                 className="flex items-center space-x-2 p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-md"
                 onClick={() => setShowUserMenu(!showUserMenu)}
               >
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
-                  <span className="text-sm font-medium text-white">A</span>
-                </div>
+                {typeof avatarContent === 'object' && 'initials' in avatarContent ? (
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">{avatarContent.initials}</span>
+                  </div>
+                ) : (
+                  <Image
+                    src={typeof avatarContent === 'string' ? avatarContent : user?.avatar || '/images/default-avatar.svg'}
+                    alt={displayName}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-full object-cover"
+                  />
+                )}
                 <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium text-gray-900">Nguyễn Văn A</p>
-                  <p className="text-xs text-gray-500">Giảng viên</p>
+                  <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                  <p className="text-xs text-gray-500">{roleLabel}</p>
                 </div>
                 <ChevronDownIcon className="h-4 w-4" />
               </button>
@@ -230,6 +285,7 @@ export default function InstructorHeader() {
                     <div className="border-t border-gray-100"></div>
                     <button
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={logout}
                     >
                       <ArrowRightOnRectangleIcon className="mr-3 h-4 w-4" />
                       Đăng xuất

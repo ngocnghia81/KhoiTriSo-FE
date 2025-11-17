@@ -21,6 +21,8 @@ export default function EditQuestionPage() {
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userAvatar, setUserAvatar] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -48,7 +50,10 @@ export default function EditQuestionPage() {
       setError(null);
       const data = await forumApiService.getQuestionById(questionId);
       
-      if (parseInt(user?.id || '0') !== data.userId) {
+      const isOwner = parseInt(user?.id || '0') === data.userId;
+      const isAdminOrInstructor = user?.role === 'admin' || user?.role === 'instructor';
+      
+      if (!isOwner && !isAdminOrInstructor) {
         setError('Bạn không có quyền chỉnh sửa câu hỏi này');
         return;
       }
@@ -56,12 +61,15 @@ export default function EditQuestionPage() {
       setQuestion(data);
       setTitle(data.title);
       setContent(data.content);
+      setUserName(data.userName || '');
+      setUserAvatar(data.userAvatar || '');
       setSelectedCategory(data.categoryId || '');
       setSelectedTags(data.tags || []);
       setIsPinned(data.isPinned);
       setIsClosed(data.isClosed);
-    } catch (err: any) {
-      setError(err.message || 'Không thể tải câu hỏi');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể tải câu hỏi';
+      setError(errorMessage);
       console.error('Error loading question:', err);
     } finally {
       setLoading(false);
@@ -105,7 +113,11 @@ export default function EditQuestionPage() {
       return;
     }
 
-    if (!content.trim() || content.length < 20) {
+    const isOwner = parseInt(user?.id || '0') === question?.userId;
+    const isAdminOrInstructor = user?.role === 'admin' || user?.role === 'instructor';
+    
+    // Only owner can update content
+    if (isOwner && (!content.trim() || content.length < 20)) {
       setError('Nội dung phải có ít nhất 20 ký tự');
       return;
     }
@@ -116,7 +128,9 @@ export default function EditQuestionPage() {
 
       await forumApiService.updateQuestion(questionId, {
         title: title.trim(),
-        content: content.trim(),
+        content: isOwner ? content.trim() : undefined, // Only owner can update content
+        userName: isAdminOrInstructor && !isOwner ? userName.trim() : undefined,
+        userAvatar: isAdminOrInstructor && !isOwner ? userAvatar.trim() || undefined : undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         categoryId: selectedCategory || undefined,
         categoryName: categories.find(c => c.id === selectedCategory)?.name,
@@ -207,20 +221,54 @@ export default function EditQuestionPage() {
             </p>
           </div>
 
-          {/* Content */}
-          <div className="mb-6">
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-              Nội dung câu hỏi <span className="text-red-500">*</span>
-            </label>
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="Mô tả chi tiết câu hỏi của bạn..."
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Tối thiểu 20 ký tự • Bạn có thể sử dụng định dạng rich text
-            </p>
-          </div>
+          {/* Content - Only owner can edit */}
+          {parseInt(user?.id || '0') === question?.userId && (
+            <div className="mb-6">
+              <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
+                Nội dung câu hỏi <span className="text-red-500">*</span>
+              </label>
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Mô tả chi tiết câu hỏi của bạn..."
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Tối thiểu 20 ký tự • Bạn có thể sử dụng định dạng rich text
+              </p>
+            </div>
+          )}
+
+          {/* Personal Info - Only Admin/Instructor can edit (not owner) */}
+          {(user?.role === 'admin' || user?.role === 'instructor') && parseInt(user?.id || '0') !== question?.userId && (
+            <div className="mb-6 space-y-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <h3 className="text-sm font-semibold text-gray-700">Thông tin cá nhân (Admin/Instructor chỉnh sửa)</h3>
+              <div>
+                <label htmlFor="userName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Tên người dùng
+                </label>
+                <input
+                  type="text"
+                  id="userName"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="userAvatar" className="block text-sm font-medium text-gray-700 mb-2">
+                  Avatar URL
+                </label>
+                <input
+                  type="url"
+                  id="userAvatar"
+                  value={userAvatar}
+                  onChange={(e) => setUserAvatar(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://example.com/avatar.jpg"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Category */}
           <div className="mb-6">
@@ -349,7 +397,7 @@ export default function EditQuestionPage() {
             </Link>
             <button
               type="submit"
-              disabled={saving || !title.trim() || !content.trim()}
+              disabled={saving || !title.trim() || (parseInt(user?.id || '0') === question?.userId && !content.trim())}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Đang lưu...' : 'Lưu thay đổi'}

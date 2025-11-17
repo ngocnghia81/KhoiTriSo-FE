@@ -61,7 +61,8 @@ export const useCourses = (filters?: {
   sortBy?: string;
   sortOrder?: string;
   approvalStatus?: number;
-}) => {
+  instructorId?: number;
+}, options?: { enabled?: boolean }) => {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,7 +74,10 @@ export const useCourses = (filters?: {
   });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const enabled = options?.enabled ?? true;
+
   useEffect(() => {
+    if (!enabled) return;
     const fetchCoursesAsync = async () => {
       // Build URL with filters
       const url = buildUrlWithParams('/api/courses', {
@@ -86,6 +90,7 @@ export const useCourses = (filters?: {
         sortBy: filters?.sortBy,
         sortOrder: filters?.sortOrder,
         approvalStatus: filters?.approvalStatus,
+        instructorId: filters?.instructorId,
       });
       
       try {
@@ -164,6 +169,7 @@ export const useCourses = (filters?: {
     fetchCoursesAsync();
   }, [
     authenticatedFetch,
+    enabled,
     filters?.category,
     filters?.level,
     filters?.isFree,
@@ -174,6 +180,7 @@ export const useCourses = (filters?: {
     filters?.sortOrder,
     filters?.approvalStatus,
     refreshTrigger,
+    filters?.instructorId,
   ]);
 
   const refetch = useCallback(() => {

@@ -52,6 +52,7 @@ interface Course {
   TotalLessons: number;
   IsPublished: boolean;
   ApprovalStatus: number;
+  IsActive?: boolean;
   EstimatedDuration: number;
   CreatedAt?: string;
   UpdatedAt?: string;
@@ -71,7 +72,6 @@ export default function CoursesManagementPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authenticatedFetch } = useAuthenticatedFetch();
-  const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,12 +101,20 @@ export default function CoursesManagementPage() {
   const [filters, setFilters] = useState<CourseFilters>(getInitialFilters());
   const [totalCount, setTotalCount] = useState(0);
   
-  // Determine active tab from filters
-  const activeTab = useMemo(() => {
-    if (filters.approvalStatus === 1) return 'pending'; // Pending = 1
-    if (filters.isFree === true) return 'free';
-    if (filters.isFree === false) return 'paid';
-    return 'all';
+  const [activeTab, setActiveTab] = useState<'all' | 'free' | 'paid' | 'pending' | 'inactive'>('all');
+  
+  // Determine active tab from filters or maintain tab state
+  useEffect(() => {
+    if (filters.approvalStatus === 1) {
+      if (activeTab !== 'pending') setActiveTab('pending');
+    } else if (filters.isFree === true) {
+      if (activeTab !== 'free') setActiveTab('free');
+    } else if (filters.isFree === false) {
+      if (activeTab !== 'paid') setActiveTab('paid');
+    } else if (activeTab !== 'inactive' && activeTab !== 'all') {
+      // Don't change tab if it's inactive or all
+      setActiveTab('all');
+    }
   }, [filters.approvalStatus, filters.isFree]);
   
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -143,6 +151,8 @@ export default function CoursesManagementPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+
   const loadCourses = async () => {
     try {
       setLoading(true);
@@ -150,7 +160,7 @@ export default function CoursesManagementPage() {
       
       const queryParams = new URLSearchParams();
       
-      // Filters
+      // Filters (don't filter by isActive - let backend handle role-based filtering)
       if (filters.category) queryParams.append('category', filters.category.toString());
       if (filters.level !== undefined) queryParams.append('level', filters.level.toString());
       if (filters.isFree !== undefined) queryParams.append('isFree', filters.isFree.toString());
@@ -183,7 +193,7 @@ export default function CoursesManagementPage() {
           return acc;
         }, []);
         
-        setCourses(uniqueCourses);
+        setAllCourses(uniqueCourses);
         setTotalCount(result?.Total || result?.TotalCount || result?.totalCount || 0);
       } else {
         setError(data?.Message || 'Không thể tải danh sách khóa học');
@@ -194,6 +204,16 @@ export default function CoursesManagementPage() {
       setLoading(false);
     }
   };
+
+  // Filter courses by active tab (client-side filter)
+  const courses = useMemo(() => {
+    if (activeTab === 'inactive') {
+      // Chỉ hiển thị courses có IsActive === false
+      return allCourses.filter(c => c.IsActive === false);
+    }
+    // Các tab khác (all, free, paid, pending): vẫn áp dụng filters từ backend
+    return allCourses;
+  }, [allCourses, activeTab]);
 
   const loadCategories = async () => {
     try {
@@ -230,7 +250,14 @@ export default function CoursesManagementPage() {
     });
   }, [updateURL]);
 
-  const handleTabChange = (tab: 'all' | 'free' | 'paid' | 'pending') => {
+  const handleTabChange = (tab: 'all' | 'free' | 'paid' | 'pending' | 'inactive') => {
+    setActiveTab(tab);
+    
+    if (tab === 'inactive') {
+      // Don't change filters for inactive tab - filter client-side
+      return;
+    }
+    
     const newFilters: Partial<CourseFilters> = {
       page: 1,
       pageSize: 20,
@@ -293,6 +320,28 @@ export default function CoursesManagementPage() {
       }
     } catch (err) {
       alert('Có lỗi xảy ra khi xóa khóa học');
+    }
+  };
+
+  const handleRestoreCourse = async (courseId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn khôi phục khóa học này?')) return;
+    
+    try {
+      const resp = await authenticatedFetch(`/api/admin/courses/${courseId}/restore`, {
+        method: 'PUT'
+      });
+      
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        throw new Error(errorData.Message || errorData.message || 'Không thể khôi phục khóa học');
+      }
+      
+      alert('Khôi phục khóa học thành công!');
+      await loadCourses();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Có lỗi xảy ra khi khôi phục khóa học';
+      alert(message);
+      console.error('Restore course error:', err);
     }
   };
 
@@ -484,6 +533,17 @@ export default function CoursesManagementPage() {
             >
               <ClockIcon className="h-5 w-5 mr-2" />
               Chờ duyệt
+            </button>
+            <button
+              onClick={() => handleTabChange('inactive')}
+              className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'inactive'
+                  ? 'border-red-500 text-red-600 bg-red-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <XCircleIcon className="h-5 w-5 mr-2" />
+              Đã vô hiệu
             </button>
           </nav>
         </div>
@@ -840,13 +900,23 @@ export default function CoursesManagementPage() {
                       </div>
                     )}
                     
-                    <button
-                      onClick={() => handleDeleteCourse(course.Id)}
-                      className="w-full inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      <TrashIcon className="h-4 w-4 mr-1.5" />
-                      Xóa khóa học
-                    </button>
+                    {course.IsActive === false ? (
+                      <button
+                        onClick={() => handleRestoreCourse(course.Id)}
+                        className="w-full inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+                        Khôi phục
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDeleteCourse(course.Id)}
+                        className="w-full inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <TrashIcon className="h-4 w-4 mr-1.5" />
+                        Xóa khóa học
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
