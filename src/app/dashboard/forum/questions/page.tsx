@@ -49,6 +49,8 @@ export default function ForumQuestionsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({}); // questionId -> voteType
+  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   
   const [filters, setFilters] = useState<ForumQuestionFilters>({
     page: 1,
@@ -68,7 +70,10 @@ export default function ForumQuestionsPage() {
   useEffect(() => {
     loadCategories();
     loadTags();
-  }, []);
+    if (user?.id) {
+      loadBookmarks();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     loadQuestions();
@@ -93,8 +98,8 @@ export default function ForumQuestionsPage() {
 
   const loadCategories = async () => {
     try {
-      const categories = await forumApiService.getCategories();
-      setCategories(categories.filter(c => c.isActive));
+      const categories = await forumApiService.getCategories(false); // Only active
+      setCategories(categories);
     } catch (err) {
       console.error('Error loading categories:', err);
     }
@@ -102,10 +107,20 @@ export default function ForumQuestionsPage() {
 
   const loadTags = async () => {
     try {
-      const tags = await forumApiService.getTags(50);
-      setTags(tags.filter(t => t.isActive));
+      const tags = await forumApiService.getTags(50, false); // Only active
+      setTags(tags);
     } catch (err) {
       console.error('Error loading tags:', err);
+    }
+  };
+
+  const loadBookmarks = async () => {
+    if (!user?.id) return;
+    try {
+      const bookmarksList = await forumApiService.getBookmarks(parseInt(user.id) || 0);
+      setBookmarks(new Set(bookmarksList.map(b => b.questionId)));
+    } catch (err) {
+      console.error('Error loading bookmarks:', err);
     }
   };
 
@@ -135,12 +150,38 @@ export default function ForumQuestionsPage() {
     }
 
     try {
-      await forumApiService.vote({
-        targetId: questionId,
-        targetType: 1, // Question
-        userId: parseInt(user.id) || 0,
-        voteType: voteType,
+      const currentVote = userVotes[questionId];
+      // If clicking the same vote type, remove vote (toggle)
+      const newVoteType = currentVote === voteType ? 0 : voteType;
+      
+      if (newVoteType !== 0) {
+        await forumApiService.vote({
+          targetId: questionId,
+          targetType: 1, // Question
+          userId: parseInt(user.id) || 0,
+          voteType: newVoteType,
+        });
+      } else {
+        // Remove vote by voting opposite
+        await forumApiService.vote({
+          targetId: questionId,
+          targetType: 1,
+          userId: parseInt(user.id) || 0,
+          voteType: -voteType, // Opposite to cancel
+        });
+      }
+      
+      // Update local state
+      setUserVotes(prev => {
+        const updated = { ...prev };
+        if (newVoteType === 0) {
+          delete updated[questionId];
+        } else {
+          updated[questionId] = newVoteType;
+        }
+        return updated;
       });
+      
       await loadQuestions();
     } catch (err: any) {
       alert(err.message || 'Không thể vote');
@@ -157,10 +198,15 @@ export default function ForumQuestionsPage() {
       const userId = parseInt(user.id) || 0;
       if (isBookmarked) {
         await forumApiService.removeBookmark(questionId, userId);
+        setBookmarks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(questionId);
+          return newSet;
+        });
       } else {
         await forumApiService.addBookmark(questionId, userId);
+        setBookmarks(prev => new Set(prev).add(questionId));
       }
-      await loadQuestions();
     } catch (err: any) {
       alert(err.message || 'Không thể bookmark');
     }
@@ -306,13 +352,18 @@ export default function ForumQuestionsPage() {
                           <div className="flex-1">
                             <Link
                               href={`/dashboard/forum/questions/${question.id}`}
-                              className="text-lg font-semibold text-blue-600 hover:text-blue-800 line-clamp-2"
+                              className={`text-lg font-semibold text-blue-600 hover:text-blue-800 line-clamp-2 ${
+                                question.isDeleted ? 'line-through opacity-60' : ''
+                              }`}
                             >
                               {question.isPinned && (
                                 <span className="inline-block mr-2 text-yellow-500">📌</span>
                               )}
                               {question.isClosed && (
                                 <span className="inline-block mr-2 text-red-500">🔒</span>
+                              )}
+                              {question.isDeleted && (
+                                <span className="inline-block mr-2 text-red-500">🗑️</span>
                               )}
                               {question.title}
                             </Link>
@@ -326,7 +377,9 @@ export default function ForumQuestionsPage() {
                         </div>
 
                         <div 
-                          className="text-sm text-gray-700 mb-3 line-clamp-2"
+                          className={`text-sm text-gray-700 mb-3 line-clamp-2 ${
+                            question.isDeleted ? 'line-through opacity-60' : ''
+                          }`}
                           dangerouslySetInnerHTML={{ __html: question.content.substring(0, 200) }}
                         />
 
@@ -360,11 +413,15 @@ export default function ForumQuestionsPage() {
                           </div>
                           {user && (
                             <button
-                              onClick={() => handleBookmark(question.id, false)}
+                              onClick={() => handleBookmark(question.id, bookmarks.has(question.id))}
                               className="text-gray-400 hover:text-yellow-500 transition-colors"
-                              title="Bookmark"
+                              title={bookmarks.has(question.id) ? 'Bỏ bookmark' : 'Bookmark'}
                             >
-                              <BookmarkIcon className="h-4 w-4" />
+                              {bookmarks.has(question.id) ? (
+                                <BookmarkSolidIcon className="h-4 w-4 text-yellow-500" />
+                              ) : (
+                                <BookmarkIcon className="h-4 w-4" />
+                              )}
                             </button>
                           )}
                         </div>

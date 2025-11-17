@@ -76,10 +76,9 @@ const navigation = [
     icon: ChatBubbleLeftRightIcon,
     children: [
       { name: 'Danh sách câu hỏi', href: '/instructor/forum/questions' },
-      { name: 'Tạo câu hỏi', href: '/instructor/forum/questions/create' },
+      { name: 'Bookmarks', href: '/instructor/forum/bookmarks' },
       { name: 'Câu hỏi chưa trả lời', href: '/instructor/forum/unanswered' },
       { name: 'Câu hỏi nổi bật', href: '/instructor/forum/featured' },
-      { name: 'Bài viết', href: '/instructor/forum-posts' },
       { name: 'Moderation', href: '/instructor/forum/moderation' },
       { name: 'Báo cáo vi phạm', href: '/instructor/forum/reports' },
       { name: 'Thống kê forum', href: '/instructor/forum/analytics' },

@@ -88,6 +88,10 @@ export const getNavigation = (language: 'vi' | 'en') => {
       children: [
         { name: t.questionList, href: '/dashboard/forum/questions' },
         { name: t.forumAnalytics, href: '/dashboard/forum/analytics' },
+        { name: t.manageTags, href: '/dashboard/forum/tags' },
+        { name: t.manageCategories, href: '/dashboard/forum/categories' },
+        { name: t.bookmarks, href: '/dashboard/forum/bookmarks' },
+        { name: t.moderation, href: '/dashboard/forum/moderation' },
       ],
     },
     {

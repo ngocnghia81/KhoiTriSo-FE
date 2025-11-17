@@ -16,7 +16,6 @@ import {
   BookmarkIcon,
   PencilIcon,
   TrashIcon,
-  FlagIcon,
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon as CheckCircleSolidIcon, BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import Link from 'next/link';
@@ -51,6 +50,8 @@ export default function QuestionDetailPage() {
   const [comments, setComments] = useState<Record<string, ForumComment[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({}); // key: "targetType-targetId" -> voteType
+  const [isBookmarked, setIsBookmarked] = useState(false);
   
   // Answer form
   const [showAnswerForm, setShowAnswerForm] = useState(false);
@@ -66,8 +67,17 @@ export default function QuestionDetailPage() {
     if (questionId) {
       loadQuestion();
       loadAnswers();
+      if (user?.id) {
+        loadBookmarkStatus();
+      }
     }
-  }, [questionId]);
+  }, [questionId, user?.id]);
+
+  useEffect(() => {
+    if (user?.id && questionId && answers.length > 0) {
+      loadUserVotes();
+    }
+  }, [user?.id, questionId, answers.length]);
 
   const loadQuestion = async () => {
     try {
@@ -75,8 +85,9 @@ export default function QuestionDetailPage() {
       setError(null);
       const data = await forumApiService.getQuestionById(questionId);
       setQuestion(data);
-    } catch (err: any) {
-      setError(err.message || 'Không thể tải câu hỏi');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể tải câu hỏi';
+      setError(errorMessage);
       console.error('Error loading question:', err);
     } finally {
       setLoading(false);
@@ -94,7 +105,7 @@ export default function QuestionDetailPage() {
         try {
           const answerComments = await forumApiService.getComments(2, answer.id); // 2 = Answer
           commentsMap[answer.id] = answerComments;
-        } catch (err) {
+        } catch {
           commentsMap[answer.id] = [];
         }
       }
@@ -105,11 +116,56 @@ export default function QuestionDetailPage() {
         const questionComments = await forumApiService.getComments(1, questionId); // 1 = Question
         commentsMap[questionId] = questionComments;
         setComments(commentsMap);
+      } catch {
+        // Ignore
+      }
+    } catch (err: unknown) {
+      console.error('Error loading answers:', err);
+    }
+  };
+
+  const loadUserVotes = async () => {
+    if (!user?.id || !questionId) return;
+    try {
+      const userId = parseInt(user.id) || 0;
+      const votes: Record<string, number> = {};
+      
+      // Load vote for question
+      try {
+        const questionVote = await forumApiService.getUserVote(1, questionId, userId);
+        if (questionVote.voteType !== null) {
+          votes[`1-${questionId}`] = questionVote.voteType;
+        }
       } catch (err) {
         // Ignore
       }
-    } catch (err: any) {
-      console.error('Error loading answers:', err);
+      
+      // Load votes for answers
+      for (const answer of answers) {
+        try {
+          const answerVote = await forumApiService.getUserVote(2, answer.id, userId);
+          if (answerVote.voteType !== null) {
+            votes[`2-${answer.id}`] = answerVote.voteType;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+      
+      setUserVotes(votes);
+    } catch (err: unknown) {
+      console.error('Error loading user votes:', err);
+    }
+  };
+
+  const loadBookmarkStatus = async () => {
+    if (!user?.id || !questionId) return;
+    try {
+      const userId = parseInt(user.id) || 0;
+      const bookmarked = await forumApiService.isBookmarked(questionId, userId);
+      setIsBookmarked(bookmarked);
+    } catch (err) {
+      console.error('Error loading bookmark status:', err);
     }
   };
 
@@ -120,16 +176,61 @@ export default function QuestionDetailPage() {
     }
 
     try {
-      await forumApiService.vote({
-        targetId,
-        targetType,
-        userId: parseInt(user.id) || 0,
-        voteType,
+      const key = `${targetType}-${targetId}`;
+      const currentVote = userVotes[key];
+      // If clicking the same vote type, remove vote (toggle)
+      const newVoteType = currentVote === voteType ? 0 : voteType;
+      
+      if (newVoteType !== 0) {
+        await forumApiService.vote({
+          targetId,
+          targetType,
+          userId: parseInt(user.id) || 0,
+          voteType: newVoteType,
+        });
+      } else {
+        // Remove vote by voting opposite
+        await forumApiService.vote({
+          targetId,
+          targetType,
+          userId: parseInt(user.id) || 0,
+          voteType: -voteType, // Opposite to cancel
+        });
+      }
+      
+      // Update local state
+      setUserVotes(prev => {
+        const newVotes = { ...prev };
+        if (newVoteType === 0) {
+          delete newVotes[key];
+        } else {
+          newVotes[key] = newVoteType;
+        }
+        return newVotes;
       });
+      
       await loadQuestion();
       await loadAnswers();
-    } catch (err: any) {
-      alert(err.message || 'Không thể vote');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể vote';
+      alert(errorMessage);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!user?.id || !questionId) return;
+    try {
+      const userId = parseInt(user.id) || 0;
+      if (isBookmarked) {
+        await forumApiService.removeBookmark(questionId, userId);
+        setIsBookmarked(false);
+      } else {
+        await forumApiService.addBookmark(questionId, userId);
+        setIsBookmarked(true);
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể bookmark';
+      alert(errorMessage);
     }
   };
 
@@ -138,8 +239,11 @@ export default function QuestionDetailPage() {
       return;
     }
 
-    if (parseInt(user.id) !== question.userId) {
-      alert('Chỉ người đặt câu hỏi mới có thể chấp nhận câu trả lời');
+    const isOwner = parseInt(user.id) === question.userId;
+    const isAdminOrInstructor = user.role === 'admin' || user.role === 'instructor';
+
+    if (!isOwner && !isAdminOrInstructor) {
+      alert('Chỉ người đặt câu hỏi, Admin hoặc Instructor mới có thể chấp nhận câu trả lời');
       return;
     }
 
@@ -147,8 +251,32 @@ export default function QuestionDetailPage() {
       await forumApiService.acceptAnswer(answerId);
       await loadQuestion();
       await loadAnswers();
-    } catch (err: any) {
-      alert(err.message || 'Không thể chấp nhận câu trả lời');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể chấp nhận câu trả lời';
+      alert(errorMessage);
+    }
+  };
+
+  const handleUnacceptAnswer = async (answerId: string) => {
+    if (!user?.id || !question) {
+      return;
+    }
+
+    const isOwner = parseInt(user.id) === question.userId;
+    const isAdminOrInstructor = user.role === 'admin' || user.role === 'instructor';
+
+    if (!isOwner && !isAdminOrInstructor) {
+      alert('Chỉ người đặt câu hỏi, Admin hoặc Instructor mới có thể hủy chấp nhận câu trả lời');
+      return;
+    }
+
+    try {
+      await forumApiService.unacceptAnswer(answerId);
+      await loadQuestion();
+      await loadAnswers();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể hủy chấp nhận câu trả lời';
+      alert(errorMessage);
     }
   };
 
@@ -170,8 +298,9 @@ export default function QuestionDetailPage() {
       setShowAnswerForm(false);
       await loadAnswers();
       await loadQuestion();
-    } catch (err: any) {
-      alert(err.message || 'Không thể gửi câu trả lời');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể gửi câu trả lời';
+      alert(errorMessage);
     } finally {
       setSubmittingAnswer(false);
     }
@@ -196,8 +325,9 @@ export default function QuestionDetailPage() {
       setCommentContents(prev => ({ ...prev, [parentId]: '' }));
       setShowCommentForms(prev => ({ ...prev, [parentId]: false }));
       await loadAnswers();
-    } catch (err: any) {
-      alert(err.message || 'Không thể gửi bình luận');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể gửi bình luận';
+      alert(errorMessage);
     } finally {
       setSubmittingComments(prev => ({ ...prev, [parentId]: false }));
     }
@@ -209,8 +339,9 @@ export default function QuestionDetailPage() {
     try {
       await forumApiService.deleteQuestion(questionId);
       router.push('/instructor/forum/questions');
-    } catch (err: any) {
-      alert(err.message || 'Không thể xóa câu hỏi');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể xóa câu hỏi';
+      alert(errorMessage);
     }
   };
 
@@ -221,8 +352,9 @@ export default function QuestionDetailPage() {
       await forumApiService.deleteAnswer(answerId);
       await loadAnswers();
       await loadQuestion();
-    } catch (err: any) {
-      alert(err.message || 'Không thể xóa câu trả lời');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Không thể xóa câu trả lời';
+      alert(errorMessage);
     }
   };
 
@@ -255,6 +387,8 @@ export default function QuestionDetailPage() {
   }
 
   const isQuestionOwner = user?.id && parseInt(user.id) === question.userId;
+  const isAdminOrInstructor = user?.role === 'admin' || user?.role === 'instructor';
+  const canAcceptAnswer = isQuestionOwner || isAdminOrInstructor;
   const sortedAnswers = [...answers].sort((a, b) => {
     if (a.isAccepted) return -1;
     if (b.isAccepted) return 1;
@@ -274,7 +408,12 @@ export default function QuestionDetailPage() {
             Quay lại danh sách
           </Link>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">{question.title}</h1>
+            <h1 className={`text-3xl font-bold text-gray-900 ${
+              question.isDeleted ? 'line-through opacity-60' : ''
+            }`}>
+              {question.isDeleted && <span className="mr-2 text-red-500">🗑️</span>}
+              {question.title}
+            </h1>
             {isQuestionOwner && (
               <div className="flex gap-2">
                 <Link
@@ -301,28 +440,51 @@ export default function QuestionDetailPage() {
             <div className="flex flex-col items-center gap-2 min-w-[60px]">
               <button
                 onClick={() => handleVote(question.id, 1, 1)}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
+                className={`p-2 hover:bg-gray-100 rounded transition-colors ${
+                  userVotes[`1-${question.id}`] === 1 ? 'bg-blue-50' : ''
+                }`}
                 title="Upvote"
               >
-                <ArrowUpIcon className="h-6 w-6 text-gray-400 hover:text-blue-600" />
+                <ArrowUpIcon className={`h-6 w-6 ${
+                  userVotes[`1-${question.id}`] === 1 ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+                }`} />
               </button>
               <div className="text-2xl font-semibold text-gray-700">{question.voteCount}</div>
               <button
                 onClick={() => handleVote(question.id, 1, -1)}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
+                className={`p-2 hover:bg-gray-100 rounded transition-colors ${
+                  userVotes[`1-${question.id}`] === -1 ? 'bg-red-50' : ''
+                }`}
                 title="Downvote"
               >
-                <ArrowDownIcon className="h-6 w-6 text-gray-400 hover:text-red-600" />
+                <ArrowDownIcon className={`h-6 w-6 ${
+                  userVotes[`1-${question.id}`] === -1 ? 'text-red-600' : 'text-gray-400 hover:text-red-600'
+                }`} />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded transition-colors" title="Bookmark">
-                <BookmarkIcon className="h-5 w-5 text-gray-400 hover:text-yellow-500" />
-              </button>
+              {user && (
+                <button 
+                  onClick={handleBookmark}
+                  className="p-2 hover:bg-gray-100 rounded transition-colors" 
+                  title={isBookmarked ? 'Bỏ bookmark' : 'Bookmark'}
+                >
+                  {isBookmarked ? (
+                    <BookmarkSolidIcon className="h-5 w-5 text-yellow-500" />
+                  ) : (
+                    <BookmarkIcon className="h-5 w-5 text-gray-400 hover:text-yellow-500" />
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Content Column */}
             <div className="flex-1">
+              {question.isDeleted && (
+                <div className="mb-2 text-sm text-red-600 font-medium">🗑️ Đã xóa</div>
+              )}
               <div 
-                className="prose prose-sm max-w-none mb-4"
+                className={`prose prose-sm max-w-none mb-4 ${
+                  question.isDeleted ? 'line-through opacity-60' : ''
+                }`}
                 dangerouslySetInnerHTML={{ __html: question.content }}
               />
 
@@ -488,41 +650,62 @@ export default function QuestionDetailPage() {
                     <div className="flex flex-col items-center gap-2 min-w-[60px]">
                       <button
                         onClick={() => handleVote(answer.id, 2, 1)}
-                        className="p-2 hover:bg-gray-100 rounded transition-colors"
+                        className={`p-2 hover:bg-gray-100 rounded transition-colors ${
+                          userVotes[`2-${answer.id}`] === 1 ? 'bg-blue-50' : ''
+                        }`}
                         title="Upvote"
                       >
-                        <ArrowUpIcon className="h-6 w-6 text-gray-400 hover:text-blue-600" />
+                        <ArrowUpIcon className={`h-6 w-6 ${
+                          userVotes[`2-${answer.id}`] === 1 ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+                        }`} />
                       </button>
                       <div className="text-2xl font-semibold text-gray-700">{answer.voteCount}</div>
                       <button
                         onClick={() => handleVote(answer.id, 2, -1)}
-                        className="p-2 hover:bg-gray-100 rounded transition-colors"
+                        className={`p-2 hover:bg-gray-100 rounded transition-colors ${
+                          userVotes[`2-${answer.id}`] === -1 ? 'bg-red-50' : ''
+                        }`}
                         title="Downvote"
                       >
-                        <ArrowDownIcon className="h-6 w-6 text-gray-400 hover:text-red-600" />
+                        <ArrowDownIcon className={`h-6 w-6 ${
+                          userVotes[`2-${answer.id}`] === -1 ? 'text-red-600' : 'text-gray-400 hover:text-red-600'
+                        }`} />
                       </button>
-                      {isQuestionOwner && !question.isSolved && (
-                        <button
-                          onClick={() => handleAcceptAnswer(answer.id)}
-                          className={`p-2 rounded transition-colors ${
-                            answer.isAccepted
-                              ? 'bg-green-100 text-green-600'
-                              : 'hover:bg-gray-100 text-gray-400'
-                          }`}
-                          title="Chấp nhận câu trả lời"
-                        >
-                          <CheckCircleIcon className="h-6 w-6" />
-                        </button>
+                      {canAcceptAnswer && !answer.isDeleted && (
+                        <>
+                          {answer.isAccepted ? (
+                            <button
+                              onClick={() => handleUnacceptAnswer(answer.id)}
+                              className="p-2 rounded transition-colors bg-green-100 text-green-600 hover:bg-green-200"
+                              title="Hủy chấp nhận"
+                            >
+                              <CheckCircleSolidIcon className="h-6 w-6 text-green-600" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleAcceptAnswer(answer.id)}
+                              className="p-2 rounded transition-colors hover:bg-gray-100 text-gray-400"
+                              title="Chấp nhận câu trả lời"
+                            >
+                              <CheckCircleIcon className="h-6 w-6" />
+                            </button>
+                          )}
+                        </>
                       )}
                       {answer.isAccepted && (
-                        <div className="text-green-600 font-semibold text-xs">Đã chấp nhận</div>
+                        <div className="text-green-600 font-semibold text-xs">✓ Đã chấp nhận</div>
                       )}
                     </div>
 
                     {/* Content Column */}
                     <div className="flex-1">
+                      {answer.isDeleted && (
+                        <div className="mb-2 text-sm text-red-600 font-medium">🗑️ Đã xóa</div>
+                      )}
                       <div 
-                        className="prose prose-sm max-w-none mb-4"
+                        className={`prose prose-sm max-w-none mb-4 ${
+                          answer.isDeleted ? 'line-through opacity-60' : ''
+                        }`}
                         dangerouslySetInnerHTML={{ __html: answer.content }}
                       />
 
