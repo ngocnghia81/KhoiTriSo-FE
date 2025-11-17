@@ -1,448 +1,800 @@
-import { Metadata } from 'next';
+'use client';
+
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { useAuth } from '@/contexts/AuthContext';
+import Image from 'next/image';
 import {
   AcademicCapIcon,
   PlusIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  EllipsisVerticalIcon,
+  EyeIcon,
   PencilIcon,
   TrashIcon,
-  EyeIcon,
   CheckCircleIcon,
+  ExclamationTriangleIcon,
   ClockIcon,
   UserGroupIcon,
   CurrencyDollarIcon,
+  MagnifyingGlassIcon,
+  FunnelIcon,
   StarIcon,
   PlayIcon,
-  PauseIcon,
-  DocumentDuplicateIcon
+  ChevronDownIcon,
+  ChevronUpIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
-export const metadata: Metadata = {
-  title: 'Quản lý khóa học - Instructor',
-  description: 'Quản lý tất cả khóa học của giảng viên',
-};
+interface Course {
+  Id: number;
+  Title: string;
+  Description: string;
+  Thumbnail: string;
+  InstructorId: number;
+  Instructor?: {
+    Id: number;
+    Name: string;
+    Avatar: string | null;
+    Bio: string | null;
+  };
+  CategoryId: number;
+  Category?: {
+    Id: number;
+    Name: string;
+  };
+  Level: number;
+  IsFree: boolean;
+  Price: number;
+  Rating: number;
+  TotalReviews: number;
+  TotalStudents: number;
+  TotalLessons: number;
+  IsPublished: boolean;
+  ApprovalStatus: number;
+  EstimatedDuration: number;
+  CreatedAt?: string;
+  UpdatedAt?: string;
+}
 
-// Mock data
-const courses = [
-  {
-    id: 1,
-    title: 'Toán học nâng cao lớp 12 - Phần Đạo hàm',
-    description: 'Khóa học chuyên sâu về đạo hàm với nhiều bài tập thực hành và ứng dụng thực tế',
-    category: 'Toán học',
-    price: 299000,
-    originalPrice: 399000,
-    duration: '40 giờ',
-    lessons: 25,
-    students: 234,
-    rating: 4.8,
-    reviewCount: 156,
-    revenue: 69666000,
-    status: 'published',
-    createdAt: '2024-01-15T09:00:00Z',
-    updatedAt: '2024-01-20T14:30:00Z',
-    thumbnail: '/images/courses/math-advanced.jpg',
-    tags: ['toán-12', 'đạo-hàm', 'nâng-cao']
-  },
-  {
-    id: 2,
-    title: 'Vật lý thí nghiệm lớp 11',
-    description: 'Khóa học thí nghiệm vật lý với video thực hành chi tiết và mô phỏng 3D',
-    category: 'Vật lý',
-    price: 199000,
-    originalPrice: 299000,
-    duration: '30 giờ',
-    lessons: 20,
-    students: 89,
-    rating: 4.6,
-    reviewCount: 67,
-    revenue: 17711000,
-    status: 'pending',
-    createdAt: '2024-01-10T08:00:00Z',
-    updatedAt: '2024-01-19T16:45:00Z',
-    thumbnail: '/images/courses/physics-lab.jpg',
-    tags: ['vật-lý-11', 'thí-nghiệm', 'thực-hành']
-  },
-  {
-    id: 3,
-    title: 'Hóa học cơ bản lớp 10',
-    description: 'Nền tảng hóa học với các phản ứng cơ bản và bài tập thực hành',
-    category: 'Hóa học',
-    price: 149000,
-    originalPrice: 199000,
-    duration: '25 giờ',
-    lessons: 18,
-    students: 0,
-    rating: 0,
-    reviewCount: 0,
-    revenue: 0,
-    status: 'draft',
-    createdAt: '2024-01-08T07:30:00Z',
-    updatedAt: '2024-01-18T11:15:00Z',
-    thumbnail: '/images/courses/chemistry-basic.jpg',
-    tags: ['hóa-10', 'cơ-bản', 'nền-tảng']
-  },
-  {
-    id: 4,
-    title: 'Sinh học phân tử',
-    description: 'Khóa học về sinh học phân tử và công nghệ gen hiện đại',
-    category: 'Sinh học',
-    price: 249000,
-    originalPrice: 349000,
-    duration: '35 giờ',
-    lessons: 22,
-    students: 45,
-    rating: 4.9,
-    reviewCount: 23,
-    revenue: 11205000,
-    status: 'rejected',
-    rejectionReason: 'Nội dung cần bổ sung thêm video thực hành',
-    createdAt: '2024-01-05T06:00:00Z',
-    updatedAt: '2024-01-17T09:20:00Z',
-    thumbnail: '/images/courses/biology-molecular.jpg',
-    tags: ['sinh-học', 'phân-tử', 'công-nghệ-gen']
-  }
-];
+interface CourseFilters {
+  category?: number;
+  level?: number;
+  isFree?: boolean;
+  search?: string;
+  approvalStatus?: number;
+  page: number;
+  pageSize: number;
+  instructorId?: number;
+}
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'published':
-      return 'bg-green-100 text-green-800 border-green-200';
+export default function CoursesManagementPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isAuthenticated, user } = useAuth();
+  const normalizedRole = user?.role as string | undefined;
+  const isTeacher = normalizedRole === 'instructor' || normalizedRole === 'teacher';
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  
+  const getInitialFilters = (): CourseFilters => {
+    const approvalStatus = searchParams?.get('approvalStatus') ?? undefined;
+    const isFree = searchParams?.get('isFree') ?? undefined;
+    const category = searchParams?.get('category') ?? undefined;
+    const level = searchParams?.get('level') ?? undefined;
+    const search = searchParams?.get('search') ?? undefined;
+    const page = searchParams?.get('page') ?? undefined;
+    const instructorIdParam = searchParams?.get('instructorId') ?? undefined;
+  const fallbackInstructorId =
+    user?.role === 'instructor' ? user.id : undefined;
+
+  const instructorId =
+    instructorIdParam ?? (fallbackInstructorId ? String(fallbackInstructorId) : undefined);
+    return {
+      page: page ? parseInt(page) : 1,
+      pageSize: 20,
+      approvalStatus: approvalStatus ? parseInt(approvalStatus) : undefined,
+      isFree: typeof isFree === 'string' ? isFree === 'true' : undefined,
+      category: category ? parseInt(category) : undefined,
+      level: typeof level === 'string' ? parseInt(level) : undefined,
+      search: search || undefined,
+      instructorId:instructorId? parseInt(instructorId) : undefined,
+    };
+  };
+  
+  const [filters, setFilters] = useState<CourseFilters>(getInitialFilters());
+  const isInitialRender = useRef(true);
+  const [totalCount, setTotalCount] = useState(0);
+  
+  // Determine active tab from filters
+  const activeTab = useMemo(() => {
+    if (filters.approvalStatus === 1) return 'pending'; // Pending = 1
+    if (filters.isFree === true) return 'free';
+    if (filters.isFree === false) return 'paid';
+    return 'all';
+  }, [filters.approvalStatus, filters.isFree]);
+  
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [sortBy, setSortBy] = useState<string>('createdAt_desc');
+  
+  // Redirect non-teachers away from instructor courses page
+  useEffect(() => {
+    if (isAuthenticated && !isTeacher) {
+      router.push('/');
+    }
+  }, [isAuthenticated, isTeacher, router]);
+
+  // Sync search input with filters
+  useEffect(() => {
+    setSearchInput(filters.search || '');
+  }, [filters.search]);
+
+  // Update URL when filters change
+  const updateURL = useCallback((newFilters: CourseFilters) => {
+    const params = new URLSearchParams();
+    if (newFilters.approvalStatus !== undefined) params.set('approvalStatus', newFilters.approvalStatus.toString());
+    if (newFilters.isFree !== undefined) params.set('isFree', newFilters.isFree.toString());
+    if (newFilters.category) params.set('category', newFilters.category.toString());
+    if (newFilters.level !== undefined) params.set('level', newFilters.level.toString());
+    if (newFilters.search) params.set('search', newFilters.search);
+    if (newFilters.page > 1) params.set('page', newFilters.page.toString());
+    if (newFilters.instructorId) params.set('instructorId', newFilters.instructorId.toString());
+    const queryString = params.toString();
+    router.push(`/instructor/courses${queryString ? `?${queryString}` : ''}`, { scroll: false });
+  }, [router]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        handleFilterChange('search', searchInput || undefined);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const loadCourses = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = new URLSearchParams();
+      
+      // Filters
+      if (filters.category) queryParams.append('category', filters.category.toString());
+      if (filters.level !== undefined) queryParams.append('level', filters.level.toString());
+      if (filters.isFree !== undefined) queryParams.append('isFree', filters.isFree.toString());
+      if (filters.search) queryParams.append('search', filters.search);
+      if (filters.approvalStatus !== undefined) queryParams.append('approvalStatus', filters.approvalStatus.toString());
+      if (filters.instructorId) queryParams.append('instructorId', filters.instructorId.toString());
+      // Pagination
+      queryParams.append('page', filters.page.toString());
+      queryParams.append('pageSize', filters.pageSize.toString());
+      
+      // Sorting
+      if (sortBy) {
+        const [field, order] = sortBy.split('_');
+        queryParams.append('sortBy', field);
+        queryParams.append('sortOrder', order);
+      }
+
+      const resp = await authenticatedFetch(`/api/courses?${queryParams}`);
+      const data = await resp.json();
+      
+      if (resp.ok) {
+        const result = data?.Result || data;
+        const coursesData = result?.Items || result?.items || [];
+        
+        // Remove duplicates by ID
+        const uniqueCourses = coursesData.reduce((acc: Course[], course: Course) => {
+          if (!acc.find(c => c.Id === course.Id)) {
+            acc.push(course);
+          }
+          return acc;
+        }, []);
+        
+        setCourses(uniqueCourses);
+        setTotalCount(result?.Total || result?.TotalCount || result?.totalCount || 0);
+      } else {
+        setError(data?.Message || 'Không thể tải danh sách khóa học');
+      }
+    } catch (err) {
+      setError('Có lỗi xảy ra khi tải dữ liệu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const resp = await authenticatedFetch('/api/categories?pageSize=100');
+      const data = await resp.json();
+      
+      if (resp.ok) {
+        const result = data?.Result?.Result || data?.Result || data;
+        const categoryList = Array.isArray(result) ? result : (result?.Items || result?.items || []);
+        setCategories(categoryList);
+      }
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadCourses();
+  }, [filters, sortBy]);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const handleFilterChange = useCallback((key: keyof CourseFilters, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value,
+      page: key === 'page' ? (typeof value === 'number' ? value : 1) : 1 // Reset unless directly updating page
+    }));
+  }, []);
+
+  const handleTabChange = (tab: 'all' | 'free' | 'paid' | 'pending') => {
+    const newFilters: Partial<CourseFilters> = {
+      page: 1,
+      pageSize: 20,
+    };
+    
+    switch (tab) {
+      case 'free':
+        newFilters.isFree = true;
+        newFilters.approvalStatus = undefined;
+        break;
+      case 'paid':
+        newFilters.isFree = false;
+        newFilters.approvalStatus = undefined;
+        break;
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'draft':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    case 'rejected':
-      return 'bg-red-100 text-red-800 border-red-200';
+        newFilters.approvalStatus = 1; // Pending = 1 (Rejected = 0, Approved = 2)
+        newFilters.isFree = undefined;
+        break;
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-};
+        newFilters.isFree = undefined;
+        newFilters.approvalStatus = undefined;
+        break;
+    }
+    
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  };
 
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'published':
-      return 'Đã xuất bản';
-    case 'pending':
-      return 'Chờ phê duyệt';
-    case 'draft':
-      return 'Bản nháp';
-    case 'rejected':
-      return 'Bị từ chối';
-    default:
-      return 'Không xác định';
-  }
-};
+  const clearAllFilters = () => {
+    const clearedFilters: CourseFilters = {
+      page: 1,
+      pageSize: 20,
+    };
+    setFilters(clearedFilters);
+    setSearchInput('');
+  };
+
+  useEffect(() => {
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
+    }
+    updateURL(filters);
+  }, [filters, updateURL]);
+
+  const removeFilter = (key: keyof CourseFilters) => {
+    handleFilterChange(key, undefined);
+  };
+
+  const handleDeleteCourse = async (courseId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa khóa học này? Hành động này không thể hoàn tác.')) return;
+    
+    try {
+      const resp = await authenticatedFetch(`/api/courses/${courseId}`, {
+        method: 'DELETE'
+      });
+      
+      if (resp.ok) {
+        await loadCourses();
+        alert('Xóa khóa học thành công!');
+      } else {
+        const data = await resp.json();
+        alert(data?.Message || 'Có lỗi xảy ra khi xóa');
+      }
+    } catch (err) {
+      alert('Có lỗi xảy ra khi xóa khóa học');
+    }
+  };
+
 
 const formatCurrency = (amount: number) => {
-  return `₫${amount.toLocaleString()}`;
-};
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
+  };
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('vi-VN');
-};
+  const getLevelName = (level: number) => {
+    const levels = ['Nhận biết', 'Thông hiểu', 'Vận dụng', 'Vận dụng cao'];
+    return levels[level] || 'Không xác định';
+  };
 
-export default function InstructorCoursesPage() {
+  const getLevelColor = (level: number) => {
+    const colors = [
+      'bg-blue-100 text-blue-800 border-blue-200',
+      'bg-green-100 text-green-800 border-green-200',
+      'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'bg-red-100 text-red-800 border-red-200'
+    ];
+    return colors[level] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const getApprovalStatusBadge = (status: number, isPublished: boolean) => {
+    if (!isPublished) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
+          <ClockIcon className="h-3 w-3 mr-1" />
+          Chờ duyệt
+        </span>
+      );
+    }
+    if (status === 2) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+          <CheckCircleIcon className="h-3 w-3 mr-1" />
+          Đã duyệt
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const totalPages = Math.ceil(totalCount / filters.pageSize);
+
+  const sanitizeHtml = (html?: string) => {
+    if (!html) return '';
+    let out = String(html);
+    out = out.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
+    out = out.replace(/<\s*style[^>]*>[\s\S]*?<\s*\/\s*style\s*>/gi, '');
+    out = out.replace(/<\s*iframe[^>]*>[\s\S]*?<\s*\/\s*iframe\s*>/gi, '');
+    out = out.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const allowed = ['b','strong','i','em','u','br','p','ul','ol','li','h1','h2','h3'];
+    for (const tag of allowed) {
+      const open = new RegExp(`&lt;${tag}(\\s[^&>]*)?&gt;`, 'gi');
+      const close = new RegExp(`&lt;\\/${tag}&gt;`, 'gi');
+      out = out.replace(open, `<${tag}$1>`).replace(close, `</${tag}>`);
+    }
+    return out;
+  };
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filters.search) count++;
+    if (filters.category) count++;
+    if (filters.level !== undefined) count++;
+    if (filters.isFree !== undefined) count++;
+    if (filters.approvalStatus !== undefined) count++;
+    if (filters.instructorId !== undefined) count++;
+    return count;
+  }, [filters]);
+
   return (
-    <div className="space-y-4">
-      {/* Page header */}
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Quản lý khóa học</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            Tạo, chỉnh sửa và quản lý tất cả khóa học của bạn
-          </p>
+    <div className="space-y-6 p-4 md:p-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Quản lý khóa học</h1>
+          <p className="text-sm text-gray-600 mt-1">Quản lý và theo dõi tất cả khóa học trong hệ thống</p>
         </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none space-x-3">
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+            <span className="font-semibold text-gray-900">{totalCount}</span> khóa học
+        </div>
           <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-all duration-200"
+            onClick={() => router.push('/instructor/courses/create')}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
-            <DocumentDuplicateIcon className="-ml-0.5 mr-1.5 h-5 w-5" />
-            Nhân bản khóa học
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-all duration-200"
-          >
-            <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" />
+            <PlusIcon className="h-5 w-5 mr-2" />
             Tạo khóa học mới
           </button>
         </div>
       </div>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-gradient-to-br from-green-50 to-green-100 overflow-hidden shadow-sm rounded-lg p-4 border border-green-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                <CheckCircleIcon className="h-5 w-5 text-white" />
-              </div>
-            </div>
-            <div className="ml-4">
-              <dl>
-                <dt className="text-sm font-medium text-green-700">Đã xuất bản</dt>
-                <dd className="text-2xl font-bold text-green-900">1</dd>
-                <dd className="text-sm text-green-600">Khóa học</dd>
-              </dl>
-            </div>
+      {/* Tabs */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px overflow-x-auto">
+            <button
+              onClick={() => handleTabChange('all')}
+              className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'all'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <AcademicCapIcon className="h-5 w-5 mr-2" />
+              Tất cả
+            </button>
+            <button
+              onClick={() => handleTabChange('free')}
+              className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'free'
+                  ? 'border-green-500 text-green-600 bg-green-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <CheckCircleIcon className="h-5 w-5 mr-2" />
+              Miễn phí
+            </button>
+            <button
+              onClick={() => handleTabChange('paid')}
+              className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'paid'
+                  ? 'border-yellow-500 text-yellow-600 bg-yellow-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <CurrencyDollarIcon className="h-5 w-5 mr-2" />
+              Trả phí
+            </button>
+            <button
+              onClick={() => handleTabChange('pending')}
+              className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'pending'
+                  ? 'border-orange-500 text-orange-600 bg-orange-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClockIcon className="h-5 w-5 mr-2" />
+              Chờ duyệt
+            </button>
+          </nav>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 overflow-hidden shadow-sm rounded-lg p-4 border border-yellow-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
-                <ClockIcon className="h-5 w-5 text-white" />
+      {/* Filters Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <button
+          onClick={() => setFiltersExpanded(!filtersExpanded)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <FunnelIcon className="h-5 w-5 text-gray-600" />
+            <h3 className="text-sm font-semibold text-gray-900">Bộ lọc</h3>
+            {activeFiltersCount > 0 && (
+              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {activeFiltersCount}
+              </span>
+            )}
               </div>
-            </div>
-            <div className="ml-4">
-              <dl>
-                <dt className="text-sm font-medium text-yellow-700">Chờ phê duyệt</dt>
-                <dd className="text-2xl font-bold text-yellow-900">1</dd>
-                <dd className="text-sm text-yellow-600">Khóa học</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
+          {filtersExpanded ? (
+            <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+          ) : (
+            <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+          )}
+        </button>
 
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden shadow-sm rounded-lg p-4 border border-blue-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                <UserGroupIcon className="h-5 w-5 text-white" />
-              </div>
-            </div>
-            <div className="ml-4">
-              <dl>
-                <dt className="text-sm font-medium text-blue-700">Tổng học viên</dt>
-                <dd className="text-2xl font-bold text-blue-900">368</dd>
-                <dd className="text-sm text-blue-600">Đã đăng ký</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden shadow-sm rounded-lg p-4 border border-purple-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                <CurrencyDollarIcon className="h-5 w-5 text-white" />
-              </div>
-            </div>
-            <div className="ml-4">
-              <dl>
-                <dt className="text-sm font-medium text-purple-700">Tổng doanh thu</dt>
-                <dd className="text-2xl font-bold text-purple-900">₫98M</dd>
-                <dd className="text-sm text-purple-600">Từ khóa học</dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters and search */}
-      <div className="bg-white shadow-sm rounded-lg border border-gray-200">
-        <div className="p-6">
-          <div className="sm:flex sm:items-center sm:justify-between">
-            <div className="sm:flex sm:items-center sm:space-x-4">
+        {filtersExpanded && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tìm kiếm
+                </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-                </div>
+                  <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-xl leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all"
-                  placeholder="Tìm kiếm khóa học..."
-                />
+                    placeholder="Tên khóa học, mô tả..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
 
-              {/* Category filter */}
-              <select className="mt-2 sm:mt-0 block w-full sm:w-auto pl-3 pr-10 py-2.5 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 rounded-xl bg-gray-50">
-                <option>Tất cả danh mục</option>
-                <option>Toán học</option>
-                <option>Vật lý</option>
-                <option>Hóa học</option>
-                <option>Sinh học</option>
+              {/* Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Danh mục
+                </label>
+                <select
+                  value={filters.category || ''}
+                  onChange={(e) => handleFilterChange('category', e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Tất cả danh mục</option>
+                  {categories.map((category) => (
+                    <option key={category.Id || category.id} value={category.Id || category.id}>
+                      {category.Name || category.name}
+                    </option>
+                  ))}
               </select>
+              </div>
 
-              {/* Status filter */}
-              <select className="mt-2 sm:mt-0 block w-full sm:w-auto pl-3 pr-10 py-2.5 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 rounded-xl bg-gray-50">
-                <option>Tất cả trạng thái</option>
-                <option>Đã xuất bản</option>
-                <option>Chờ phê duyệt</option>
-                <option>Bản nháp</option>
-                <option>Bị từ chối</option>
+              {/* Level Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cấp độ
+                </label>
+                <select
+                  value={filters.level === undefined ? '' : filters.level.toString()}
+                  onChange={(e) => handleFilterChange('level', e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Tất cả cấp độ</option>
+                  <option value="0">Nhận biết</option>
+                  <option value="1">Thông hiểu</option>
+                  <option value="2">Vận dụng</option>
+                  <option value="3">Vận dụng cao</option>
               </select>
             </div>
 
-            <div className="mt-4 sm:mt-0">
-              <button
-                type="button"
-                className="inline-flex items-center px-4 py-2.5 border border-gray-300 rounded-xl shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                <FunnelIcon className="-ml-1 mr-2 h-5 w-5 text-gray-500" />
-                Lọc nâng cao
-              </button>
-            </div>
-          </div>
+              {/* Sort Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sắp xếp
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="createdAt_desc">Mới nhất</option>
+                  <option value="createdAt_asc">Cũ nhất</option>
+                  <option value="title_asc">Tên A-Z</option>
+                  <option value="title_desc">Tên Z-A</option>
+                  <option value="price_asc">Giá thấp đến cao</option>
+                  <option value="price_desc">Giá cao đến thấp</option>
+                </select>
         </div>
       </div>
 
-      {/* Courses grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {courses.map((course) => (
-          <div key={course.id} className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition-all duration-300 border border-gray-100">
-            {/* Course thumbnail */}
-            <div className="aspect-video bg-gradient-to-br from-green-500 to-blue-600 relative">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <AcademicCapIcon className="h-16 w-16 text-white opacity-80" />
-              </div>
-              
-              {/* Status badge */}
-              <div className="absolute top-3 left-3">
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadge(course.status)}`}>
-                  {getStatusText(course.status)}
-                </span>
-              </div>
-
-              {/* Actions */}
-              <div className="absolute top-3 right-3">
-                <div className="flex space-x-1">
-                  <button className="p-2 bg-white/90 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white transition-all">
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                  <button className="p-2 bg-white/90 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white transition-all">
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button className="p-2 bg-white/90 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white transition-all">
-                    <EllipsisVerticalIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Course stats overlay */}
-              {course.status === 'published' && (
-                <div className="absolute bottom-3 left-3 right-3">
-                  <div className="bg-white/90 rounded-lg p-2 grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{course.students}</div>
-                      <div className="text-xs text-gray-600">Học viên</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{course.rating}</div>
-                      <div className="text-xs text-gray-600">Đánh giá</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{formatCurrency(course.revenue)}</div>
-                      <div className="text-xs text-gray-600">Doanh thu</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Course content */}
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-green-600 font-medium">{course.category}</span>
-                <div className="flex items-center">
-                  {course.rating > 0 && (
-                    <>
-                      <StarIcon className="h-4 w-4 text-yellow-400 fill-current" />
-                      <span className="ml-1 text-sm text-gray-600">{course.rating}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-                {course.title}
-              </h3>
-
-              <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                {course.description}
-              </p>
-
-              {/* Course details */}
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-600">
-                <div>
-                  <span className="font-medium">Thời lượng:</span> {course.duration}
-                </div>
-                <div>
-                  <span className="font-medium">Bài học:</span> {course.lessons}
-                </div>
-              </div>
-
-              {/* Price */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-lg font-bold text-gray-900">{formatCurrency(course.price)}</span>
-                  {course.originalPrice > course.price && (
-                    <span className="ml-2 text-sm text-gray-500 line-through">
-                      {formatCurrency(course.originalPrice)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {course.tags.slice(0, 3).map((tag) => (
-                  <span key={tag} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    {tag}
-                  </span>
-                ))}
-                {course.tags.length > 3 && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                    +{course.tags.length - 3}
+            {/* Active Filters */}
+            {activeFiltersCount > 0 && (
+              <div className="flex items-center flex-wrap gap-2 pt-2 border-t border-gray-200">
+                <span className="text-sm font-medium text-gray-700">Đang lọc:</span>
+                {filters.search && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                    Tìm kiếm: "{filters.search}"
+                    <button
+                      onClick={() => removeFilter('search')}
+                      className="hover:bg-blue-200 rounded-full p-0.5"
+                    >
+                      <XMarkIcon className="h-3 w-3" />
+                    </button>
                   </span>
                 )}
-              </div>
-
-              {/* Rejection reason */}
-              {course.status === 'rejected' && course.rejectionReason && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-800">
-                    <strong>Lý do từ chối:</strong> {course.rejectionReason}
-                  </p>
+                {filters.category && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                    Danh mục: {categories.find(c => (c.Id || c.id) === filters.category)?.Name || categories.find(c => (c.Id || c.id) === filters.category)?.name}
+                    <button
+                      onClick={() => removeFilter('category')}
+                      className="hover:bg-green-200 rounded-full p-0.5"
+                    >
+                      <XMarkIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {filters.level !== undefined && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                    Cấp độ: {getLevelName(filters.level)}
+                    <button
+                      onClick={() => removeFilter('level')}
+                      className="hover:bg-purple-200 rounded-full p-0.5"
+                    >
+                      <XMarkIcon className="h-3 w-3" />
+                    </button>
+                </span>
+                )}
+                {filters.isFree !== undefined && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                    {filters.isFree ? 'Miễn phí' : 'Trả phí'}
+                    <button
+                      onClick={() => removeFilter('isFree')}
+                      className="hover:bg-yellow-200 rounded-full p-0.5"
+                    >
+                      <XMarkIcon className="h-3 w-3" />
+                  </button>
+                  </span>
+                )}
+                {filters.approvalStatus !== undefined && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                    Chờ duyệt
+                    <button
+                      onClick={() => removeFilter('approvalStatus')}
+                      className="hover:bg-orange-200 rounded-full p-0.5"
+                    >
+                      <XMarkIcon className="h-3 w-3" />
+                  </button>
+                  </span>
+                )}
+                <button
+                  onClick={clearAllFilters}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium ml-auto"
+                >
+                  Xóa tất cả
+                  </button>
+                </div>
+            )}
                 </div>
               )}
+            </div>
 
-              {/* Dates */}
-              <div className="text-xs text-gray-500 mb-4">
-                <div>Tạo: {formatDate(course.createdAt)}</div>
-                <div>Cập nhật: {formatDate(course.updatedAt)}</div>
+      {/* Courses Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden animate-pulse">
+              <div className="h-48 bg-gray-200"></div>
+              <div className="p-6 space-y-4">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <ExclamationTriangleIcon className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <p className="text-red-600 mb-4 font-medium">{error}</p>
+          <button
+            onClick={loadCourses}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Thử lại
+          </button>
+        </div>
+      ) : courses.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <AcademicCapIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Chưa có khóa học</h3>
+          <p className="text-sm text-gray-500 mb-6">
+            {activeFiltersCount > 0 
+              ? 'Không tìm thấy khóa học nào phù hợp với bộ lọc của bạn.'
+              : 'Bắt đầu bằng cách tạo khóa học đầu tiên.'}
+          </p>
+          {activeFiltersCount > 0 ? (
+            <button
+              onClick={clearAllFilters}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Xóa bộ lọc
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push('/instructor/courses/create')}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Tạo khóa học mới
+            </button>
+                  )}
+                </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {courses.map((course) => (
+              <div key={course.Id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all overflow-hidden flex flex-col">
+                {/* Thumbnail */}
+                <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600 overflow-hidden">
+                  {course.Thumbnail ? (
+                    <img 
+                      src={course.Thumbnail} 
+                      alt={course.Title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <AcademicCapIcon className="h-20 w-20 text-white opacity-50" />
+              </div>
+                  )}
+                  
+                  {/* Badges */}
+                  <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2">
+                    <div className="flex flex-col gap-2">
+                      {getApprovalStatusBadge(course.ApprovalStatus, course.IsPublished)}
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getLevelColor(course.Level)}`}>
+                        {getLevelName(course.Level)}
+                      </span>
+                </div>
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${
+                      course.IsFree 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-yellow-500 text-gray-900'
+                    }`}>
+                      {course.IsFree ? 'Miễn phí' : formatCurrency(course.Price)}
+                    </span>
+                </div>
+              </div>
+
+                <div className="p-6 flex-1 flex flex-col">
+                  {/* Header */}
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 line-clamp-2 mb-2">
+                      {course.Title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <UserGroupIcon className="h-4 w-4 mr-1" />
+                        <span className="truncate">{course.Instructor?.Name || `GV #${course.InstructorId}`}</span>
+                      </div>
+                      <span>•</span>
+                      <div className="flex items-center">
+                        <AcademicCapIcon className="h-4 w-4 mr-1" />
+                        <span className="truncate">{course.Category?.Name || `DM #${course.CategoryId}`}</span>
+                      </div>
+                </div>
+              </div>
+
+                  {/* Description */}
+                  {course.Description && (
+                    <div
+                      className="prose prose-sm max-w-none text-gray-700 mb-4 line-clamp-3 flex-1"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(course.Description) }}
+                    />
+                  )}
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-4 mb-4 py-3 border-y border-gray-200">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-1">
+                        <UserGroupIcon className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <div className="text-lg font-bold text-gray-900">{course.TotalStudents || 0}</div>
+                      <div className="text-xs text-gray-500">Học viên</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-1">
+                        <PlayIcon className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <div className="text-lg font-bold text-gray-900">{course.TotalLessons || 0}</div>
+                      <div className="text-xs text-gray-500">Bài học</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center mb-1">
+                        <StarIcon className="h-5 w-5 text-yellow-400" />
+                      </div>
+                      <div className="text-lg font-bold text-gray-900">{course.Rating?.toFixed(1) || '0.0'}</div>
+                      <div className="text-xs text-gray-500">({course.TotalReviews || 0})</div>
               </div>
             </div>
 
-            {/* Actions footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <div className="flex space-x-2">
-                  <button className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
-                    Chỉnh sửa
+                  {/* Actions */}
+                  <div className="space-y-2 mt-auto">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => router.push(`/instructor/courses/${course.Id}`)}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <EyeIcon className="h-4 w-4 mr-1.5" />
+                        Xem
                   </button>
-                  <button className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
-                    Thống kê
-                  </button>
-                  {course.status === 'published' && (
-                    <button className="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors">
-                      <PauseIcon className="h-3 w-3 inline mr-1" />
-                      Tạm dừng
+                      <button
+                        onClick={() => router.push(`/instructor/courses/${course.Id}/edit`)}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <PencilIcon className="h-4 w-4 mr-1.5" />
+                        Sửa
                     </button>
-                  )}
-                  {course.status === 'draft' && (
-                    <button className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
-                      <PlayIcon className="h-3 w-3 inline mr-1" />
-                      Gửi duyệt
-                    </button>
-                  )}
                 </div>
-                <button className="p-1.5 text-gray-400 hover:text-red-600 transition-colors">
-                  <TrashIcon className="h-4 w-4" />
+                    
+                    
+                    <button
+                      onClick={() => handleDeleteCourse(course.Id)}
+                      className="w-full inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      <TrashIcon className="h-4 w-4 mr-1.5" />
+                      Xóa khóa học
                 </button>
               </div>
             </div>
@@ -451,38 +803,74 @@ export default function InstructorCoursesPage() {
       </div>
 
       {/* Pagination */}
-      <div className="bg-white px-6 py-4 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-xl shadow-sm border border-gray-200">
+          {totalPages > 1 && (
+            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex-1 flex justify-between sm:hidden">
-          <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">
+                <button
+                  onClick={() => handleFilterChange('page', Math.max(1, filters.page - 1))}
+                  disabled={filters.page === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
             Trước
           </button>
-          <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">
+                <button
+                  onClick={() => handleFilterChange('page', Math.min(totalPages, filters.page + 1))}
+                  disabled={filters.page === totalPages}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
             Sau
           </button>
         </div>
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-gray-700">
-              Hiển thị <span className="font-medium">1</span> đến{' '}
-              <span className="font-medium">4</span> trong{' '}
-              <span className="font-medium">4</span> kết quả
+                    Hiển thị <span className="font-medium">{(filters.page - 1) * filters.pageSize + 1}</span> đến{' '}
+                    <span className="font-medium">{Math.min(filters.page * filters.pageSize, totalCount)}</span> trong{' '}
+                    <span className="font-medium">{totalCount}</span> kết quả
             </p>
           </div>
           <div>
             <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px">
-              <button className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                    <button
+                      onClick={() => handleFilterChange('page', Math.max(1, filters.page - 1))}
+                      disabled={filters.page === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                 Trước
               </button>
-              <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-green-50 text-sm font-medium text-green-600">
-                1
+                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                      const pageNum = Math.max(1, Math.min(totalPages - 4, filters.page - 2)) + i;
+                      if (pageNum > totalPages) return null;
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handleFilterChange('page', pageNum)}
+                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                            pageNum === filters.page
+                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
               </button>
-              <button className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                      );
+                    })}
+                    <button
+                      onClick={() => handleFilterChange('page', Math.min(totalPages, filters.page + 1))}
+                      disabled={filters.page === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                 Sau
               </button>
             </nav>
           </div>
         </div>
       </div>
+          )}
+        </>
+      )}
+
+      
     </div>
   );
 }

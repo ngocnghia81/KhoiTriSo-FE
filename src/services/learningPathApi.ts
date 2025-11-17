@@ -392,6 +392,7 @@ class LearningPathApiService {
     pageSize?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    instructorId?: number;
   } = {}): Promise<PagedLearningPathResult> {
     const urlParams = new URLSearchParams();
     if (params.categoryId !== undefined) urlParams.append('category', String(params.categoryId));
@@ -400,6 +401,7 @@ class LearningPathApiService {
     if (params.pageSize) urlParams.append('pageSize', String(params.pageSize));
     if (params.sortBy) urlParams.append('sortBy', params.sortBy);
     if (params.sortOrder) urlParams.append('sortOrder', params.sortOrder);
+    if (params.instructorId !== undefined) urlParams.append('instructorId', String(params.instructorId));
 
     const url = `${this.baseUrl}/api/learning-paths${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
 
@@ -532,6 +534,23 @@ class LearningPathApiService {
     const result = extractResult(parsed);
     if (result === true || result === 'true') return true;
     return result?.Success === true;
+  }
+
+  async restoreLearningPath(id: number): Promise<LearningPath> {
+    const response = await retryRequest(async () =>
+      fetchWithAutoRefresh(`${this.baseUrl}/api/admin/learning-paths/${id}/restore`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+      })
+    );
+
+    const parsed = await safeJsonParse(response);
+    if (!isSuccessfulResponse(parsed)) {
+      throw new Error(extractMessage(parsed));
+    }
+
+    const result = extractResult(parsed);
+    return mapLearningPath(result);
   }
 
   async getLearningPathCourses(id: number): Promise<LearningPathCourse[]> {

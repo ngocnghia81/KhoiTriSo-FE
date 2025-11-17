@@ -1,127 +1,26 @@
-import { Metadata } from 'next';
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   AcademicCapIcon,
   BookOpenIcon,
   UserGroupIcon,
   CurrencyDollarIcon,
   ChartBarIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  EyeIcon,
-  HandThumbUpIcon,
   StarIcon,
-  ArrowTrendingUpIcon,
   CalendarIcon,
   PlusIcon,
   DocumentTextIcon,
   VideoCameraIcon,
   UsersIcon
 } from '@heroicons/react/24/outline';
-
-export const metadata: Metadata = {
-  title: 'Instructor Dashboard - Khởi Trí Số',
-  description: 'Bảng điều khiển giảng viên - Quản lý khóa học và thu nhập',
-};
-
-// Mock data
-const stats = [
-  {
-    name: 'Tổng khóa học',
-    value: '12',
-    change: '+2',
-    changeType: 'increase' as const,
-    icon: AcademicCapIcon,
-    color: 'blue',
-  },
-  {
-    name: 'Tổng sách',
-    value: '8',
-    change: '+1',
-    changeType: 'increase' as const,
-    icon: BookOpenIcon,
-    color: 'green',
-  },
-  {
-    name: 'Học viên',
-    value: '1,234',
-    change: '+89',
-    changeType: 'increase' as const,
-    icon: UserGroupIcon,
-    color: 'purple',
-  },
-  {
-    name: 'Thu nhập tháng',
-    value: '₫2,450,000',
-    change: '+12.5%',
-    changeType: 'increase' as const,
-    icon: CurrencyDollarIcon,
-    color: 'yellow',
-  },
-];
-
-const recentCourses = [
-  {
-    id: 1,
-    title: 'Toán học nâng cao lớp 12',
-    status: 'published',
-    students: 234,
-    revenue: 1200000,
-    rating: 4.8,
-    lastUpdated: '2024-01-20',
-    thumbnail: '/images/courses/math-12.jpg'
-  },
-  {
-    id: 2,
-    title: 'Vật lý cơ bản lớp 11',
-    status: 'pending',
-    students: 0,
-    revenue: 0,
-    rating: 0,
-    lastUpdated: '2024-01-19',
-    thumbnail: '/images/courses/physics-11.jpg'
-  },
-  {
-    id: 3,
-    title: 'Hóa học thực hành',
-    status: 'draft',
-    students: 0,
-    revenue: 0,
-    rating: 0,
-    lastUpdated: '2024-01-18',
-    thumbnail: '/images/courses/chemistry.jpg'
-  },
-];
-
-const recentBooks = [
-  {
-    id: 1,
-    title: 'Sách bài tập Toán 12',
-    status: 'published',
-    activations: 156,
-    revenue: 780000,
-    codesRemaining: 344,
-    lastUpdated: '2024-01-20'
-  },
-  {
-    id: 2,
-    title: 'Tuyển tập đề thi Vật lý',
-    status: 'pending',
-    activations: 0,
-    revenue: 0,
-    codesRemaining: 500,
-    lastUpdated: '2024-01-19'
-  },
-];
-
-const earnings = {
-  thisMonth: 2450000,
-  lastMonth: 2180000,
-  pending: 340000,
-  available: 2110000,
-  nextPayout: '2024-02-15'
-};
+import { useAuth } from '@/contexts/AuthContext';
+import { useCourses, Course } from '@/hooks/useCourses';
+import { useInstructorDetail, useInstructorAnalytics } from '@/hooks/useInstructors';
+import { useBooks } from '@/hooks/useBooks';
+import type { Book } from '@/services/bookApi';
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -153,14 +52,166 @@ const getStatusText = (status: string) => {
   }
 };
 
+type BookWithStats = Book & {
+  Id?: number;
+  Title?: string;
+  status?: string;
+  activations?: number;
+  Activations?: number;
+  activationCount?: number;
+  totalActivations?: number;
+  revenue?: number;
+  Revenue?: number;
+  totalRevenue?: number;
+  earnings?: number;
+  codesRemaining?: number;
+  CodesRemaining?: number;
+  remainingCodes?: number;
+  RemainingCodes?: number;
+  lastUpdated?: string;
+  LastUpdated?: string;
+  updatedAt?: string;
+  UpdatedAt?: string;
+  isPublished?: boolean;
+  IsPublished?: boolean;
+  ApprovalStatus?: number;
+};
+
 export default function InstructorDashboard() {
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
+  const normalizedRole = user?.role as string | undefined;
+  const isTeacher = normalizedRole === 'instructor' || normalizedRole === 'teacher';
+  const instructorId = user?.id ? Number(user.id) : 0;
+  const {
+    data: instructorDetail,
+    loading: instructorLoading,
+    error: instructorError,
+  } = useInstructorDetail(instructorId);
+  const {
+    data: analytics,
+    loading: analyticsLoading,
+    error: analyticsError,
+  } = useInstructorAnalytics(instructorId, '6m');
+  const lastMonthEntry = (() => {
+    const list = analytics?.MonthlyEarnings || [];
+    return list.length > 0 ? list[list.length - 1] : null;
+  })();
+  const prevMonthEntry = (() => {
+    const list = analytics?.MonthlyEarnings || [];
+    return list.length > 1 ? list[list.length - 2] : null;
+  })();
+  const currentMonthEarnings = lastMonthEntry?.Earnings ?? 0;
+  const previousMonthEarnings = prevMonthEntry?.Earnings ?? 0;
+  const latestMonthLabel = lastMonthEntry?.Month ?? null;
+  const {
+    courses: recentCourses,
+    loading: courseLoading,
+    error: courseError,
+  } = useCourses({
+    page: 1,
+    pageSize: 5,
+    sortBy: 'updatedAt',
+    sortOrder: 'desc',
+    instructorId: instructorId,
+  });
+  const {
+    books: recentBooks,
+    loading: booksLoading,
+    error: booksError,
+  } = useBooks({
+    authorId: instructorId,
+    page: 1,
+    pageSize: 5,
+    sortBy: 'updatedAt',
+    sortOrder: 'desc',
+  });
+
+  useEffect(() => {
+    if (isAuthenticated && !isTeacher) {
+      router.push('/');
+    }
+  }, [isAuthenticated, isTeacher, router]);
+
+  if (!isAuthenticated || !isTeacher) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  const displayName = user?.name || user?.email || 'Giảng viên';
+
+  const getCourseStatus = (course: Course): string => {
+    if (course.isPublished) return 'published';
+
+    switch (course.approvalStatus) {
+      case 2:
+        return 'approved';
+      case 1:
+        return 'pending';
+      case 0:
+        return 'rejected';
+      default:
+        return 'draft';
+    }
+  };
+
+  const getBookStatus = (book: BookWithStats): string => {
+    if (book.isPublished || book.IsPublished) return 'published';
+
+    const approval = book.approvalStatus ?? book.ApprovalStatus;
+    switch (approval) {
+      case 2:
+        return 'published';
+      case 1:
+        return 'pending';
+      case 0:
+        return 'rejected';
+      default:
+        return 'draft';
+    }
+  };
+
+  const statCards = [
+    {
+      name: 'Tổng khóa học',
+      value: instructorDetail?.TotalCourses ?? 0,
+      icon: AcademicCapIcon,
+      color: 'blue',
+      isCurrency: false,
+    },
+    {
+      name: 'Tổng sách',
+      value: instructorDetail?.TotalBooks ?? 0,
+      icon: BookOpenIcon,
+      color: 'green',
+      isCurrency: false,
+    },
+    {
+      name: 'Học viên',
+      value: instructorDetail?.TotalStudents ?? 0,
+      icon: UserGroupIcon,
+      color: 'purple',
+      isCurrency: false,
+    },
+    {
+      name: 'Tổng thu nhập',
+      value: instructorDetail?.TotalEarnings ?? 0,
+      icon: CurrencyDollarIcon,
+      color: 'yellow',
+      isCurrency: true,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Welcome header */}
       <div className="bg-gradient-to-r from-green-500 to-blue-600 rounded-xl p-6 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Chào mừng trở lại, Nguyễn Văn A!</h1>
+            <h1 className="text-2xl font-bold">Chào mừng trở lại, {displayName}!</h1>
             <p className="text-green-100 mt-1">
               Bạn có 2 nội dung chờ phê duyệt và thu nhập tháng này đã tăng 12.5%
             </p>
@@ -180,8 +231,8 @@ export default function InstructorDashboard() {
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.name} className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+        {statCards.map((stat, index) => (
+          <div key={stat.name ?? index} className="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
             <div className="p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -193,10 +244,16 @@ export default function InstructorDashboard() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">{stat.name}</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">{stat.value}</div>
-                      <div className="ml-2 flex items-baseline text-sm font-semibold text-green-600">
-                        <ArrowTrendingUpIcon className="h-4 w-4 mr-1" />
-                        {stat.change}
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {instructorLoading ? (
+                          <span className="block h-5 bg-gray-200 rounded animate-pulse w-16" />
+                        ) : instructorError ? (
+                          '—'
+                        ) : stat.isCurrency ? (
+                          `₫${stat.value.toLocaleString()}`
+                        ) : (
+                          stat.value.toLocaleString()
+                        )}
                       </div>
                     </dd>
                   </dl>
@@ -215,48 +272,61 @@ export default function InstructorDashboard() {
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">Khóa học gần đây</h3>
-                <button className="text-sm text-green-600 hover:text-green-800">Xem tất cả</button>
+                <Link href="/instructor/courses" className="text-sm text-green-600 hover:text-green-800">
+                  Xem tất cả
+                </Link>
               </div>
             </div>
             <div className="divide-y divide-gray-200">
-              {recentCourses.map((course) => (
-                <div key={course.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <AcademicCapIcon className="h-8 w-8 text-white" />
+              {courseLoading ? (
+                <div className="p-6 text-center text-gray-500">Đang tải dữ liệu khóa học...</div>
+              ) : courseError ? (
+                <div className="p-6 text-center text-red-600">{courseError}</div>
+              ) : recentCourses.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">Chưa có khóa học nào gần đây.</div>
+              ) : (
+                recentCourses.map((course) => {
+                  const status = getCourseStatus(course);
+                  return (
+                    <div key={course.id} className="p-6 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <AcademicCapIcon className="h-8 w-8 text-white" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-medium text-gray-900 truncate">
+                              {course.title}
+                            </h4>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(status)}`}>
+                              {getStatusText(status)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <UserGroupIcon className="h-4 w-4 mr-1" />
+                              {course.totalStudents ?? 0} học viên
+                            </div>
+                            <div className="flex items-center">
+                              <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+                              ₫{(course.price ?? 0).toLocaleString()}
+                            </div>
+                            <div className="flex items-center">
+                              <StarIcon className="h-4 w-4 mr-1" />
+                              {course.rating ?? 'Chưa có'}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-400">
+                            Cập nhật: {course.updatedAt ? new Date(course.updatedAt).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium text-gray-900 truncate">
-                          {course.title}
-                        </h4>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(course.status)}`}>
-                          {getStatusText(course.status)}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <UserGroupIcon className="h-4 w-4 mr-1" />
-                          {course.students} học viên
-                        </div>
-                        <div className="flex items-center">
-                          <CurrencyDollarIcon className="h-4 w-4 mr-1" />
-                          ₫{course.revenue.toLocaleString()}
-                        </div>
-                        <div className="flex items-center">
-                          <StarIcon className="h-4 w-4 mr-1" />
-                          {course.rating || 'Chưa có'}
-                        </div>
-                      </div>
-                      <div className="mt-2 text-xs text-gray-400">
-                        Cập nhật: {new Date(course.lastUpdated).toLocaleDateString('vi-VN')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -272,37 +342,57 @@ export default function InstructorDashboard() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Tháng này</span>
                 <span className="text-lg font-semibold text-gray-900">
-                  ₫{earnings.thisMonth.toLocaleString()}
+                  {analyticsLoading ? (
+                    <span className="inline-block h-5 bg-gray-200 rounded animate-pulse w-24" />
+                  ) : analyticsError ? (
+                    '—'
+                  ) : (
+                    `₫${currentMonthEarnings.toLocaleString()}`
+                  )}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Tháng trước</span>
                 <span className="text-sm text-gray-500">
-                  ₫{earnings.lastMonth.toLocaleString()}
+                  {analyticsLoading ? (
+                    <span className="inline-block h-4 bg-gray-200 rounded animate-pulse w-20" />
+                  ) : analyticsError ? (
+                    '—'
+                  ) : (
+                    `₫${previousMonthEarnings.toLocaleString()}`
+                  )}
                 </span>
               </div>
               <div className="border-t pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-gray-600">Chờ thanh toán</span>
                   <span className="text-sm font-medium text-yellow-600">
-                    ₫{earnings.pending.toLocaleString()}
+                    ₫{(0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Có thể rút</span>
                   <span className="text-sm font-medium text-green-600">
-                    ₫{earnings.available.toLocaleString()}
+                    {analyticsLoading ? (
+                      <span className="inline-block h-4 bg-gray-200 rounded animate-pulse w-20" />
+                    ) : analyticsError ? (
+                      '—'
+                    ) : (
+                      `₫${(analytics?.TotalEarnings ?? 0).toLocaleString()}`
+                    )}
                   </span>
                 </div>
               </div>
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="flex items-center">
-                  <CalendarIcon className="h-4 w-4 text-blue-600 mr-2" />
-                  <span className="text-sm text-blue-800">
-                    Thanh toán tiếp theo: {new Date(earnings.nextPayout).toLocaleDateString('vi-VN')}
-                  </span>
+              {!!latestMonthLabel && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="flex items-center">
+                    <CalendarIcon className="h-4 w-4 text-blue-600 mr-2" />
+                    <span className="text-sm text-blue-800">
+                      Cập nhật gần nhất: {new Date(latestMonthLabel).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
               <button className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
                 Yêu cầu rút tiền
               </button>
@@ -345,7 +435,9 @@ export default function InstructorDashboard() {
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium text-gray-900">Sách điện tử gần đây</h3>
-            <button className="text-sm text-green-600 hover:text-green-800">Xem tất cả</button>
+            <Link href="/instructor/books" className="text-sm text-green-600 hover:text-green-800">
+              Xem tất cả
+            </Link>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -373,42 +465,92 @@ export default function InstructorDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recentBooks.map((book) => (
-                <tr key={book.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
-                          <BookOpenIcon className="h-5 w-5 text-white" />
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{book.title}</div>
-                        <div className="text-sm text-gray-500">
-                          Cập nhật: {new Date(book.lastUpdated).toLocaleDateString('vi-VN')}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(book.status)}`}>
-                      {getStatusText(book.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {book.activations}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ₫{book.revenue.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {book.codesRemaining}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-green-600 hover:text-green-900">Quản lý</button>
+              {booksLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                    Đang tải dữ liệu sách...
                   </td>
                 </tr>
-              ))}
+              ) : booksError ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-4 text-center text-red-600">
+                    {booksError}
+                  </td>
+                </tr>
+              ) : recentBooks.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                    Bạn chưa có sách nào.
+                  </td>
+                </tr>
+              ) : (
+                recentBooks.map((book, index) => {
+                  const extendedBook = book as BookWithStats;
+                  const status = getBookStatus(extendedBook);
+                  const activations =
+                    extendedBook.Activations ??
+                    extendedBook.activations ??
+                    extendedBook.activationCount ??
+                    extendedBook.totalActivations ??
+                    0;
+                  const revenue =
+                    extendedBook.totalRevenue ??
+                    extendedBook.revenue ??
+                    extendedBook.earnings ??
+                    0;
+                  const codesRemaining =
+                    extendedBook.CodesRemaining ??
+                    extendedBook.codesRemaining ??
+                    extendedBook.RemainingCodes ??
+                    extendedBook.remainingCodes ??
+                    0;
+                  const updatedAt =
+                    extendedBook.UpdatedAt ??
+                    extendedBook.updatedAt ??
+                    extendedBook.LastUpdated ??
+                    extendedBook.lastUpdated ??
+                    null;
+
+                  return (
+                    <tr key={extendedBook.id ?? extendedBook.Id ?? index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
+                              <BookOpenIcon className="h-5 w-5 text-white" />
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {extendedBook.title ?? extendedBook.Title ?? 'Không có tên'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Cập nhật: {updatedAt ? new Date(updatedAt).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(status)}`}>
+                          {getStatusText(status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {activations}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ₫{Number(revenue).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {codesRemaining}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button className="text-green-600 hover:text-green-900">Quản lý</button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

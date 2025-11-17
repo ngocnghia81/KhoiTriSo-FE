@@ -20,7 +20,7 @@ export interface PaginationInfo {
   pageSize: number;
 }
 
-export const useBooks = (filters: BookFilters = {}) => {
+export const useBooks = (filters: BookFilters = {}, options: { enabled?: boolean } = {}) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,8 +28,10 @@ export const useBooks = (filters: BookFilters = {}) => {
 
   // Stringify filters to avoid infinite loop
   const filtersString = JSON.stringify(filters);
+  const enabled = options.enabled ?? true;
 
   const fetchBooks = useCallback(async () => {
+    if (!enabled) return;
     try {
       setLoading(true);
       setError(null);
@@ -64,7 +66,7 @@ export const useBooks = (filters: BookFilters = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [filtersString]); // Use stringified version
+  }, [filtersString, enabled]); // Use stringified version
 
   useEffect(() => {
     fetchBooks();

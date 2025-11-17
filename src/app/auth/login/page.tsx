@@ -32,7 +32,13 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.push(user?.role === 'admin' ? '/dashboard' : '/');
+      if(user?.role === 'instructor') {
+        router.push('/instructor');
+      } else if(user?.role === 'admin') {
+        router.push('/dashboard');
+      } else {
+        router.push('/');
+      }
     }
   }, [isAuthenticated, user?.role, router]);
 

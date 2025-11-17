@@ -122,7 +122,7 @@ export default function ForumReportsPage() {
               <p>
                 Backend chưa cung cấp trường đánh dấu báo cáo. Khi backend sẵn sàng,
                 trang này sẽ gọi API để lấy danh sách báo cáo thực tế (ví dụ: `isFlagged = true`,
-                `reportsCount &gt; 0`). Hiện tại bạn có thể dùng trang này như dashboard để kiểm tra nhanh các câu hỏi mới.
+                `reportsCount &gt; 0`). Hiện tại bạn có thể dùng trang này như instructor để kiểm tra nhanh các câu hỏi mới.
               </p>
             </div>
           </div>
