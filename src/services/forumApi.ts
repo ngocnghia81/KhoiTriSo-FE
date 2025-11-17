@@ -720,8 +720,8 @@ class ForumApiService {
       sortOrder: item.SortOrder || item.sortOrder || 0,
     }));
     
-    // Filter by isActive if needed
-    return includeInactive ? categories : categories.filter((c: ForumCategory) => c.isActive);
+    // Backend already filters by role, but we can double-check if needed
+    return categories;
   }
 
   async createCategory(request: {
@@ -818,7 +818,10 @@ class ForumApiService {
 
   // Tags
   async getTags(limit: number = 20, includeInactive: boolean = false): Promise<ForumTag[]> {
-    const url = `${this.baseUrl}/api/forum/tags?limit=${limit}`;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    
+    const url = `${this.baseUrl}/api/forum/tags?${params.toString()}`;
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -836,8 +839,8 @@ class ForumApiService {
       isActive: item.IsActive !== undefined ? item.IsActive : item.isActive !== undefined ? item.isActive : true,
     }));
     
-    // Filter by isActive if needed (backend already filters, but we can double-check)
-    return includeInactive ? tags : tags.filter((t: ForumTag) => t.isActive);
+    // Backend already filters by role, so we return all tags from backend
+    return tags;
   }
 
   async getAllTags(includeInactive: boolean = false): Promise<ForumTag[]> {
