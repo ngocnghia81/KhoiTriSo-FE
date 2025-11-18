@@ -53,10 +53,7 @@ const navigation = [
     name: 'Bài tập & Kiểm tra',
     icon: DocumentTextIcon,
     children: [
-      { name: 'Tất cả bài tập', href: '/instructor/assignments' },
-      { name: 'Tạo bài tập', href: '/instructor/assignments/create' },
-      { name: 'Chấm điểm', href: '/instructor/assignments/grading' },
-      { name: 'Thống kê', href: '/instructor/assignments/stats' },
+      { name: 'Tất cả bài tập', href: '/instructor/assignments' }
     ],
   },
   {

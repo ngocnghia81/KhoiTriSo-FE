@@ -2,12 +2,14 @@
 
 import { useParams } from 'next/navigation';
 import React from 'react';
-import { useAssignment, useAssignmentResults } from '@/hooks/useAssignments';
+import { useAssignment, useAssignmentResults, useAssignmentQuestions, useRedistributePoints, RedistributePointsRequest } from '@/hooks/useAssignments';
 import Link from 'next/link';
-import { ArrowLeft, Info, FileQuestion, ClipboardList, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Info, FileQuestion, ClipboardList, BarChart3, RefreshCw, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { AssignmentQuestionManager } from '@/components/AssignmentQuestionManager';
 import { AssignmentSubmissions } from '@/components/AssignmentSubmissions';
 
@@ -15,8 +17,17 @@ export default function AssignmentDetailPage() {
   const params = useParams();
   const id = params?.id ? parseInt(params.id as string) : 0;
 
-  const { assignment, loading, error } = useAssignment(id);
-  const { data: results, loading: rLoading } = useAssignmentResults(id);
+  const { assignment, loading, error, refetch: refetchAssignment } = useAssignment(id);
+  const { data: results, loading: rLoading, refetch: refetchResults } = useAssignmentResults(id);
+  const { questions, refetch: refetchQuestions } = useAssignmentQuestions(id);
+  const { redistributePoints, loading: redistributing } = useRedistributePoints();
+  const [showRedistributeModal, setShowRedistributeModal] = React.useState(false);
+  const [questionPoints, setQuestionPoints] = React.useState<Record<number, number>>({});
+  const [pointsByType, setPointsByType] = React.useState<Record<number, number>>({
+    0: 0,
+    1: 0,
+    2: 0,
+  });
 
   // Load MathJax for MathML rendering
   React.useEffect(() => {
@@ -55,6 +66,115 @@ export default function AssignmentDetailPage() {
     }
   }, [assignment]);
 
+  const questionCountsByType = React.useMemo(() => {
+    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+    questions.forEach((q: any) => {
+      const questionType = q.QuestionType ?? q.questionType;
+      if (questionType !== null && questionType !== undefined && questionType !== 3 && questionType >= 0 && questionType <= 2) {
+        counts[questionType] = (counts[questionType] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [questions]);
+
+  React.useEffect(() => {
+    if (showRedistributeModal && questions.length > 0) {
+      const initialPoints: Record<number, number> = {};
+      questions.forEach((q: any) => {
+        const questionId = q.Id ?? q.id;
+        const questionType = q.QuestionType ?? q.questionType;
+        if (questionType !== null && questionType !== undefined && questionType !== 3) {
+          initialPoints[questionId] = q.DefaultPoints ?? q.defaultPoints ?? 0;
+        }
+      });
+      setQuestionPoints(initialPoints);
+
+      const initialPointsByType: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+      questions.forEach((q: any) => {
+        const questionType = q.QuestionType ?? q.questionType;
+        if (questionType !== null && questionType !== undefined && questionType !== 3 && questionType >= 0 && questionType <= 2) {
+          const points = q.DefaultPoints ?? q.defaultPoints ?? 0;
+          initialPointsByType[questionType] = (initialPointsByType[questionType] || 0) + points;
+        }
+      });
+      setPointsByType(initialPointsByType);
+    }
+  }, [showRedistributeModal, questions]);
+
+  React.useEffect(() => {
+    if (showRedistributeModal && questions.length > 0) {
+      const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+      questions.forEach((q: any) => {
+        const questionType = q.QuestionType ?? q.questionType;
+        if (questionType !== null && questionType !== undefined && questionType !== 3 && questionType >= 0 && questionType <= 2) {
+          counts[questionType] = (counts[questionType] || 0) + 1;
+        }
+      });
+
+      const hasAnyPoints = Object.values(pointsByType).some(p => p > 0);
+      if (hasAnyPoints) {
+        const updatedPoints: Record<number, number> = {};
+        questions.forEach((q: any) => {
+          const questionId = q.Id ?? q.id;
+          const questionType = q.QuestionType ?? q.questionType;
+          if (questionType !== null && questionType !== undefined && questionType !== 3 && questionType >= 0 && questionType <= 2) {
+            const totalPointsForType = pointsByType[questionType] || 0;
+            const countForType = counts[questionType] || 1;
+            const pointsPerQuestion = countForType > 0 ? totalPointsForType / countForType : 0;
+            updatedPoints[questionId] = pointsPerQuestion > 0 ? pointsPerQuestion : 0;
+          }
+        });
+        setQuestionPoints(prev => {
+          const hasChanges = Object.keys(updatedPoints).some(id => {
+            const qId = parseInt(id);
+            return Math.abs((prev[qId] || 0) - (updatedPoints[qId] || 0)) >= 0.001;
+          });
+          return hasChanges ? { ...prev, ...updatedPoints } : prev;
+        });
+      }
+    }
+  }, [pointsByType, showRedistributeModal, questions]);
+
+  const actualQuestions = React.useMemo(() => {
+    return questions.filter((q: any) => {
+      const questionType = q.QuestionType ?? q.questionType;
+      return questionType !== 3 && questionType !== null && questionType !== undefined;
+    });
+  }, [questions]);
+
+  const totalPoints = React.useMemo(() => {
+    return Object.values(questionPoints).reduce((sum, p) => sum + (p || 0), 0);
+  }, [questionPoints]);
+
+  const totalPointsByType = React.useMemo(() => {
+    return Object.values(pointsByType).reduce((sum, p) => sum + (p || 0), 0);
+  }, [pointsByType]);
+
+  const handleRedistributePoints = async () => {
+    const questionPointsList = actualQuestions.map((q: any) => {
+      const questionId = q.Id ?? q.id;
+      return {
+        QuestionId: questionId,
+        Points: questionPoints[questionId] ?? 0
+      };
+    });
+
+    const request: RedistributePointsRequest = {
+      QuestionPoints: questionPointsList
+    };
+
+    const result = await redistributePoints(id, request);
+    if (result.success) {
+      alert('Chia điểm lại thành công!');
+      setShowRedistributeModal(false);
+      refetchAssignment();
+      refetchResults();
+      refetchQuestions();
+    } else {
+      alert(result.error || 'Chia điểm lại thất bại');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -84,10 +204,9 @@ export default function AssignmentDetailPage() {
   }
 
   const showAnswersAfterLabels: Record<number, string> = {
-    0: 'Không bao giờ',
-    1: 'Sau khi nộp bài',
-    2: 'Sau hạn nộp',
-    3: 'Sau khi chấm điểm'
+    0: 'Sau khi nộp bài',
+    1: 'Sau khi chấm',
+    2: 'Không bao giờ'
   };
 
   return (
@@ -116,6 +235,14 @@ export default function AssignmentDetailPage() {
               <Badge variant={assignment.isPublished ? "default" : "secondary"}>
                 {assignment.isPublished ? 'Đã xuất bản' : 'Chưa xuất bản'}
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRedistributeModal(true)}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Chia điểm lại
+              </Button>
             </div>
           </div>
         </div>
@@ -330,8 +457,172 @@ export default function AssignmentDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {showRedistributeModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-6 border w-full max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Chia điểm lại cho câu hỏi</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowRedistributeModal(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="mb-6 p-4 bg-white border rounded-lg shadow-sm">
+              <h2 className="text-lg font-semibold mb-4">Phân bổ điểm theo loại câu hỏi</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Trắc nghiệm (Loại 0)
+                    <span className="text-xs text-gray-500 ml-1">({questionCountsByType[0]} câu)</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={pointsByType[0] || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      setPointsByType(prev => ({ ...prev, 0: value }));
+                    }}
+                    className="w-full"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Đúng/Sai (Loại 1)
+                    <span className="text-xs text-gray-500 ml-1">({questionCountsByType[1]} câu)</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={pointsByType[1] || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      setPointsByType(prev => ({ ...prev, 1: value }));
+                    }}
+                    className="w-full"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tự luận ngắn (Loại 2)
+                    <span className="text-xs text-gray-500 ml-1">({questionCountsByType[2]} câu)</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={pointsByType[2] || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      setPointsByType(prev => ({ ...prev, 2: value }));
+                    }}
+                    className="w-full"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  <span className="font-medium">Tổng điểm: </span>
+                  <span className={Math.abs(totalPointsByType - 10) < 0.01 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                    {totalPointsByType.toFixed(2)} / 10.00
+                  </span>
+                </div>
+                {Math.abs(totalPointsByType - 10) >= 0.01 && (
+                  <div className="text-xs text-red-600">
+                    Tổng điểm phải bằng 10
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm">
+                  <span className="font-medium">Tổng điểm (từng câu): </span>
+                  <span className={Math.abs(totalPoints - 10) < 0.01 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                    {totalPoints.toFixed(2)} / 10.00
+                  </span>
+                </div>
+                {Math.abs(totalPoints - 10) >= 0.01 && (
+                  <div className="text-xs text-red-600">
+                    Tổng điểm phải bằng 10
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6 max-h-[60vh] overflow-y-auto">
+              {actualQuestions.map((q: any, index: number) => {
+                const questionId = q.Id ?? q.id;
+                const questionType = q.QuestionType ?? q.questionType;
+                const questionContent = q.QuestionContent ?? q.questionContent ?? '';
+                const questionNumber = index + 1;
+
+                return (
+                  <Card key={questionId} className="border-l-4 border-l-blue-500">
+                    <CardContent className="pt-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-medium">Câu {questionNumber}</span>
+                            <Badge variant="outline">
+                              {questionType === 0 ? 'Trắc nghiệm' : questionType === 1 ? 'Đúng/Sai' : questionType === 2 ? 'Tự luận ngắn' : `Loại ${questionType}`}
+                            </Badge>
+                          </div>
+                          <div 
+                            className="prose prose-sm max-w-none text-sm"
+                            dangerouslySetInnerHTML={{ __html: questionContent.substring(0, 200) + (questionContent.length > 200 ? '...' : '') }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            className="w-24"
+                            value={questionPoints[questionId] ?? ''}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value) || 0;
+                              setQuestionPoints(prev => ({
+                                ...prev,
+                                [questionId]: value
+                              }));
+                            }}
+                            placeholder="0"
+                          />
+                          <span className="text-sm text-gray-500">điểm</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowRedistributeModal(false)}>
+                Hủy
+              </Button>
+              <Button 
+                onClick={handleRedistributePoints} 
+                disabled={redistributing || Math.abs(totalPoints - 10) >= 0.01}
+              >
+                {redistributing ? 'Đang lưu...' : 'Lưu điểm'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-

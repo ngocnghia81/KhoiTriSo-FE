@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAIGenerateQuestions, useBatchInsertQuestions, AIGeneratedQuestion } from '@/hooks/useAssignments';
 import { useUpload } from '@/hooks/useUpload';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ImportQuestionsFromWordProps {
   assignmentId: number;
@@ -17,6 +18,7 @@ interface ImportQuestionsFromWordProps {
 
 export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: ImportQuestionsFromWordProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const insertAtCursor = (el: HTMLTextAreaElement | HTMLInputElement, before: string, after: string = '') => {
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
@@ -153,7 +155,7 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
 
   const normalizeMathForRender = (raw: string) => {
     if (!raw) return '';
-    let s = htmlDecode(raw.trim()).replace(/\r?\n|\r/g, '\n').replace(/\s+/g, ' ');
+    const s = htmlDecode(raw.trim()).replace(/\r?\n|\r/g, '\n').replace(/\s+/g, ' ');
     // Patch cho các fragment đặc biệt do AI/backend trả lỗi
     if (/^mfrac$/i.test(s)) return '<math xmlns="http://www.w3.org/1998/Math/MathML"><mfrac><mn>1</mn><mn>2</mn></mfrac></math>';
     if (/^msup$/i.test(s)) return '<math xmlns="http://www.w3.org/1998/Math/MathML"><msup><mi>x</mi><mn>2</mn></msup></math>';
@@ -192,9 +194,18 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
     setError(null);
     
     try {
-      // Step 1: Upload file to Cloudflare Workers
+      // Step 1: Tạo filename mới với timestamp + userid để tránh trùng
+      const timestamp = Date.now();
+      const userId = user?.id || 'unknown';
+      const fileExtension = file.name.split('.').pop() || 'docx';
+      const newFileName = `${timestamp}_${userId}.${fileExtension}`;
+      
+      // Tạo File mới với tên mới
+      const renamedFile = new File([file], newFileName, { type: file.type });
+      
+      // Step 2: Upload file to Cloudflare Workers
       console.log('Uploading Word file to Cloudflare Workers...');
-      const uploadResult = await uploadFileWithPresign(file, {
+      const uploadResult = await uploadFileWithPresign(renamedFile, {
         folder: 'word-imports',
         accessRole: 'GUEST',
         onProgress: (progress) => {
@@ -208,7 +219,7 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
 
       console.log('File uploaded successfully, URL:', uploadResult.url);
 
-      // Step 2: Send FileUrl to AI API
+      // Step 3: Send FileUrl to AI API
       const res = await generateFromWord(uploadResult.url);
       if (res.success && res.data) {
       // Initialize OrderIndex and default points if missing
@@ -243,15 +254,24 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
       };
 
       const normalized = (res.data as any[]).map(toAppQuestion);
-      const filtered = normalized.filter(q => q.QuestionType !== 3);
-      setExcludedCount(normalized.length - filtered.length);
+      // Giữ lại tất cả questions, kể cả QuestionType 3 (tiêu đề)
+      const filtered = normalized;
+      setExcludedCount(0); // Không loại bỏ gì nữa
       // Lưu vào sessionStorage và chuyển sang trang review để chỉnh sửa lần cuối
       try {
         const key = `generated_questions_assignment_${assignmentId}`;
         sessionStorage.setItem(key, JSON.stringify({ questions: filtered }));
       } catch {}
-        router.push(`/dashboard/assignments/${assignmentId}/review-generated`);
-        return;
+      
+      // Detect dashboard or instructor route
+      const pathname = window.location.pathname;
+      const isInstructor = pathname.includes('/instructor');
+      const reviewPath = isInstructor 
+        ? `/instructor/assignments/${assignmentId}/review-generated`
+        : `/dashboard/assignments/${assignmentId}/review-generated`;
+      
+      router.push(reviewPath);
+      return;
       } else {
         setError(res.error || 'Không thể tạo câu hỏi từ file');
       }
@@ -428,7 +448,14 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
     if (res.success) {
       onImported();
       // Chuyển đến trang chi tiết/biên tập bài tập để người dùng chỉnh sửa ngay
-      router.push(`/dashboard/assignments/${assignmentId}`);
+      // Detect dashboard or instructor route
+      const pathname = window.location.pathname;
+      const isInstructor = pathname.includes('/instructor');
+      const detailPath = isInstructor 
+        ? `/instructor/assignments/${assignmentId}`
+        : `/dashboard/assignments/${assignmentId}`;
+      
+      router.push(detailPath);
     } else {
       setError(res.error || 'Import thất bại');
     }

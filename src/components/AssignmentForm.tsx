@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { XMarkIcon } from '@heroicons/react/24/outline';
@@ -37,15 +37,12 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
   const [formData, setFormData] = useState({
     title: assignment?.title || '',
     description: assignment?.description || '',
-    maxScore: assignment?.maxScore || 100,
     timeLimit: assignment?.timeLimit || 60,
     maxAttempts: assignment?.maxAttempts || 1,
-    showAnswersAfter: assignment?.showAnswersAfter || 1,
+    showAnswersAfter: assignment?.showAnswersAfter !== undefined ? assignment.showAnswersAfter : 1, // 0 = Immediately (Sau khi nộp bài)
     dueDate: assignment?.dueDate ? assignment.dueDate.split('T')[0] : '',
     isPublished: assignment?.isPublished || false,
     passingScore: assignment?.passingScore || 50,
-    shuffleQuestions: assignment?.shuffleQuestions || false,
-    shuffleOptions: assignment?.shuffleOptions || false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,21 +58,21 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
       
       const method = isEdit ? 'PUT' : 'POST';
       
-      // Format payload với PascalCase như backend yêu cầu - đúng format như curl command
-      // Match chính xác với: curl -X POST http://localhost:8080/api/assignments
+      // Format payload với PascalCase như backend yêu cầu
+      // ShowAnswersAfter enum: 0 = Immediately, 1 = AfterDue, 2 = Never
       const payload = {
         LessonId: lessonId || 0,
         Title: formData.title || '',
         Description: formData.description || '',
-        MaxScore: formData.maxScore || 100,
+        MaxScore: 10, // Mặc định 10 điểm
         TimeLimit: formData.timeLimit || null,
         MaxAttempts: formData.maxAttempts || 1,
-        ShowAnswersAfter: formData.showAnswersAfter || 0,
+        ShowAnswersAfter: formData.showAnswersAfter, // 0 = Sau khi nộp bài, 1 = Sau khi chấm, 2 = Không bao giờ
         DueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
         IsPublished: formData.isPublished !== undefined ? formData.isPublished : false,
         PassingScore: formData.passingScore !== null && formData.passingScore !== undefined ? formData.passingScore : null,
-        ShuffleQuestions: formData.shuffleQuestions !== undefined ? formData.shuffleQuestions : false,
-        ShuffleOptions: formData.shuffleOptions !== undefined ? formData.shuffleOptions : false,
+        ShuffleQuestions: false, // BE chưa hỗ trợ
+        ShuffleOptions: false, // BE chưa hỗ trợ
       };
 
       // Debug: Log payload để verify format
@@ -95,7 +92,7 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
         const errorData = await response.json();
         setError(errorData.Message || 'Có lỗi xảy ra');
       }
-    } catch (err) {
+    } catch {
       setError('Có lỗi xảy ra khi lưu bài tập');
     } finally {
       setLoading(false);
@@ -170,34 +167,20 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
             />
           </div>
 
-          {/* Score and Time */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Điểm tối đa
-              </label>
-              <input
-                type="number"
-                name="maxScore"
-                value={formData.maxScore}
-                onChange={handleChange}
-                min="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Thời gian (phút)
-              </label>
-              <input
-                type="number"
-                name="timeLimit"
-                value={formData.timeLimit}
-                onChange={handleChange}
-                min="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          {/* Time Limit */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Thời gian (phút)
+            </label>
+            <input
+              type="number"
+              name="timeLimit"
+              value={formData.timeLimit}
+              onChange={handleChange}
+              min="1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">Điểm tối đa: 10 (mặc định)</p>
           </div>
 
           {/* Attempts and Passing Score */}
@@ -256,10 +239,9 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value={0}>Không bao giờ</option>
-              <option value={1}>Sau khi nộp bài</option>
-              <option value={2}>Sau hạn nộp</option>
-              <option value={3}>Sau khi chấm điểm</option>
+              <option value={0}>Sau khi nộp bài</option>
+              <option value={1}>Sau khi chấm</option>
+              <option value={2}>Không bao giờ</option>
             </select>
           </div>
 
@@ -278,26 +260,6 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
                   className="mr-2"
                 />
                 <span className="text-sm text-gray-700">Xuất bản ngay</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="shuffleQuestions"
-                  checked={formData.shuffleQuestions}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <span className="text-sm text-gray-700">Xáo trộn câu hỏi</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="shuffleOptions"
-                  checked={formData.shuffleOptions}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <span className="text-sm text-gray-700">Xáo trộn đáp án</span>
               </label>
             </div>
           </div>
