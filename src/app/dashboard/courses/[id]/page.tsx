@@ -443,25 +443,25 @@ function CourseDetailClient() {
             {lessons.length > 0 ? (
               <div className="space-y-3">
                 {lessons.map((lesson: any, index: number) => (
-                  <div key={lesson.id || lesson.Id || index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div className="flex items-center">
-                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                  <div key={lesson.id || lesson.Id || index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
                         <PlayIcon className="h-4 w-4 text-blue-600" />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {lesson.title || lesson.name || `Bài ${index + 1}`}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {lesson.Title || lesson.title || lesson.name || lesson.Name || `Bài ${index + 1}`}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {lesson.duration || lesson.estimatedDuration || 'Không xác định'}
+                          {lesson.VideoDuration || lesson.videoDuration || lesson.Duration || lesson.duration || lesson.estimatedDuration || 'Không xác định'}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        lesson.isPublished !== false ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        (lesson.IsPublished ?? lesson.isPublished ?? false) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {lesson.isPublished !== false ? 'Đã xuất bản' : 'Chưa xuất bản'}
+                        {(lesson.IsPublished ?? lesson.isPublished ?? false) ? 'Đã xuất bản' : 'Chưa xuất bản'}
                       </span>
                     </div>
                   </div>

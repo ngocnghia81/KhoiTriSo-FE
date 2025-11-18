@@ -78,7 +78,14 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await createQuestion(assignmentId, formData);
+    
+    // Normalize: đảm bảo GroupTitle (QuestionType = 3) luôn có DefaultPoints = 0
+    const normalizedFormData = {
+      ...formData,
+      DefaultPoints: formData.QuestionType === 3 ? 0 : formData.DefaultPoints
+    };
+    
+    const result = await createQuestion(assignmentId, normalizedFormData);
     if (result.success) {
       setShowCreateForm(false);
       setFormData({
@@ -144,7 +151,7 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
         <div>
           <h2 className="text-2xl font-semibold">Quản lý câu hỏi</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Tổng số câu hỏi: {questions.length}
+            Tổng số câu hỏi: {questions.filter((q: any) => (q.QuestionType || q.questionType) !== 3).length}
           </p>
         </div>
         <div className="flex gap-2">
@@ -202,16 +209,24 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
                   </label>
                   <Select
                     value={formData.QuestionType.toString()}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, QuestionType: parseInt(value) }))}
+                    onValueChange={(value) => {
+                      const questionType = parseInt(value);
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        QuestionType: questionType,
+                        // Tự động set DefaultPoints = 0 nếu là GroupTitle (3)
+                        DefaultPoints: questionType === 3 ? 0 : prev.DefaultPoints
+                      }));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Trắc nghiệm</SelectItem>
-                      <SelectItem value="2">Đúng/Sai</SelectItem>
-                      <SelectItem value="3">Tự luận</SelectItem>
-                      <SelectItem value="4">Điền khuyết</SelectItem>
+                      <SelectItem value="0">Trắc nghiệm</SelectItem>
+                      <SelectItem value="1">Đúng/Sai</SelectItem>
+                      <SelectItem value="2">Tự luận ngắn</SelectItem>
+                      <SelectItem value="3">Tiêu đề</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -237,16 +252,26 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Điểm số *
+                    Điểm số {formData.QuestionType !== 3 ? '*' : ''}
                   </label>
                   <Input
                     type="number"
                     value={formData.DefaultPoints}
-                    onChange={(e) => setFormData(prev => ({ ...prev, DefaultPoints: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      // Không cho phép nhập điểm nếu là GroupTitle
+                      if (formData.QuestionType === 3) return;
+                      setFormData(prev => ({ ...prev, DefaultPoints: value }));
+                    }}
                     min="0"
                     step="0.1"
-                    required
+                    required={formData.QuestionType !== 3}
+                    disabled={formData.QuestionType === 3}
+                    placeholder={formData.QuestionType === 3 ? 'Tiêu đề không có điểm' : ''}
                   />
+                  {formData.QuestionType === 3 && (
+                    <p className="text-xs text-gray-500 mt-1">Tiêu đề không có điểm số</p>
+                  )}
                 </div>
               </div>
 
@@ -361,6 +386,30 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
             const difficulty = q.DifficultyLevel !== undefined ? q.DifficultyLevel : (q.difficultyLevel || 1);
             const options = q.Options || q.options || q.QuestionOptions || [];
             
+            // QuestionType = 3 (GroupTitle): hiển thị như tiêu đề
+            if (questionType === 3) {
+              return (
+                <div key={questionId || index} className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-semibold text-blue-700">📌 TIÊU ĐỀ</div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(questionId)}
+                      disabled={deleting}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="text-lg font-bold text-blue-900" dangerouslySetInnerHTML={renderHTML(questionContent)} />
+                </div>
+              );
+            }
+            
+            // Tính số thứ tự câu hỏi (không đếm GroupTitle)
+            const questionNumber = questions.slice(0, index + 1).filter((q: any) => (q.QuestionType || q.questionType) !== 3).length;
+            
             return (
               <Card key={questionId || index}>
                 <CardHeader>
@@ -368,7 +417,7 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm font-medium text-gray-500">
-                          Câu {index + 1}
+                          Câu {questionNumber}
                         </span>
                         <Badge className={difficultyConfig[difficulty]?.color || difficultyConfig[1].color}>
                           {difficultyConfig[difficulty]?.label || 'Dễ'}
@@ -397,28 +446,59 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
                 </CardHeader>
                 {(options.length > 0) && (
                   <CardContent>
-                    <div className="space-y-2">
-                      {options.map((opt: any, optIndex: number) => (
-                        <div
-                          key={optIndex}
-                          className={`flex items-center gap-2 p-2 rounded ${
-                            opt.IsCorrect || opt.isCorrect
-                              ? 'bg-green-50 border border-green-200'
-                              : 'bg-gray-50'
-                          }`}
-                        >
-                          <span className="text-sm font-medium w-6">
-                            {String.fromCharCode(65 + optIndex)}.
-                          </span>
-                          <span className="flex-1 text-sm option-math" dangerouslySetInnerHTML={renderHTML(
-                            cleanOption(opt.OptionText || opt.optionText || opt.OptionContent || opt.optionContent || '')
-                          )} />
-                          {(opt.IsCorrect || opt.isCorrect) && (
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    {questionType === 2 ? (
+                      // QuestionType = 2 (ShortAnswer): hiển thị đáp số, split bởi "|"
+                      <div className="mt-2">
+                        <div className="text-xs text-gray-500 mb-1 font-medium">Đáp số:</div>
+                        {options.map((opt: any, optIndex: number) => {
+                          const optionText = opt.OptionText || opt.optionText || opt.OptionContent || opt.optionContent || '';
+                          // Split bởi "|" nếu có
+                          const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
+                          
+                          return (
+                            <div key={optIndex} className="space-y-1">
+                              {answers.length > 0 ? (
+                                answers.map((answer: string, answerIndex: number) => (
+                                  <div key={answerIndex} className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                                    <span className="text-sm font-medium text-green-700">•</span>
+                                    <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                                  <span className="text-sm font-medium text-green-700">•</span>
+                                  <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      // QuestionType khác (Trắc nghiệm/Đúng-Sai): render options với checkbox
+                      <div className="space-y-2">
+                        {options.map((opt: any, optIndex: number) => (
+                          <div
+                            key={optIndex}
+                            className={`flex items-center gap-2 p-2 rounded ${
+                              opt.IsCorrect || opt.isCorrect
+                                ? 'bg-green-50 border border-green-200'
+                                : 'bg-gray-50'
+                            }`}
+                          >
+                            <span className="text-sm font-medium w-6">
+                              {String.fromCharCode(65 + optIndex)}.
+                            </span>
+                            <span className="flex-1 text-sm option-math" dangerouslySetInnerHTML={renderHTML(
+                              cleanOption(opt.OptionText || opt.optionText || opt.OptionContent || opt.optionContent || '')
+                            )} />
+                            {(opt.IsCorrect || opt.isCorrect) && (
+                              <CheckCircle2 className="w-4 h-4 text-green-600" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {q.ExplanationContent || q.explanationContent ? (
                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-sm font-medium text-blue-900 mb-1">Giải thích:</p>

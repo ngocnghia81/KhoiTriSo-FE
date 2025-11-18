@@ -84,10 +84,9 @@ export default function AssignmentDetailPage() {
   }
 
   const showAnswersAfterLabels: Record<number, string> = {
-    0: 'Không bao giờ',
-    1: 'Sau khi nộp bài',
-    2: 'Sau hạn nộp',
-    3: 'Sau khi chấm điểm'
+    0: 'Sau khi nộp bài',
+    1: 'Sau khi chấm',
+    2: 'Không bao giờ'
   };
 
   return (
