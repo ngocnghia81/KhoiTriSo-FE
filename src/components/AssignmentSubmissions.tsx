@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, CheckCircle2, XCircle, Clock, User, ChevronDown, ChevronRight } from 'lucide-react';
+import { Eye, CheckCircle2, XCircle, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Table,
   TableBody,
@@ -432,7 +433,7 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12"></TableHead>
-                <TableHead>Người làm</TableHead>
+                <TableHead>Thông tin học sinh</TableHead>
                 <TableHead>Số lần làm</TableHead>
                 <TableHead>Điểm cao nhất</TableHead>
                 <TableHead>Điểm trung bình</TableHead>
@@ -488,11 +489,40 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                         </Button>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium">
-                            User #{userId}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const firstSubmission = sortedSubmissions[0];
+                            const userFullName = firstSubmission?.UserFullName ?? firstSubmission?.userFullName;
+                            const userAvatar = firstSubmission?.UserAvatar ?? firstSubmission?.userAvatar;
+                            const userName = firstSubmission?.UserName ?? firstSubmission?.userName;
+                            const displayName = userFullName || userName || `Học sinh #${userId}`;
+                            const initials = userFullName 
+                              ? userFullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                              : userName 
+                                ? userName.charAt(0).toUpperCase()
+                                : userId.toString();
+                            
+                            return (
+                              <>
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={userAvatar || '/images/default-avatar.svg'} alt={displayName} />
+                                  <AvatarFallback className="bg-blue-500 text-white text-xs">
+                                    {initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-sm">
+                                    {displayName}
+                                  </span>
+                                  {userName && userFullName && (
+                                    <span className="text-xs text-gray-500">
+                                      @{userName}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>
