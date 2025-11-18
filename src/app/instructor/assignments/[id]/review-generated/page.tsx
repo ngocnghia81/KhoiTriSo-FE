@@ -19,16 +19,117 @@ export default function ReviewGeneratedPage() {
   const [questions, setQuestions] = useState<AIGeneratedQuestion[]>([]);
   const [showMathKb, setShowMathKb] = useState(false);
   const [mathTarget, setMathTarget] = useState<{ q: number; field: 'QuestionContent'|'ExplanationContent'|'OptionText'; o?: number; token?: string } | null>(null);
+  
+  // Điểm theo từng question type (0: Trắc nghiệm, 1: Đúng/Sai, 2: Tự luận ngắn)
+  const [pointsByType, setPointsByType] = useState<Record<number, number>>({
+    0: 0, // Trắc nghiệm
+    1: 0, // Đúng/Sai
+    2: 0, // Tự luận ngắn
+  });
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(storageKey);
+      console.log('Review page - Loading from sessionStorage:', storageKey, 'Raw:', raw ? 'exists' : 'null');
       if (raw) {
         const parsed = JSON.parse(raw);
-        setQuestions(parsed.questions || []);
+        const loadedQuestions = parsed.questions || [];
+        console.log('Review page - Loaded questions count:', loadedQuestions.length);
+        // Đảm bảo mặc định không có điểm (set về 0)
+        const questionsWithoutPoints = loadedQuestions.map((q: AIGeneratedQuestion) => ({
+          ...q,
+          DefaultPoints: 0,
+        }));
+        setQuestions(questionsWithoutPoints);
+        console.log('Review page - Questions set:', questionsWithoutPoints.length);
+      } else {
+        console.warn('Review page - No data in sessionStorage for key:', storageKey);
       }
-    } catch {}
+    } catch (error) {
+      console.error('Review page - Error loading from sessionStorage:', error);
+    }
   }, [storageKey]);
+
+  // Tính số lượng câu hỏi theo từng loại (không tính tiêu đề)
+  const questionCountsByType = React.useMemo(() => {
+    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+    questions.forEach(q => {
+      if (q.QuestionType !== 3 && q.QuestionType >= 0 && q.QuestionType <= 2) {
+        counts[q.QuestionType] = (counts[q.QuestionType] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [questions]);
+
+  // Khi thay đổi điểm theo loại, tự động chia lại
+  useEffect(() => {
+    // Chỉ chạy nếu questions đã được load (tránh chạy khi questions rỗng)
+    if (questions.length === 0) return;
+    
+    // Tính lại questionCountsByType trực tiếp trong useEffect để tránh dependency loop
+    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+    questions.forEach(q => {
+      if (q.QuestionType !== 3 && q.QuestionType >= 0 && q.QuestionType <= 2) {
+        counts[q.QuestionType] = (counts[q.QuestionType] || 0) + 1;
+      }
+    });
+    
+    // Chỉ chia nếu có ít nhất 1 loại có điểm > 0
+    const hasAnyPoints = Object.values(pointsByType).some(p => p > 0);
+    if (hasAnyPoints) {
+      const updatedQuestions = questions.map(q => {
+        // Bỏ qua tiêu đề
+        if (q.QuestionType === 3) return q;
+        
+        const type = q.QuestionType;
+        const totalPointsForType = pointsByType[type] || 0;
+        const countForType = counts[type] || 1;
+        
+        // Chia đều điểm cho các câu trong cùng loại
+        const pointsPerQuestion = countForType > 0 ? totalPointsForType / countForType : 0;
+        
+        // Chỉ update nếu điểm thay đổi (tránh vòng lặp)
+        const newPoints = pointsPerQuestion > 0 ? pointsPerQuestion : 0;
+        if (Math.abs((q.DefaultPoints || 0) - newPoints) < 0.001) {
+          return q; // Không thay đổi
+        }
+        
+        return {
+          ...q,
+          DefaultPoints: newPoints,
+        } as AIGeneratedQuestion;
+      });
+      
+      // Chỉ set nếu có thay đổi
+      const hasChanges = updatedQuestions.some((q, i) => {
+        if (q.QuestionType === 3) return false;
+        return Math.abs((q.DefaultPoints || 0) - (questions[i].DefaultPoints || 0)) >= 0.001;
+      });
+      
+      if (hasChanges) {
+        setQuestions(updatedQuestions);
+      }
+    } else {
+      // Nếu tất cả = 0, xóa điểm của tất cả câu (set về 0)
+      const hasNonZeroPoints = questions.some(q => q.QuestionType !== 3 && (q.DefaultPoints || 0) > 0);
+      if (hasNonZeroPoints) {
+        const updatedQuestions = questions.map(q => {
+          if (q.QuestionType === 3) return q; // Bỏ qua tiêu đề
+          return {
+            ...q,
+            DefaultPoints: 0, // Set về 0 thay vì undefined để tránh lỗi type
+          } as AIGeneratedQuestion;
+        });
+        setQuestions(updatedQuestions);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pointsByType]); // Chỉ phụ thuộc vào pointsByType, không phụ thuộc questionCountsByType
+
+  // Tính tổng điểm hiện tại
+  const totalPoints = React.useMemo(() => {
+    return Object.values(pointsByType).reduce((sum, p) => sum + (p || 0), 0);
+  }, [pointsByType]);
 
   // MathJax loader
   useEffect(() => {
@@ -101,15 +202,18 @@ export default function ReviewGeneratedPage() {
 
   // Validation function for DefaultPoints (matching backend logic)
   const validateDefaultPoints = (questions: AIGeneratedQuestion[]): { valid: boolean; error?: string } => {
-    if (questions.length === 0) {
+    // Lọc bỏ QuestionType 3 (tiêu đề) vì tiêu đề không có điểm
+    const actualQuestions = questions.filter(q => q.QuestionType !== 3);
+    
+    if (actualQuestions.length === 0) {
       return { valid: false, error: 'Không có câu hỏi để import' };
     }
 
-    const questionsWithPoints = questions.filter(
+    const questionsWithPoints = actualQuestions.filter(
       q => q.DefaultPoints != null && q.DefaultPoints > 0
     );
-    const questionsWithoutPoints = questions.filter(
-      q => q.DefaultPoints == null || q.DefaultPoints <= 0
+    const questionsWithoutPoints = actualQuestions.filter(
+      q => q.DefaultPoints == null || q.DefaultPoints <= 0 || q.DefaultPoints === 0
     );
 
     // Rule 3.1: All questions must either all have DefaultPoints OR all don't have DefaultPoints
@@ -121,7 +225,7 @@ export default function ReviewGeneratedPage() {
     }
 
     // If all have DefaultPoints, validate that total = 10
-    if (questionsWithPoints.length === questions.length) {
+    if (questionsWithPoints.length === actualQuestions.length) {
       const totalPoints = questionsWithPoints.reduce((sum, q) => sum + (q.DefaultPoints || 0), 0);
       if (Math.abs(totalPoints - 10) > 0.01) {
         return {
@@ -144,7 +248,13 @@ export default function ReviewGeneratedPage() {
       return;
     }
 
-    const res = await batchInsert(id, { Questions: questions });
+    // Normalize questions: đảm bảo GroupTitle (QuestionType === 3) luôn có DefaultPoints = 0
+    const normalizedQuestions = questions.map(q => ({
+      ...q,
+      DefaultPoints: q.QuestionType === 3 ? 0 : q.DefaultPoints
+    }));
+
+    const res = await batchInsert(id, { Questions: normalizedQuestions });
     if (res.success) {
       try { sessionStorage.removeItem(storageKey); } catch {}
       router.push(`/instructor/assignments/${id}`);
@@ -254,35 +364,159 @@ export default function ReviewGeneratedPage() {
         {validationError && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-sm text-red-700">{validationError}</div>}
         {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
 
+        {/* Phân bổ điểm theo loại câu hỏi */}
+        <div className="mb-6 p-4 bg-white border rounded-lg shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Phân bổ điểm theo loại câu hỏi</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Trắc nghiệm (Loại 0)
+                <span className="text-xs text-gray-500 ml-1">({questionCountsByType[0]} câu)</span>
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={pointsByType[0] || ''}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value) || 0;
+                  setPointsByType(prev => ({ ...prev, 0: value }));
+                }}
+                className="w-full"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Đúng/Sai (Loại 1)
+                <span className="text-xs text-gray-500 ml-1">({questionCountsByType[1]} câu)</span>
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={pointsByType[1] || ''}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value) || 0;
+                  setPointsByType(prev => ({ ...prev, 1: value }));
+                }}
+                className="w-full"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tự luận ngắn (Loại 2)
+                <span className="text-xs text-gray-500 ml-1">({questionCountsByType[2]} câu)</span>
+              </label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={pointsByType[2] || ''}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value) || 0;
+                  setPointsByType(prev => ({ ...prev, 2: value }));
+                }}
+                className="w-full"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <span className="font-medium">Tổng điểm: </span>
+              <span className={Math.abs(totalPoints - 10) < 0.01 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                {totalPoints.toFixed(2)} / 10.00
+              </span>
+            </div>
+            {Math.abs(totalPoints - 10) >= 0.01 && (
+              <div className="text-xs text-red-600">
+                Tổng điểm phải bằng 10
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* One-column, liền mạch: preview + click-to-edit + quick fields */}
         <div className="space-y-4">
-          {questions.map((q, qi) => (
-            <div key={qi} className="bg-white border rounded p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">Câu {qi+1}</div>
-                <div className="flex items-center gap-2">
-                  {advanced ? (
-                    <Input className="w-16" type="number" title="Loại" value={q.QuestionType} onChange={e => updateQuestion(qi, { QuestionType: parseInt(e.target.value||'1') } as any)} />
-                  ) : (
-                    <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Loại: ${getQuestionTypeName(q.QuestionType)}`}>
-                      {getQuestionTypeName(q.QuestionType)}
+          {questions.map((q, qi) => {
+            // Tính số thứ tự câu hỏi (không đếm QuestionType 3 - tiêu đề)
+            const questionNumber = questions.slice(0, qi + 1).filter(q => q.QuestionType !== 3).length;
+            
+            // QuestionType 3 = Tiêu đề: hiển thị như header, không phải câu hỏi
+            if (q.QuestionType === 3) {
+              return (
+                <div key={qi} className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-semibold text-blue-700">📌 TIÊU ĐỀ</div>
+                    <div className="flex items-center gap-2">
+                      {advanced && (
+                        <Input className="w-16" type="number" title="Loại" value={q.QuestionType} onChange={e => updateQuestion(qi, { QuestionType: parseInt(e.target.value||'3') } as any)} />
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setQuestions(prev => prev.filter((_, i) => i !== qi))}>Xóa</Button>
                     </div>
-                  )}
-                  {advanced ? (
-                    <Input className="w-16" type="number" title="Độ khó" value={q.DifficultyLevel} onChange={e => updateQuestion(qi, { DifficultyLevel: parseInt(e.target.value||'1') } as any)} />
-                  ) : (
-                    <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Độ khó: ${q.DifficultyLevel}`}>
-                      {q.DifficultyLevel}
-                    </div>
-                  )}
-                  <Input className="w-20" type="number" step="0.1" title="Điểm" value={q.DefaultPoints} onChange={e => updateQuestion(qi, { DefaultPoints: parseFloat(e.target.value||'1') } as any)} />
-                  <Button size="sm" variant="outline" onClick={() => setQuestions(prev => prev.filter((_, i) => i !== qi))}>Xóa</Button>
+                  </div>
+                  <div className="text-lg font-bold text-blue-900 cursor-pointer" onClick={(e) => onPreviewClick(qi, 'QuestionContent', e)} dangerouslySetInnerHTML={{ __html: renderRich(q.QuestionContent) }} />
                 </div>
-              </div>
+              );
+            }
 
-              <div className="prose max-w-none cursor-pointer" onClick={(e) => onPreviewClick(qi, 'QuestionContent', e)} dangerouslySetInnerHTML={{ __html: renderRich(q.QuestionContent) }} />
+            // Các loại câu hỏi khác
+            return (
+              <div key={qi} className="bg-white border rounded p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">Câu {questionNumber}</div>
+                  <div className="flex items-center gap-2">
+                    {advanced ? (
+                      <Input className="w-16" type="number" title="Loại" value={q.QuestionType} onChange={e => updateQuestion(qi, { QuestionType: parseInt(e.target.value||'1') } as any)} />
+                    ) : (
+                      <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Loại: ${getQuestionTypeName(q.QuestionType)}`}>
+                        {getQuestionTypeName(q.QuestionType)}
+                      </div>
+                    )}
+                    {advanced ? (
+                      <Input className="w-16" type="number" title="Độ khó" value={q.DifficultyLevel} onChange={e => updateQuestion(qi, { DifficultyLevel: parseInt(e.target.value||'1') } as any)} />
+                    ) : (
+                      <div className="text-xs px-2 py-1 bg-gray-100 rounded" title={`Độ khó: ${q.DifficultyLevel}`}>
+                        {q.DifficultyLevel}
+                      </div>
+                    )}
+                    <Input 
+                      className="w-20" 
+                      type="number" 
+                      step="0.1" 
+                      title="Điểm" 
+                      value={q.DefaultPoints && q.DefaultPoints > 0 ? q.DefaultPoints : ''} 
+                      onChange={e => {
+                        const value = parseFloat(e.target.value);
+                        updateQuestion(qi, { DefaultPoints: isNaN(value) ? 0 : value } as any);
+                      }} 
+                    />
+                    <Button size="sm" variant="outline" onClick={() => setQuestions(prev => prev.filter((_, i) => i !== qi))}>Xóa</Button>
+                  </div>
+                </div>
 
-              {q.Options?.length ? (
+                <div className="prose max-w-none cursor-pointer" onClick={(e) => onPreviewClick(qi, 'QuestionContent', e)} dangerouslySetInnerHTML={{ __html: renderRich(q.QuestionContent) }} />
+
+              {/* Render options khác nhau tùy theo loại câu hỏi */}
+              {q.QuestionType === 2 ? (
+                // Loại tự luận ngắn (ShortAnswer): hiển thị đáp số từ optionText (phân tách bởi "|")
+                q.Options?.length ? (
+                  <div className="mt-2">
+                    <div className="text-xs text-gray-500 mb-1">Đáp số:</div>
+                    {q.Options.map((o, oi) => (
+                      <div key={oi} className="flex items-start gap-2">
+                        <div className="flex-1 prose max-w-none cursor-pointer" onClick={() => openMathEditor(qi, 'OptionText', oi, o.OptionText)} dangerouslySetInnerHTML={{ __html: renderRich(o.OptionText) }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : null
+              ) : q.Options?.length ? (
+                // Loại trắc nghiệm/đúng-sai: render options với checkbox
                 <div className="mt-2 space-y-2">
                   {q.Options.map((o, oi) => (
                     <div key={oi} className="flex items-start gap-2">
@@ -296,14 +530,15 @@ export default function ReviewGeneratedPage() {
                 </div>
               ) : null}
 
-              {q.ExplanationContent ? (
-                <div className="mt-3">
-                  <div className="text-xs text-gray-500">Lời giải</div>
-                  <div className="prose max-w-none cursor-pointer" onClick={(e) => onPreviewClick(qi, 'ExplanationContent', e)} dangerouslySetInnerHTML={{ __html: renderRich(q.ExplanationContent) }} />
-                </div>
-              ) : null}
-            </div>
-          ))}
+                {q.ExplanationContent ? (
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500">Lời giải</div>
+                    <div className="prose max-w-none cursor-pointer" onClick={(e) => onPreviewClick(qi, 'ExplanationContent', e)} dangerouslySetInnerHTML={{ __html: renderRich(q.ExplanationContent) }} />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
 
         {showMathKb && (

@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useCourseLessons } from '@/hooks/useLessons';
-import { useImportAssignment } from '@/hooks/useLessons';
+import { useRouter } from 'next/navigation';
+import { useCreateAssignment } from '@/hooks/useAssignments';
+import { useAIGenerateQuestions } from '@/hooks/useAssignments';
+import { useUpload } from '@/hooks/useUpload';
+import { useAuth } from '@/contexts/AuthContext';
 import { XMarkIcon, DocumentArrowUpIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface AssignmentImportModalProps {
@@ -12,17 +15,15 @@ interface AssignmentImportModalProps {
 }
 
 export function AssignmentImportModal({ initialLessonId, onClose, onImported }: AssignmentImportModalProps) {
-  const { importAssignment, loading } = useImportAssignment();
-  const [selectedLessonId, setSelectedLessonId] = useState<number>(initialLessonId);
-  const [courseId, setCourseId] = useState<number>();
+  const router = useRouter();
+  const { user } = useAuth();
+  const { createAssignment, loading: creatingAssignment } = useCreateAssignment();
+  const { generateFromWord, loading: generating } = useAIGenerateQuestions();
+  const { uploadFileWithPresign, uploading: uploadingFile } = useUpload();
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [importResult, setImportResult] = useState<{
-    success: boolean;
-    message: string;
-    data?: any;
-  } | null>(null);
-
-  const { lessons, loading: lessonsLoading, error: lessonsError } = useCourseLessons(courseId || 0);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,50 +33,153 @@ export function AssignmentImportModal({ initialLessonId, onClose, onImported }: 
         return;
       }
       setSelectedFile(file);
-      setImportResult(null);
+      setError(null);
     }
   };
 
   const handleImport = async () => {
     if (!selectedFile) {
-      alert('Vui lòng chọn file Word');
+      setError('Vui lòng chọn file Word');
       return;
     }
-    if (!selectedLessonId) {
-      alert('Vui lòng chọn bài học');
+    if (!initialLessonId) {
+      setError('Vui lòng chọn bài học');
       return;
     }
 
+    setLoading(true);
+    setError(null);
+
     try {
-      const result = await importAssignment(selectedLessonId, selectedFile);
+      // Step 1: Tạo assignment mới với title từ tên file
+      const fileNameWithoutExt = selectedFile.name.replace(/\.docx?$/i, '');
+      const assignmentTitle = fileNameWithoutExt || 'Bài tập mới';
       
-      if (result.success) {
-        setImportResult({
-          success: true,
-          message: 'Import thành công',
-          data: result.data
-        });
-        onImported();
-      } else {
-        setImportResult({
-          success: false,
-          message: result.error || 'Import thất bại'
-        });
-      }
-    } catch (error) {
-      console.error('Import error:', error);
-      setImportResult({
-        success: false,
-        message: 'Có lỗi xảy ra khi import file'
+      const createResult = await createAssignment({
+        lessonId: initialLessonId,
+        title: assignmentTitle,
+        description: `Bài tập được import từ file: ${selectedFile.name}`,
+        maxScore: 10,
+        timeLimit: undefined,
+        maxAttempts: 1,
+        showAnswersAfter: 0, // Sau khi nộp bài
+        dueDate: undefined,
+        isPublished: false,
+        passingScore: undefined,
+        shuffleQuestions: false,
+        shuffleOptions: false,
       });
+
+      if (!createResult.success || !createResult.data) {
+        throw new Error(createResult.error || 'Không thể tạo bài tập');
+      }
+
+      const assignmentId = createResult.data.id;
+
+      // Step 2: Tạo filename mới với timestamp + userid để tránh trùng
+      const timestamp = Date.now();
+      const userId = user?.id || 'unknown';
+      const fileExtension = selectedFile.name.split('.').pop() || 'docx';
+      const newFileName = `${timestamp}_${userId}.${fileExtension}`;
+      
+      // Tạo File mới với tên mới
+      const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
+
+      // Step 3: Upload file Word to Cloudflare Workers
+      console.log('Uploading Word file to Cloudflare Workers...');
+      const uploadResult = await uploadFileWithPresign(renamedFile, {
+        folder: 'word-imports',
+        accessRole: 'GUEST',
+        onProgress: (progress) => {
+          console.log(`Upload progress: ${progress.percentage}%`);
+        }
+      });
+
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || 'Upload file thất bại');
+      }
+
+      console.log('File uploaded successfully, URL:', uploadResult.url);
+
+      // Step 4: Generate questions from Word file using AI
+      const generateResult = await generateFromWord(uploadResult.url);
+      
+      if (!generateResult.success || !generateResult.data) {
+        throw new Error(generateResult.error || 'Không thể tạo câu hỏi từ file');
+      }
+
+      // Step 5: Normalize questions (same logic as ImportQuestionsFromWord)
+      const stripChoicePrefix = (s: string) => (s || '').replace(/^\s*[A-Da-d]\s*[:.\-]\s*/,'').trim();
+      const hasMathMLFragment = (s: string) => /<\s*(mfrac|msup|msub|mi|mn|mo)\b/i.test(s) && !/<\s*math\b/i.test(s);
+      const wrapMathML = (s: string) => {
+        if (!s) return s;
+        if (hasMathMLFragment(s)) {
+          return `<math xmlns="http://www.w3.org/1998/Math/MathML">${s}</math>`;
+        }
+        return s;
+      };
+
+      const toAppQuestion = (q: unknown) => {
+        const qData = q as { QuestionContent?: string; content?: string; ExplanationContent?: string; Explanation?: string; Options?: unknown[]; ContentOptions?: unknown[]; DefaultPoints?: number; QuestionType?: number };
+        const questionContent = qData.QuestionContent ?? qData.content ?? '';
+        const explanation = qData.ExplanationContent ?? qData.Explanation ?? '';
+        const optionsSource = Array.isArray(qData.Options) ? qData.Options : (Array.isArray(qData.ContentOptions) ? qData.ContentOptions : []);
+        const options = optionsSource.map((o: unknown, oi: number) => {
+          const oData = o as { OptionText?: string; Content?: string; content?: string; IsCorrect?: boolean; isCorrect?: boolean; OrderIndex?: number };
+          return {
+            OptionText: stripChoicePrefix(wrapMathML(oData.OptionText ?? oData.Content ?? oData.content ?? '')),
+            IsCorrect: !!(oData.IsCorrect ?? oData.isCorrect),
+            OrderIndex: oData.OrderIndex ?? oi
+          };
+        });
+        return {
+          ...qData,
+          QuestionContent: wrapMathML(questionContent),
+          ExplanationContent: wrapMathML(explanation),
+          DefaultPoints: qData.DefaultPoints ?? 1,
+          QuestionType: qData.QuestionType,
+          Options: options
+        };
+      };
+
+      const normalized = (generateResult.data as unknown[]).map(toAppQuestion);
+      // Không filter QuestionType 3 (tiêu đề) vì review page cần hiển thị cả tiêu đề
+      const filtered = normalized;
+
+      // Step 6: Save to sessionStorage and redirect to review page
+      try {
+        const key = `generated_questions_assignment_${assignmentId}`;
+        console.log('Saving to sessionStorage:', key, 'Questions count:', filtered.length);
+        sessionStorage.setItem(key, JSON.stringify({ questions: filtered }));
+      } catch (e) {
+        console.error('Failed to save to sessionStorage:', e);
+      }
+
+      // Redirect to review page
+      const pathname = window.location.pathname;
+      const isInstructor = pathname.includes('/instructor');
+      const reviewPath = isInstructor 
+        ? `/instructor/assignments/${assignmentId}/review-generated`
+        : `/dashboard/assignments/${assignmentId}/review-generated`;
+      
+      router.push(reviewPath);
+      onImported();
+      onClose();
+    } catch (err) {
+      console.error('Import error:', err);
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi import file');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleClose = () => {
     setSelectedFile(null);
-    setImportResult(null);
+    setError(null);
     onClose();
   };
+
+  const isLoading = loading || creatingAssignment || generating || uploadingFile;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -93,57 +197,6 @@ export function AssignmentImportModal({ initialLessonId, onClose, onImported }: 
         </div>
 
         <div className="space-y-6">
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Bước 1: Chọn khóa học và bài học</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Chọn khóa học *
-                </label>
-                <input
-                  type="number"
-                  placeholder="Nhập ID khóa học"
-                  value={courseId ?? ''}
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
-                    setCourseId(Number.isNaN(value) ? undefined : value);
-                    setSelectedLessonId(0);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Chọn bài học *
-                </label>
-                {courseId ? (
-                  lessonsLoading ? (
-                    <p className="text-sm text-gray-500">Đang tải danh sách bài học…</p>
-                  ) : lessonsError ? (
-                    <p className="text-sm text-red-600">{lessonsError}</p>
-                  ) : lessons.length > 0 ? (
-                    <select
-                      value={selectedLessonId || ''}
-                      onChange={(e) => setSelectedLessonId(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Chọn bài học...</option>
-                      {lessons.map((lesson) => (
-                        <option key={lesson.id} value={lesson.id}>
-                          {lesson.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="text-sm text-gray-500">Không tìm thấy bài học nào.</p>
-                  )
-                ) : (
-                  <p className="text-sm text-gray-500">Vui lòng nhập ID khóa học trước.</p>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* File Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -204,46 +257,14 @@ export function AssignmentImportModal({ initialLessonId, onClose, onImported }: 
             </div>
           </div>
 
-          {/* Import Result */}
-          {importResult && (
-            <div className={`p-4 border rounded-lg ${
-              importResult.success 
-                ? 'bg-green-50 border-green-200' 
-                : 'bg-red-50 border-red-200'
-            }`}>
+          {/* Error Display */}
+          {error && (
+            <div className="p-4 border rounded-lg bg-red-50 border-red-200">
               <div className="flex items-center">
-                {importResult.success ? (
-                  <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
-                ) : (
                   <XCircleIcon className="h-5 w-5 text-red-500 mr-2" />
-                )}
                 <div className="flex-1">
-                  <p className={`text-sm font-medium ${
-                    importResult.success ? 'text-green-800' : 'text-red-800'
-                  }`}>
-                    {importResult.success ? 'Import thành công!' : 'Import thất bại'}
-                  </p>
-                  <p className={`text-xs ${
-                    importResult.success ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {importResult.message}
-                  </p>
-                  {importResult.success && importResult.data && (
-                    <div className="mt-2 text-xs text-green-600">
-                      <p>Assignment ID: {importResult.data.assignmentId}</p>
-                      <p>Số câu hỏi: {importResult.data.questionCount}</p>
-                      {importResult.data.warnings && importResult.data.warnings.length > 0 && (
-                        <div className="mt-1">
-                          <p className="font-medium">Cảnh báo:</p>
-                          <ul className="list-disc list-inside">
-                            {importResult.data.warnings.map((warning: string, index: number) => (
-                              <li key={index}>{warning}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-sm font-medium text-red-800">Lỗi</p>
+                  <p className="text-xs text-red-600">{error}</p>
                 </div>
               </div>
             </div>
@@ -253,19 +274,18 @@ export function AssignmentImportModal({ initialLessonId, onClose, onImported }: 
           <div className="flex justify-end space-x-3">
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {importResult?.success ? 'Đóng' : 'Hủy'}
+              Hủy
             </button>
-            {!importResult?.success && (
               <button
                 onClick={handleImport}
-                disabled={!selectedFile || loading}
+              disabled={!selectedFile || !initialLessonId || isLoading}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Đang import...' : 'Import bài tập'}
+              {isLoading ? 'Đang xử lý...' : 'Import bài tập'}
               </button>
-            )}
           </div>
         </div>
       </div>

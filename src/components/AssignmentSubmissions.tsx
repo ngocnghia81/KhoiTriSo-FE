@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Eye, CheckCircle2, XCircle, Clock, User } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Eye, CheckCircle2, XCircle, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Table,
   TableBody,
@@ -16,11 +18,10 @@ import {
 import {
   useAssignmentSubmissions,
   useGradeAssignment,
-  AssignmentGradingRequest,
-  QuestionGradingRequest
+  AssignmentGradingRequest
 } from '@/hooks/useAssignments';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { API_URLS } from '@/lib/api-config';
 
 interface AssignmentSubmissionsProps {
   assignmentId: number;
@@ -35,61 +36,60 @@ interface GradingModalProps {
 }
 
 function GradingModal({ submission, questions, onClose, onSave, loading }: GradingModalProps) {
-  const [feedback, setFeedback] = useState(submission.Feedback || submission.feedback || '');
-  const [questionGrades, setQuestionGrades] = useState<Record<number, { points: number; feedback: string }>>(() => {
-    const grades: Record<number, { points: number; feedback: string }> = {};
-    submission.Answers?.forEach((answer: any) => {
-      const questionId = answer.QuestionId || answer.questionId;
-      if (questionId) {
-        grades[questionId] = {
-          points: answer.PointsEarned || answer.pointsEarned || 0,
-          feedback: answer.Feedback || answer.feedback || ''
-        };
-      }
-    });
-    return grades;
-  });
 
-  const handleGradeChange = (questionId: number, points: number) => {
-    setQuestionGrades(prev => ({
-      ...prev,
-      [questionId]: {
-        points,
-        feedback: prev[questionId]?.feedback || ''
-      }
-    }));
-  };
+  // Helper: render raw HTML/MathML safely
+  const renderHTML = (html?: string) => ({ __html: (html ?? '').trim() });
 
-  const handleFeedbackChange = (questionId: number, feedback: string) => {
-    setQuestionGrades(prev => ({
-      ...prev,
-      [questionId]: {
-        points: prev[questionId]?.points || 0,
-        feedback
-      }
-    }));
-  };
+  // Load MathJax for MathML rendering
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+    if (!w.MathJax) {
+      w.MathJax = {
+        loader: { load: ['input/mml', 'output/chtml'] },
+        options: {
+          renderActions: { addMenu: [0, '', ''] },
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'tex2jax_ignore',
+          processHtmlClass: 'tex2jax_process',
+        },
+        chtml: { scale: 1, displayAlign: 'center' },
+        startup: {
+          ready: () => {
+            if (w.MathJax && w.MathJax.startup && w.MathJax.startup.defaultReady) {
+              w.MathJax.startup.defaultReady();
+            }
+          },
+        },
+      };
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/mml-chtml.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Typeset whenever content changes
+  useEffect(() => {
+    const w = window as any;
+    if (w && w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+      w.MathJax.typesetPromise?.();
+    }
+  }, [questions, submission]);
+
 
   const handleSubmit = async () => {
+    // Backend sẽ tự động chấm tất cả câu hỏi bằng CalculateAndSaveScore
+    // Frontend chỉ cần gửi AttemptId
     const gradingData: AssignmentGradingRequest = {
-      AttemptId: submission.Id || submission.id,
-      QuestionGrades: questions.map(q => {
-        const questionId = q.Id || q.id;
-        const grade = questionGrades[questionId] || { points: 0, feedback: '' };
-        return {
-          QuestionId: questionId,
-          PointsEarned: grade.points,
-          Feedback: grade.feedback || undefined
-        };
-      }),
-      Feedback: feedback || undefined
+      AttemptId: submission.Id ?? submission.id
     };
 
     await onSave(gradingData);
   };
 
   const getAnswerForQuestion = (questionId: number) => {
-    return submission.Answers?.find((a: any) => (a.QuestionId || a.questionId) === questionId);
+    return submission.Answers?.find((a: any) => (a.QuestionId ?? a.questionId) === questionId);
   };
 
   return (
@@ -107,28 +107,34 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
         <div className="space-y-4 mb-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="font-medium">Lần làm:</span> {submission.AttemptNumber || submission.attemptNumber}
+              <span className="font-medium">Lần làm:</span> {submission.AttemptNumber ?? submission.attemptNumber ?? 'N/A'}
             </div>
             <div>
               <span className="font-medium">Thời gian:</span>{' '}
-              {submission.TimeSpent ? `${Math.floor(submission.TimeSpent / 60)} phút` : 'N/A'}
+              {submission.TimeSpent ? `${Math.floor((submission.TimeSpent as number) / 60)} phút` : 'N/A'}
             </div>
           </div>
         </div>
 
         <div className="space-y-4 mb-6">
-          {questions.map((q: any, index: number) => {
-            const questionId = q.Id || q.id;
+          {questions
+            .filter((q: any) => {
+              const questionType = q.QuestionType ?? q.questionType;
+              return questionType !== 3 && questionType !== null && questionType !== undefined;
+            })
+            .map((q: any, index: number) => {
+            const questionId = q.Id ?? q.id;
+            const questionType = q.QuestionType ?? q.questionType ?? 0;
             const answer = getAnswerForQuestion(questionId);
-            const grade = questionGrades[questionId] || { points: 0, feedback: '' };
-            const maxPoints = q.DefaultPoints || q.defaultPoints || 1;
+            const maxPoints = q.DefaultPoints ?? q.defaultPoints ?? 1;
+            const options = q.Options ?? q.options ?? q.QuestionOptions ?? [];
 
             return (
               <Card key={questionId} className="border-l-4 border-l-blue-500">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">
-                      Câu {index + 1}: {q.QuestionContent || q.questionContent}
+                      <span dangerouslySetInnerHTML={renderHTML(`Câu ${index + 1}: ${q.QuestionContent ?? q.questionContent ?? ''}`)} />
                     </CardTitle>
                     <Badge variant="outline">
                       Tối đa: {maxPoints} điểm
@@ -138,15 +144,19 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
                 <CardContent className="space-y-4">
                   {answer && (
                     <div>
-                      <p className="text-sm font-medium mb-2">Câu trả lời:</p>
+                      <p className="text-sm font-medium mb-2">Câu trả lời của học sinh:</p>
                       <div className="p-3 bg-gray-50 rounded border">
-                        <p className="text-sm">
-                          {answer.AnswerText || answer.answerText || 
-                           answer.OptionId ? `Đã chọn đáp án ${answer.OptionId}` : 'Không có câu trả lời'}
-                        </p>
+                        {questionType === 2 ? (
+                          <div className="text-sm" dangerouslySetInnerHTML={renderHTML(answer.AnswerText ?? answer.answerText ?? 'Không có câu trả lời')} />
+                        ) : (
+                          <p className="text-sm">
+                            {answer.AnswerText ?? answer.answerText ?? 
+                             (answer.OptionId != null ? `Đã chọn đáp án ${answer.OptionId}` : 'Không có câu trả lời')}
+                          </p>
+                        )}
                         {answer.IsCorrect !== undefined && (
                           <div className="mt-2">
-                            {answer.IsCorrect || answer.isCorrect ? (
+                            {(answer.IsCorrect ?? answer.isCorrect) ? (
                               <Badge className="bg-green-100 text-green-700">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
                                 Đúng
@@ -163,30 +173,58 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
                     </div>
                   )}
 
+                  {questionType === 2 && options.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-2">Đáp án đúng:</p>
+                      <div className="p-3 bg-green-50 rounded border border-green-200">
+                        {options.map((opt: any, optIndex: number) => {
+                          const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
+                          const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
+                          if (!isCorrect) return null;
+                          
+                          // Split bởi "|" nếu có
+                          const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
+                          
+                          return (
+                            <div key={optIndex} className="space-y-1">
+                              {answers.length > 0 ? (
+                                answers.map((answer: string, answerIndex: number) => (
+                                  <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                    <span className="text-sm font-medium text-green-700">•</span>
+                                    <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                  <span className="text-sm font-medium text-green-700">•</span>
+                                  <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Điểm số (0 - {maxPoints})
+                        Điểm số (tự động chấm)
                       </label>
-                      <Input
-                        type="number"
-                        value={grade.points}
-                        onChange={(e) => handleGradeChange(questionId, parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max={maxPoints}
-                        step="0.1"
-                      />
+                      <div className="p-2 bg-gray-100 rounded border text-sm">
+                        {answer?.PointsEarned !== undefined && answer?.PointsEarned !== null
+                          ? `${answer.PointsEarned ?? answer.pointsEarned ?? 0} / ${maxPoints}`
+                          : 'Chưa chấm (sẽ tự động chấm)'}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Nhận xét
                       </label>
-                      <Textarea
-                        value={grade.feedback}
-                        onChange={(e) => handleFeedbackChange(questionId, e.target.value)}
-                        placeholder="Nhận xét cho câu trả lời này..."
-                        rows={2}
-                      />
+                      <div className="p-2 bg-gray-50 rounded border text-sm text-gray-600">
+                        {answer?.Feedback ?? answer?.feedback ?? 'Chưa có nhận xét'}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -195,17 +233,6 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
           })}
         </div>
 
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
-            Nhận xét tổng thể
-          </label>
-          <Textarea
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="Nhận xét chung về bài làm..."
-            rows={3}
-          />
-        </div>
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
@@ -221,29 +248,126 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
 }
 
 export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsProps) {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const { data, loading, error, refetch } = useAssignmentSubmissions(assignmentId, 1, 50);
   const { gradeAssignment, loading: grading } = useGradeAssignment();
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [pendingData, setPendingData] = useState<any>(null);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'graded'>('all');
 
   const submissions = data?.Items || data?.items || data?.Result || [];
+  const pendingSubmissions = pendingData?.Items || pendingData?.items || pendingData?.Result || [];
+
+  const fetchPendingSubmissions = async () => {
+    try {
+      setPendingLoading(true);
+      const response = await authenticatedFetch(`${API_URLS.ASSIGNMENTS_BY_ID_BASE}/${assignmentId}/submissions/pending-grading?page=1&pageSize=50`);
+      const result = await response.json();
+      if (response.ok && result.Result) {
+        setPendingData(result.Result);
+      }
+    } catch (err) {
+      console.error('Error fetching pending submissions:', err);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'pending') {
+      fetchPendingSubmissions();
+    }
+  }, [activeTab, assignmentId, authenticatedFetch]);
+
+  const gradedSubmissions = submissions.filter((s: any) => {
+    const score = s.Score || s.score;
+    return score !== null && score !== undefined;
+  });
+
+  const allPendingSubmissions = pendingSubmissions.filter((s: any) => {
+    const score = s.Score || s.score;
+    return score === null || score === undefined;
+  });
+
+  const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set());
+
+  // Group submissions by userId
+  const groupedByUser = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    submissions.forEach((submission: any) => {
+      const userId = submission.UserId || submission.userId;
+      if (userId) {
+        if (!grouped.has(userId)) {
+          grouped.set(userId, []);
+        }
+        grouped.get(userId)!.push(submission);
+      }
+    });
+    return grouped;
+  }, [submissions]);
+
+  // Group pending submissions by userId
+  const groupedPendingByUser = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    pendingSubmissions.forEach((submission: any) => {
+      const userId = submission.UserId || submission.userId;
+      if (userId) {
+        if (!grouped.has(userId)) {
+          grouped.set(userId, []);
+        }
+        grouped.get(userId)!.push(submission);
+      }
+    });
+    return grouped;
+  }, [pendingSubmissions]);
+
+  // Group graded submissions by userId
+  const groupedGradedByUser = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    gradedSubmissions.forEach((submission: any) => {
+      const userId = submission.UserId || submission.userId;
+      if (userId) {
+        if (!grouped.has(userId)) {
+          grouped.set(userId, []);
+        }
+        grouped.get(userId)!.push(submission);
+      }
+    });
+    return grouped;
+  }, [gradedSubmissions]);
+
+  const toggleUserExpansion = (userId: number) => {
+    setExpandedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
 
   const handleGrade = async (submission: any) => {
     // Fetch questions for this submission
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/assignments/${assignmentId}/questions`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authenticatedFetch(`${API_URLS.ASSIGNMENTS_BY_ID_BASE}/${assignmentId}/questions`);
       const result = await response.json();
       if (response.ok && result.Result) {
-        setQuestions(Array.isArray(result.Result) ? result.Result : []);
+        const allQuestions = Array.isArray(result.Result) ? result.Result : [];
+        // Filter out GroupTitle (QuestionType = 3) khi hiển thị để chấm
+        const actualQuestions = allQuestions.filter((q: any) => {
+          const questionType = q.QuestionType ?? q.questionType;
+          return questionType !== 3 && questionType !== null && questionType !== undefined;
+        });
+        setQuestions(actualQuestions);
         setSelectedSubmission(submission);
       }
     } catch (err) {
       console.error('Error fetching questions:', err);
+      alert('Không thể tải câu hỏi để chấm điểm');
     }
   };
 
@@ -289,111 +413,300 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
     );
   }
 
+  const renderSubmissionsTable = (groupedMap: Map<number, any[]>, showGraded: boolean = true) => {
+    if (groupedMap.size === 0) {
+      return (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-gray-500">
+              {showGraded ? 'Chưa có bài nộp đã chấm.' : 'Chưa có bài nộp chưa chấm.'}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12"></TableHead>
+                <TableHead>Thông tin học sinh</TableHead>
+                <TableHead>Số lần làm</TableHead>
+                <TableHead>Điểm cao nhất</TableHead>
+                <TableHead>Điểm trung bình</TableHead>
+                <TableHead>Đã chấm</TableHead>
+                <TableHead>Chưa chấm</TableHead>
+                <TableHead>Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from(groupedMap.entries()).map(([userId, userSubmissions]) => {
+                const sortedSubmissions = [...userSubmissions].sort((a, b) => {
+                  const attemptA = a.AttemptNumber || a.attemptNumber || 0;
+                  const attemptB = b.AttemptNumber || b.attemptNumber || 0;
+                  return attemptB - attemptA; // Mới nhất trước
+                });
+
+                const maxScore = sortedSubmissions[0]?.MaxScore || sortedSubmissions[0]?.maxScore || 100;
+                const scores = sortedSubmissions
+                  .map((s: any) => s.Score || s.score)
+                  .filter((s: any) => s !== null && s !== undefined) as number[];
+                
+                const bestScore = scores.length > 0 ? Math.max(...scores) : null;
+                const avgScore = scores.length > 0 
+                  ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+                  : null;
+                
+                const gradedCount = sortedSubmissions.filter((s: any) => {
+                  const score = s.Score || s.score;
+                  return score !== null && score !== undefined;
+                }).length;
+                
+                const pendingCount = sortedSubmissions.filter((s: any) => {
+                  const score = s.Score || s.score;
+                  return score === null || score === undefined;
+                }).length;
+
+                const isExpanded = expandedUsers.has(userId);
+
+                return (
+                  <React.Fragment key={userId}>
+                    <TableRow className="bg-gray-50">
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleUserExpansion(userId)}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const firstSubmission = sortedSubmissions[0];
+                            const userFullName = firstSubmission?.UserFullName ?? firstSubmission?.userFullName;
+                            const userAvatar = firstSubmission?.UserAvatar ?? firstSubmission?.userAvatar;
+                            const userName = firstSubmission?.UserName ?? firstSubmission?.userName;
+                            const displayName = userFullName || userName || `Học sinh #${userId}`;
+                            const initials = userFullName 
+                              ? userFullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                              : userName 
+                                ? userName.charAt(0).toUpperCase()
+                                : userId.toString();
+                            
+                            return (
+                              <>
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={userAvatar || '/images/default-avatar.svg'} alt={displayName} />
+                                  <AvatarFallback className="bg-blue-500 text-white text-xs">
+                                    {initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-sm">
+                                    {displayName}
+                                  </span>
+                                  {userName && userFullName && (
+                                    <span className="text-xs text-gray-500">
+                                      @{userName}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{sortedSubmissions.length}</span>
+                      </TableCell>
+                      <TableCell>
+                        {bestScore !== null ? (
+                          <span className={`font-medium ${getScoreColor(bestScore, maxScore)}`}>
+                            {bestScore}/{maxScore}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Chưa có</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {avgScore !== null ? (
+                          <span className="text-sm">{avgScore}/{maxScore}</span>
+                        ) : (
+                          <span className="text-gray-400">Chưa có</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{gradedCount}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {pendingCount > 0 ? (
+                          <Badge variant="outline" className="bg-yellow-50">{pendingCount}</Badge>
+                        ) : (
+                          <span className="text-gray-400">0</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {pendingCount > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const firstPending = sortedSubmissions.find((s: any) => {
+                                const score = s.Score || s.score;
+                                return score === null || score === undefined;
+                              });
+                              if (firstPending) {
+                                handleGrade(firstPending);
+                              }
+                            }}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Chấm điểm
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && sortedSubmissions.map((submission: any) => {
+                      const attemptId = submission.Id || submission.id;
+                      const score = submission.Score || submission.score;
+                      const isCompleted = submission.IsCompleted || submission.isCompleted;
+                      const isGraded = score !== null && score !== undefined;
+
+                      return (
+                        <TableRow key={attemptId} className="bg-white">
+                          <TableCell></TableCell>
+                          <TableCell className="pl-8">
+                            <span className="text-sm text-gray-600">
+                              Lần {submission.AttemptNumber || submission.attemptNumber || 1}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatDate(submission.StartedAt || submission.startedAt)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {submission.CompletedAt || submission.completedAt 
+                              ? formatDate(submission.CompletedAt || submission.completedAt)
+                              : <span className="text-gray-400">Chưa hoàn thành</span>}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`font-medium ${getScoreColor(score, maxScore)}`}>
+                              {score !== null && score !== undefined 
+                                ? `${score}/${maxScore}` 
+                                : 'Chưa chấm'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              {isCompleted ? (
+                                <Badge className="bg-green-100 text-green-700">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Hoàn thành
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  Đang làm
+                                </Badge>
+                              )}
+                              {isGraded && (
+                                <Badge variant="secondary">Đã chấm</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isCompleted && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleGrade(submission)}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                {isGraded ? 'Xem/Sửa' : 'Chấm điểm'}
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold">Bài nộp của học sinh</h2>
         <p className="text-sm text-gray-600 mt-1">
-          Tổng số bài nộp: {submissions.length}
+          Tổng số học sinh: {groupedByUser.size} | 
+          Tổng số bài nộp: {submissions.length} | 
+          Đã chấm: {gradedSubmissions.length} | 
+          Chưa chấm: {allPendingSubmissions.length}
         </p>
       </div>
 
-      {submissions.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-gray-500">Chưa có bài nộp nào.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lần làm</TableHead>
-                  <TableHead>Người làm</TableHead>
-                  <TableHead>Bắt đầu</TableHead>
-                  <TableHead>Hoàn thành</TableHead>
-                  <TableHead>Điểm số</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead>Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {submissions.map((submission: any) => {
-                  const attemptId = submission.Id || submission.id;
-                  const userId = submission.UserId || submission.userId;
-                  const score = submission.Score || submission.score;
-                  const maxScore = submission.MaxScore || submission.maxScore || 100;
-                  const isCompleted = submission.IsCompleted || submission.isCompleted;
-                  const isGraded = submission.IsGraded || submission.isGraded;
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="all">Tất cả ({groupedByUser.size})</TabsTrigger>
+          <TabsTrigger value="pending">Chưa chấm ({groupedPendingByUser.size})</TabsTrigger>
+          <TabsTrigger value="graded">Đã chấm ({groupedGradedByUser.size})</TabsTrigger>
+        </TabsList>
 
-                  return (
-                    <TableRow key={attemptId}>
-                      <TableCell>
-                        {submission.AttemptNumber || submission.attemptNumber || 1}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">
-                            User #{userId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {formatDate(submission.StartedAt || submission.startedAt)}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {submission.CompletedAt || submission.completedAt 
-                          ? formatDate(submission.CompletedAt || submission.completedAt)
-                          : <span className="text-gray-400">Chưa hoàn thành</span>}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${getScoreColor(score, maxScore)}`}>
-                          {score !== null && score !== undefined 
-                            ? `${score}/${maxScore}` 
-                            : 'Chưa chấm'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          {isCompleted ? (
-                            <Badge className="bg-green-100 text-green-700">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Hoàn thành
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline">
-                              <Clock className="w-3 h-3 mr-1" />
-                              Đang làm
-                            </Badge>
-                          )}
-                          {isGraded && (
-                            <Badge variant="secondary">Đã chấm</Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {isCompleted && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleGrade(submission)}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            {isGraded ? 'Xem/Sửa' : 'Chấm điểm'}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="all">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-600">Đang tải bài nộp...</p>
+            </div>
+          ) : error ? (
+            <Card>
+              <CardContent className="py-6">
+                <p className="text-red-600">Lỗi: {error}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            renderSubmissionsTable(groupedByUser)
+          )}
+        </TabsContent>
+
+        <TabsContent value="pending">
+          {pendingLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-600">Đang tải bài nộp chưa chấm...</p>
+            </div>
+          ) : (
+            renderSubmissionsTable(groupedPendingByUser, false)
+          )}
+        </TabsContent>
+
+        <TabsContent value="graded">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-600">Đang tải bài nộp đã chấm...</p>
+            </div>
+          ) : (
+            renderSubmissionsTable(groupedGradedByUser, true)
+          )}
+        </TabsContent>
+      </Tabs>
+
 
       {selectedSubmission && questions.length > 0 && (
         <GradingModal
