@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthTokenFromRequest } from '@/lib/api/getAuthToken';
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -10,42 +11,47 @@ export async function GET(
 ) {
   try {
     const acceptLanguage = request.headers.get('accept-language') || 'vi';
-    const authHeader = request.headers.get('authorization') || '';
+    const token = getAuthTokenFromRequest(request);
     const { id } = await params;
-
-    console.log('Lesson API route - Fetching lesson:', id);
 
     const url = `${API_URL}/api/lessons/${id}`;
 
     const resp = await fetch(url, {
       headers: {
-        ...(authHeader ? { 'Authorization': authHeader } : {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         'Accept-Language': acceptLanguage,
         'Content-Type': 'application/json',
       },
       credentials: 'include',
     });
 
-    console.log('Lesson API route - Backend response status:', resp.status);
-
-    let data;
-    try {
-      data = await resp.json();
-    } catch (jsonError) {
-      console.error('Lesson API route - JSON parse error:', jsonError);
-      const text = await resp.text();
-      console.error('Lesson API route - Response text:', text.substring(0, 200));
-      return NextResponse.json(
-        { error: 'Invalid JSON response from backend', details: text.substring(0, 200) },
-        { status: 500 }
-      );
+    if (!resp.ok) {
+      let errorData;
+      try {
+        const text = await resp.text();
+        if (text && text.trim().length > 0) {
+          errorData = JSON.parse(text);
+        } else {
+          errorData = { 
+            Message: `HTTP ${resp.status}: ${resp.statusText}`,
+            MessageCode: 'ERROR'
+          };
+        }
+      } catch {
+        errorData = { 
+          Message: `HTTP ${resp.status}: ${resp.statusText}`,
+          MessageCode: 'ERROR'
+        };
+      }
+      return NextResponse.json(errorData, { status: resp.status });
     }
 
+    const data = await resp.json();
     return NextResponse.json(data, { status: resp.status });
   } catch (error) {
     console.error('Lesson API route - Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch lesson', details: error instanceof Error ? error.message : 'Unknown error' },
+      { Message: 'Lỗi khi tải bài học', Error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

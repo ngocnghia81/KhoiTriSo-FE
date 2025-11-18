@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import AssignmentList from '@/components/AssignmentList';
 
 interface Lesson {
   id: number;
@@ -738,8 +739,9 @@ export default function LessonPlayerPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+                <TabsTrigger value="assignments">Bài tập</TabsTrigger>
                 <TabsTrigger value="materials">Tài liệu ({materials.length})</TabsTrigger>
                 <TabsTrigger value="discussions">Hỏi & Đáp ({discussions.length})</TabsTrigger>
               </TabsList>
@@ -750,6 +752,10 @@ export default function LessonPlayerPage() {
                     <p className="text-gray-700 whitespace-pre-wrap">{stripHtml(lesson.description)}</p>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="assignments" className="mt-6">
+                <AssignmentList lessonId={lessonId!} courseId={courseId!} />
               </TabsContent>
 
               <TabsContent value="materials" className="mt-6">

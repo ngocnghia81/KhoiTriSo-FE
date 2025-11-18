@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthTokenFromRequest } from '@/lib/api/getAuthToken';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const authHeader = request.headers.get('authorization') || '';
+    const token = getAuthTokenFromRequest(request);
     const acceptLanguage = request.headers.get('accept-language') || 'vi';
     
     const searchParams = request.nextUrl.searchParams;
@@ -26,11 +27,32 @@ export async function GET(
     const response = await fetch(`${API_URL}/api/lessons/${id}/discussions?${paramsUrl.toString()}`, {
       method: 'GET',
       headers: {
-        ...(authHeader ? { 'Authorization': authHeader } : {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         'Accept-Language': acceptLanguage,
         'Content-Type': 'application/json',
       },
     });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        const text = await response.text();
+        if (text && text.trim().length > 0) {
+          errorData = JSON.parse(text);
+        } else {
+          errorData = { 
+            Message: `HTTP ${response.status}: ${response.statusText}`,
+            MessageCode: 'ERROR'
+          };
+        }
+      } catch {
+        errorData = { 
+          Message: `HTTP ${response.status}: ${response.statusText}`,
+          MessageCode: 'ERROR'
+        };
+      }
+      return NextResponse.json(errorData, { status: response.status });
+    }
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
@@ -49,12 +71,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const authHeader = request.headers.get('authorization') || '';
+    const token = getAuthTokenFromRequest(request);
     const acceptLanguage = request.headers.get('accept-language') || 'vi';
     
-    if (!authHeader) {
+    if (!token) {
       return NextResponse.json(
-        { Message: 'Unauthorized' },
+        { Message: 'Unauthorized', MessageCode: 'UNAUTHORIZED' },
         { status: 401 }
       );
     }
@@ -64,12 +86,33 @@ export async function POST(
     const response = await fetch(`${API_URL}/api/lessons/${id}/discussions`, {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
+        'Authorization': `Bearer ${token}`,
         'Accept-Language': acceptLanguage,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
     });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        const text = await response.text();
+        if (text && text.trim().length > 0) {
+          errorData = JSON.parse(text);
+        } else {
+          errorData = { 
+            Message: `HTTP ${response.status}: ${response.statusText}`,
+            MessageCode: 'ERROR'
+          };
+        }
+      } catch {
+        errorData = { 
+          Message: `HTTP ${response.status}: ${response.statusText}`,
+          MessageCode: 'ERROR'
+        };
+      }
+      return NextResponse.json(errorData, { status: response.status });
+    }
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });

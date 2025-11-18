@@ -28,11 +28,16 @@ import { toast } from 'sonner';
 interface Course {
   id: number;
   title: string;
+  description?: string;
   thumbnail?: string;
   instructor?: {
     id: number;
     name: string;
   };
+  categoryName?: string;
+  price?: number;
+  isFree: boolean;
+  totalLessons?: number;
   progressPercentage: number;
   enrolledAt: string;
   lastAccessed?: string;
@@ -42,11 +47,15 @@ interface Course {
 interface Book {
   id: number;
   title: string;
+  description?: string;
   coverImage?: string;
   author?: {
     id: number;
     fullName: string;
   };
+  categoryName?: string;
+  price?: number;
+  isFree: boolean;
   activatedAt: string;
   totalChapters: number;
   completedChapters: number;
@@ -172,19 +181,32 @@ export default function MyPurchasesPage() {
           coursesArray = data.Items || data.items;
         }
 
-        const transformedCourses = coursesArray.map((c: any) => ({
-          id: c.Course?.Id || c.Course?.id || c.CourseId || c.courseId,
-          title: c.Course?.Title || c.Course?.title || c.Title || c.title,
-          thumbnail: c.Course?.Thumbnail || c.Course?.thumbnail,
-          instructor: c.Course?.Instructor || c.Course?.instructor ? {
-            id: (c.Course.Instructor || c.Course.instructor).Id || (c.Course.Instructor || c.Course.instructor).id,
-            name: (c.Course.Instructor || c.Course.instructor).Name || (c.Course.Instructor || c.Course.instructor).name,
-          } : undefined,
-          progressPercentage: c.ProgressPercentage || c.progressPercentage || 0,
-          enrolledAt: c.EnrolledAt || c.enrolledAt,
-          lastAccessed: c.LastAccessed || c.lastAccessed,
-          isCompleted: c.CompletedAt !== null && c.CompletedAt !== undefined,
-        }));
+        const transformedCourses = coursesArray.map((c: any) => {
+          const courseData = c.Course || c.course || c;
+          const instructorData = courseData?.Instructor || courseData?.instructor || c.Instructor || c.instructor;
+          const categoryData = courseData?.Category || courseData?.category || c.Category || c.category;
+
+          return {
+            id: courseData?.Id || courseData?.id || c.CourseId || c.courseId,
+            title: courseData?.Title || courseData?.title || c.Title || c.title || '',
+            description: courseData?.Description || courseData?.description || c.Description || c.description,
+            thumbnail: courseData?.Thumbnail || courseData?.thumbnail,
+            instructor: instructorData
+              ? {
+                  id: instructorData.Id || instructorData.id,
+                  name: instructorData.Name || instructorData.name,
+                }
+              : undefined,
+            categoryName: categoryData?.Name || categoryData?.name,
+            price: courseData?.Price ?? c.Price,
+            isFree: courseData?.IsFree ?? courseData?.isFree ?? c.IsFree ?? false,
+            totalLessons: courseData?.TotalLessons ?? courseData?.totalLessons ?? c.TotalLessons ?? c.totalLessons ?? 0,
+            progressPercentage: c.ProgressPercentage || c.progressPercentage || 0,
+            enrolledAt: c.EnrolledAt || c.enrolledAt,
+            lastAccessed: c.LastAccessed || c.lastAccessed,
+            isCompleted: c.CompletedAt !== null && c.CompletedAt !== undefined,
+          } as Course;
+        });
 
         setCourses(transformedCourses);
       }
@@ -215,22 +237,27 @@ export default function MyPurchasesPage() {
         const transformedBooks = booksArray.map((b: any) => {
           const rawBook = b.Book || b.book || null;
           const authorData = rawBook?.Author || rawBook?.author || b.Author || b.author;
+          const categoryData = rawBook?.Category || rawBook?.category || b.Category || b.category;
 
           return {
             id: rawBook?.Id || rawBook?.id || b.BookId || b.bookId || b.Id || b.id,
-            userBookId: b.Id || b.id, // useful if we ever need it
-            title: rawBook?.Title || rawBook?.title || b.Title || b.title,
+            userBookId: b.Id || b.id,
+            title: rawBook?.Title || rawBook?.title || b.Title || b.title || '',
+            description: rawBook?.Description || rawBook?.description || b.Description || b.description,
             coverImage: rawBook?.CoverImage || rawBook?.coverImage || b.CoverImage || b.coverImage,
             author: authorData
               ? {
                   id: authorData.Id || authorData.id,
-                  fullName: authorData.FullName || authorData.fullName,
+                  fullName: authorData.FullName || authorData.fullName || authorData.Name || authorData.name,
                 }
               : undefined,
+            categoryName: categoryData?.Name || categoryData?.name,
+            price: rawBook?.Price ?? b.Price,
+            isFree: rawBook?.IsFree ?? rawBook?.isFree ?? b.IsFree ?? false,
             activatedAt: b.ActivatedAt || b.activatedAt || b.CreatedAt || b.createdAt,
             totalChapters: rawBook?.TotalChapters || rawBook?.totalChapters || b.TotalChapters || b.totalChapters || 0,
             completedChapters: b.CompletedChapters || b.completedChapters || 0,
-          };
+          } as Book;
         });
 
         setBooks(transformedBooks);
@@ -322,14 +349,29 @@ export default function MyPurchasesPage() {
                         </div>
                       </Link>
                       <div className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          {course.categoryName ? (
+                            <Badge variant="outline" className="text-xs border-blue-200 text-blue-600 bg-blue-50">
+                              {course.categoryName}
+                            </Badge>
+                          ) : <span />}
+                          <Badge className={`text-xs ${course.isFree ? 'bg-green-600' : 'bg-amber-500'}`}>
+                            {course.isFree ? 'Miễn phí' : formatPrice(course.price || 0)}
+                          </Badge>
+                        </div>
                         <Link href={`/courses/${course.id}`}>
-                          <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 hover:text-blue-600">
+                          <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 hover:text-blue-600">
                             {stripHtml(course.title)}
                           </h3>
                         </Link>
                         {course.instructor && (
-                          <p className="text-sm text-gray-600 mb-3">
+                          <p className="text-sm text-gray-600">
                             {course.instructor.name}
+                          </p>
+                        )}
+                        {course.description && (
+                          <p className="text-sm text-gray-500 mt-2 mb-3 line-clamp-2">
+                            {stripHtml(course.description)}
                           </p>
                         )}
                         <div className="space-y-2">
@@ -347,10 +389,18 @@ export default function MyPurchasesPage() {
                           </div>
                           <div className="flex items-center justify-between text-xs text-gray-500">
                             <span>Đăng ký {formatDate(course.enrolledAt)}</span>
-                            {course.lastAccessed && (
-                              <span>Truy cập {formatDate(course.lastAccessed)}</span>
+                            {course.totalLessons !== undefined && (
+                              <span className="flex items-center gap-1">
+                                <BookOpenIcon className="h-3 w-3" />
+                                {course.totalLessons} bài học
+                              </span>
                             )}
                           </div>
+                          {course.lastAccessed && (
+                            <div className="text-xs text-gray-500">
+                              Truy cập {formatDate(course.lastAccessed)}
+                            </div>
+                          )}
                         </div>
                         <Button asChild className="w-full mt-4" variant="outline">
                           <Link href={`/courses/${course.id}`}>
@@ -409,14 +459,31 @@ export default function MyPurchasesPage() {
                         </div>
                       </Link>
                       <div className="p-4">
+                        <div className="flex items-start justify-between mb-3 gap-2">
+                          {book.categoryName ? (
+                            <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">
+                              {book.categoryName}
+                            </Badge>
+                          ) : (
+                            <span />
+                          )}
+                          <Badge className={`text-xs ${book.isFree ? 'bg-green-600' : 'bg-rose-500'}`}>
+                            {book.isFree ? 'Miễn phí' : formatPrice(book.price || 0)}
+                          </Badge>
+                        </div>
                         <Link href={`/books/${book.id}`}>
-                          <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 hover:text-blue-600">
+                          <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 hover:text-blue-600">
                             {stripHtml(book.title)}
                           </h3>
                         </Link>
                         {book.author && (
-                          <p className="text-sm text-gray-600 mb-3">
+                          <p className="text-sm text-gray-600">
                             {book.author.fullName}
+                          </p>
+                        )}
+                        {book.description && (
+                          <p className="text-sm text-gray-500 mt-2 mb-3 line-clamp-2">
+                            {stripHtml(book.description)}
                           </p>
                         )}
                         <div className="space-y-2">
@@ -432,12 +499,23 @@ export default function MyPurchasesPage() {
                             <div className="w-full bg-gray-200 rounded-full h-2">
                               <div
                                 className="bg-blue-600 h-2 rounded-full transition-all"
-                                style={{ width: `${(book.completedChapters / book.totalChapters) * 100}%` }}
+                                style={{ 
+                                  width: `${Math.min(
+                                    (book.completedChapters / (book.totalChapters || 1)) * 100,
+                                    100
+                                  )}%` 
+                                }}
                               />
                             </div>
                           )}
-                          <div className="text-xs text-gray-500">
-                            Kích hoạt {formatDate(book.activatedAt)}
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>Kích hoạt {formatDate(book.activatedAt)}</span>
+                            {book.totalChapters > 0 && (
+                              <span className="flex items-center gap-1">
+                                <BookOpenIcon className="h-3 w-3" />
+                                {book.totalChapters} chương
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 mt-4">

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { 
+import {
   MessageSquare, 
   ChevronUp, 
   ChevronDown, 
@@ -286,7 +286,7 @@ export default function ForumPage() {
                 <Plus className="w-4 h-4 mr-2" />
                 Đặt câu hỏi
               </Button>
-            </Link>
+              </Link>
           </div>
         </div>
       </div>
@@ -414,38 +414,38 @@ export default function ForumPage() {
                             {question.isPinned && (
                               <Badge className="bg-blue-600 text-white text-xs">Ghim</Badge>
                             )}
-                            {question.isSolved && (
+                          {question.isSolved && (
                               <Badge className="bg-green-600 text-white text-xs">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
                                 Đã giải quyết
                               </Badge>
-                            )}
-                            <Link
-                              href={`/forum/${question.id}`}
+                          )}
+                          <Link
+                            href={`/forum/${question.id}`}
                               className="text-lg font-semibold text-gray-900 hover:text-blue-600 line-clamp-2 flex-1"
-                            >
-                              {question.title}
-                            </Link>
-                          </div>
+                          >
+                            {question.title}
+                          </Link>
+                        </div>
 
                           <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                             {stripHtml(question.content)}
-                          </p>
+                        </p>
 
-                          {/* Tags */}
+                        {/* Tags */}
                           {question.tags && question.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-3">
-                              {question.tags.map((tag) => (
+                          {question.tags.map((tag) => (
                                 <Link
-                                  key={tag}
+                              key={tag}
                                   href={`/forum?tag=${encodeURIComponent(tag)}`}
                                   className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                >
+                            >
                                   <Tag className="w-3 h-3" />
-                                  {tag}
+                              {tag}
                                 </Link>
-                              ))}
-                            </div>
+                          ))}
+                        </div>
                           )}
 
                           {/* Meta */}
@@ -454,27 +454,27 @@ export default function ForumPage() {
                               <div className="flex items-center gap-1">
                                 <User className="w-4 h-4" />
                                 <span>{question.userName}</span>
-                              </div>
+                            </div>
                               {question.categoryName && (
-                                <Link
+                            <Link
                                   href={`/forum?category=${question.categoryId}`}
-                                  className="hover:text-blue-600"
-                                >
+                              className="hover:text-blue-600"
+                            >
                                   {question.categoryName}
-                                </Link>
+                            </Link>
                               )}
                               <div className="flex items-center gap-1">
                                 <Clock className="w-4 h-4" />
                                 <span>{formatDate(question.lastActivityAt || question.updatedAt || question.createdAt)}</span>
-                              </div>
-                            </div>
-                          </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
                     </CardContent>
                   </Card>
-                ))}
-              </div>
+              ))}
+            </div>
             )}
 
             {/* Pagination */}
@@ -515,7 +515,7 @@ export default function ForumPage() {
                 >
                   Sau
                 </Button>
-              </div>
+            </div>
             )}
           </div>
 
@@ -526,9 +526,9 @@ export default function ForumPage() {
               <CardContent className="p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">Danh mục</h3>
                 <div className="space-y-2">
-                  {categories.map((category) => (
-                    <Link
-                      key={category.id}
+                {categories.map((category) => (
+                  <Link
+                    key={category.id}
                       href={`/forum?category=${category.id}`}
                       className="flex items-center justify-between p-2 rounded hover:bg-gray-50 transition-colors"
                     >
@@ -543,12 +543,12 @@ export default function ForumPage() {
                       </div>
                       {category.questionCount !== undefined && (
                         <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                          {category.questionCount}
-                        </span>
+                      {category.questionCount}
+                    </span>
                       )}
-                    </Link>
-                  ))}
-                </div>
+                  </Link>
+                ))}
+              </div>
               </CardContent>
             </Card>
 
@@ -556,18 +556,18 @@ export default function ForumPage() {
             <Card className="bg-white">
               <CardContent className="p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">Tags phổ biến</h3>
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                   {tags.slice(0, 20).map((tag) => (
-                    <Link
+                  <Link
                       key={tag.id || tag.name}
                       href={`/forum?tag=${encodeURIComponent(tag.name)}`}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 transition-colors"
                     >
                       <Tag className="w-3 h-3" />
                       {tag.name}
-                    </Link>
-                  ))}
-                </div>
+                  </Link>
+                ))}
+              </div>
               </CardContent>
             </Card>
 
@@ -577,23 +577,23 @@ export default function ForumPage() {
                 <CardContent className="p-4">
                   <h3 className="font-semibold text-gray-900 mb-3">Thống kê</h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between">
+                <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Tổng câu hỏi</span>
                       <span className="font-semibold">{stats.totalQuestions}</span>
-                    </div>
-                    <div className="flex justify-between">
+                </div>
+                <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Đã giải quyết</span>
                       <span className="font-semibold text-green-600">{stats.solvedQuestions}</span>
-                    </div>
-                    <div className="flex justify-between">
+                </div>
+                <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Tổng trả lời</span>
                       <span className="font-semibold">{stats.totalAnswers}</span>
-                    </div>
-                    <div className="flex justify-between">
+                </div>
+                <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Thành viên</span>
                       <span className="font-semibold">{stats.totalUsers}</span>
-                    </div>
-                  </div>
+                </div>
+              </div>
                 </CardContent>
               </Card>
             )}

@@ -9,13 +9,26 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const token = getAuthTokenFromRequest(request);
     const acceptLanguage = request.headers.get('accept-language') || 'vi';
+    const token = getAuthTokenFromRequest(request);
+    
+    if (!token) {
+      return NextResponse.json(
+        { Message: 'Unauthorized', MessageCode: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
 
-    const response = await fetch(`${API_URL}/api/lessons/${id}/materials`, {
+    const { searchParams } = new URL(request.url);
+    const page = searchParams.get('page') || '1';
+    const pageSize = searchParams.get('pageSize') || '20';
+
+    const queryParams = new URLSearchParams({ page, pageSize });
+
+    const response = await fetch(`${API_URL}/api/assignments/${id}/submissions?${queryParams}`, {
       method: 'GET',
       headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'Authorization': `Bearer ${token}`,
         'Accept-Language': acceptLanguage,
         'Content-Type': 'application/json',
       },
@@ -45,9 +58,9 @@ export async function GET(
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
-    console.error('Error fetching lesson materials:', error);
+    console.error('Error fetching assignment submissions:', error);
     return NextResponse.json(
-      { Message: 'Lỗi khi tải tài liệu', Error: error.message },
+      { Message: 'Lỗi khi tải danh sách bài nộp', Error: error.message },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,6 +89,17 @@ export default function CheckoutPage() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [hasCheckedCart, setHasCheckedCart] = useState(false);
 
+  const cartItems = useMemo(() => {
+    if (!cart || !Array.isArray(cart.CartItems)) {
+      return [];
+    }
+    return cart.CartItems;
+  }, [cart?.CartItems]);
+
+  const subtotal = useMemo(() => cart?.TotalAmount || 0, [cart?.TotalAmount]);
+  const discountAmount = useMemo(() => appliedCoupon?.discountAmount || 0, [appliedCoupon?.discountAmount]);
+  const total = useMemo(() => Math.max(0, subtotal - discountAmount), [subtotal, discountAmount]);
+
   // Refresh cart when component mounts (only once)
   useEffect(() => {
     if (isAuthenticated && !hasCheckedCart) {
@@ -161,7 +172,7 @@ export default function CheckoutPage() {
       fullCart: JSON.stringify(cart, null, 2)
     });
 
-    if (!cart.CartItems) {
+    if (!Array.isArray(cart?.CartItems)) {
       console.log('Checkout - Cart.CartItems is undefined/null, redirecting to cart...');
       toast.error('Giỏ hàng trống');
       router.push('/cart');
@@ -169,15 +180,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!Array.isArray(cart.CartItems)) {
-      console.log('Checkout - Cart.CartItems is not an array:', typeof cart.CartItems, cart.CartItems);
-      toast.error('Giỏ hàng trống');
-      router.push('/cart');
-      setHasCheckedCart(true);
-      return;
-    }
-
-    if (cart.CartItems.length === 0) {
+    if (cartItems.length === 0) {
       console.log('Checkout - Cart.CartItems is empty array, redirecting to cart...');
       toast.error('Giỏ hàng trống');
       router.push('/cart');
@@ -186,7 +189,7 @@ export default function CheckoutPage() {
     }
 
     console.log('Checkout - Cart is valid, proceeding with checkout:', {
-      itemsCount: cart.CartItems.length,
+      itemsCount: cartItems.length,
       totalItems: cart.TotalItems,
       totalAmount: cart.TotalAmount
     });
@@ -199,7 +202,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!cart || !cart.CartItems || cart.CartItems.length === 0) {
+    if (!cart || cartItems.length === 0) {
       toast.error('Giỏ hàng trống');
       return;
     }
@@ -208,7 +211,7 @@ export default function CheckoutPage() {
       setValidatingCoupon(true);
 
       // Prepare items for validation
-      const items = cart.CartItems.map(item => ({
+      const items = cartItems.map(item => ({
         ItemId: item.ItemId,
         ItemType: item.ItemType,
         Price: item.Price || 0,
@@ -262,7 +265,7 @@ export default function CheckoutPage() {
   };
 
   const handleCheckout = async () => {
-    if (!cart || !cart.CartItems || cart.CartItems.length === 0) {
+    if (!cart || cartItems.length === 0) {
       toast.error('Giỏ hàng trống');
       return;
     }
@@ -271,10 +274,8 @@ export default function CheckoutPage() {
       setProcessingPayment(true);
 
       // Step 1: Create order (Backend flow: POST /api/orders)
-      const cartItemIds = cart.CartItems.map(item => item.Id);
-      const subtotal = cart.TotalAmount || 0;
-      const discountAmount = appliedCoupon?.discountAmount || 0;
-      const finalTotal = Math.max(0, subtotal - discountAmount);
+      const cartItemIds = cartItems.map(item => item.Id);
+      const finalTotal = total;
       
       console.log('Creating order with:', {
         CartItemIds: cartItemIds,
@@ -412,13 +413,13 @@ export default function CheckoutPage() {
 
   // Show loading while checking authentication or fetching cart
   if (!isAuthenticated || cartLoading || !hasCheckedCart) {
-    return (
+  return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">Đang tải...</p>
         </div>
-      </div>
+        </div>
     );
   }
 
@@ -436,14 +437,14 @@ export default function CheckoutPage() {
           }}>
             Thử lại
           </Button>
-        </div>
-      </div>
+                </div>
+              </div>
     );
   }
 
   // If cart is empty (after checking), show empty state
   // Note: This should rarely be reached because useEffect redirects to /cart
-  if (!cart || !cart.CartItems || cart.CartItems.length === 0) {
+  if (!cart || cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -453,14 +454,10 @@ export default function CheckoutPage() {
           <Button onClick={() => router.push('/cart')}>
             Quay lại giỏ hàng
           </Button>
+          </div>
         </div>
-      </div>
     );
   }
-
-  const subtotal = cart.TotalAmount || 0;
-  const discountAmount = appliedCoupon?.discountAmount || 0;
-  const total = Math.max(0, subtotal - discountAmount);
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -468,7 +465,7 @@ export default function CheckoutPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Thanh toán</h1>
           <p className="text-gray-600 mt-2">Hoàn tất đơn hàng của bạn</p>
-        </div>
+                    </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -480,7 +477,7 @@ export default function CheckoutPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {cart.CartItems.map((item) => {
+                  {cartItems.map((item) => {
                     // Backend returns CoverImage, Title, Price directly on CartItemDTO
                     // And also includes full Item object
                     const itemData = item.Item as any || {};
@@ -517,18 +514,18 @@ export default function CheckoutPage() {
                                   {stripHtml(item.Title || (itemData as any)?.Title || (itemData as any)?.title || '')}
                                 </h3>
                               </Link>
-                            </div>
+                  </div>
                             <div className="text-right ml-4">
                               <div className="text-sm font-bold text-gray-900">
                                 {formatPrice(item.Price || (itemData as any)?.Price || (itemData as any)?.price || 0)}
-                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
+                  </div>
                     );
                   })}
-                  </div>
+                        </div>
               </CardContent>
             </Card>
 
@@ -568,8 +565,8 @@ export default function CheckoutPage() {
                     </div>
                     <div className="text-sm text-gray-600">
                       Giảm: {formatPrice(appliedCoupon.discountAmount || 0)}
+                      </div>
                     </div>
-                  </div>
                 ) : (
                   <div className="flex gap-2">
                     <Input
@@ -594,13 +591,13 @@ export default function CheckoutPage() {
                         'Áp dụng'
                       )}
                     </Button>
-                  </div>
-                )}
+                </div>
+              )}
               </CardContent>
             </Card>
                   </div>
 
-          {/* Order Summary */}
+                  {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="sticky top-24">
               <Card>
@@ -612,21 +609,21 @@ export default function CheckoutPage() {
                     <div className="flex justify-between text-gray-700">
                       <span>Tạm tính:</span>
                       <span className="font-medium">{formatPrice(subtotal)}</span>
-                    </div>
+                  </div>
 
                     {appliedCoupon && (
                       <div className="flex justify-between text-green-600">
                         <span>Giảm giá:</span>
                         <span className="font-medium">-{formatPrice(discountAmount)}</span>
-                      </div>
-                    )}
+                </div>
+              )}
 
                     <Separator />
 
                     <div className="flex justify-between text-lg font-bold text-gray-900">
                       <span>Tổng cộng:</span>
                       <span className="text-blue-600">{formatPrice(total)}</span>
-                    </div>
+                </div>
 
                     <Button
                       onClick={handleCheckout}
@@ -654,9 +651,9 @@ export default function CheckoutPage() {
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
                         <span>Đảm bảo hoàn tiền trong 30 ngày</span>
-                      </div>
-                    </div>
                   </div>
+                </div>
+              </div>
                 </CardContent>
               </Card>
             </div>

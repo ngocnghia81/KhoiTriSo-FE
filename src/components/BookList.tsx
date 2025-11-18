@@ -6,6 +6,7 @@ import { BookOutlined, SearchOutlined, FilterOutlined, EyeOutlined, ShoppingCart
 import { useBooks, BookFilters } from '../hooks/useBooks';
 import { Book } from '../services/bookApi';
 import { useAddToCart } from '../hooks/useCart';
+import { toast } from 'sonner';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -54,12 +55,14 @@ const BookList: React.FC<BookListProps> = ({ onBookSelect, showFilters = true, c
     setLoadingBooks(prev => new Set(prev).add(book.id));
 
     try {
-      await addToCart({ bookId: book.id, quantity: 1 });
-      message.success(`Đã thêm "${book.title}" vào giỏ hàng`);
-    } catch (error) {
-      message.error('Không thể thêm sách vào giỏ hàng');
+      debugger;
+      const response : any = await addToCart({ ItemId: book.id, ItemType: 0 }); 
+      if(response.MessageCode === 'BOOK_ALREADY_OWNED') {
+        toast.info(response.Message as string);
+      }else{
+        toast.error(response.Message as string);
+      }
     } finally {
-      // Remove loading state for this book
       setLoadingBooks(prev => {
         const newSet = new Set(prev);
         newSet.delete(book.id);

@@ -65,13 +65,14 @@ const BookList: React.FC<BookListProps> = ({ onBookSelect, showFilters = true, c
     setLoadingBooks(prev => new Set(prev).add(book.id));
 
     try {
-      // ItemType: 0 = Book, 1 = Course
       await addToCart({ ItemId: book.id, ItemType: 0 }); 
       toast.success(`Đã thêm "${book.title}" vào giỏ hàng`);
     } catch (error) {
-      // Check if it's the "already in cart" case
-      if (error instanceof Error && error.message.includes('đã có trong giỏ hàng')) {
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.includes('đã có trong giỏ hàng')) {
         toast.info(`"${book.title}" đã có trong giỏ hàng`);
+      } else if (errorMessage) {
+        toast.error(errorMessage);
       } else {
         toast.error('Không thể thêm sách vào giỏ hàng');
       }

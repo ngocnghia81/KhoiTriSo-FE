@@ -1,253 +1,273 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useAssignments, useDeleteAssignment, Assignment } from '@/hooks/useAssignments';
+import { useState, useEffect } from 'react';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage } from '@/utils/apiHelpers';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon, 
-  EyeIcon,
-  DocumentArrowUpIcon,
-  ClockIcon,
-  AcademicCapIcon
+  DocumentTextIcon, 
+  ClockIcon, 
+  CheckCircleIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline';
+import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import Link from 'next/link';
+import { toast } from 'sonner';
 
-interface AssignmentListProps {
-  lessonId?: number;
-  onEdit?: (assignment: Assignment) => void;
-  onView?: (assignment: Assignment) => void;
-  onCreate?: () => void;
-  onImport?: () => void;
+interface Assignment {
+  id: number;
+  lessonId: number;
+  title: string;
+  description: string;
+  maxScore: number;
+  timeLimit?: number;
+  maxAttempts: number;
+  dueDate?: string;
+  isPublished: boolean;
+  passingScore?: number;
+  userAttempts?: Array<{
+    id: number;
+    score?: number;
+    isCompleted: boolean;
+    startedAt: string;
+  }>;
 }
 
-export function AssignmentList({ 
-  lessonId, 
-  onEdit, 
-  onView, 
-  onCreate, 
-  onImport 
-}: AssignmentListProps) {
-  // Sử dụng filters object như curl command format
-  const { assignments, loading, error, refetch } = useAssignments({
-    lessonId,
-    page: 1,
-    pageSize: 20
-  });
-  const { deleteAssignment, loading: deleteLoading } = useDeleteAssignment();
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+interface AssignmentListProps {
+  lessonId: number;
+  courseId: number;
+}
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bài tập này?')) return;
-    
-    setDeletingId(id);
-    const result = await deleteAssignment(id);
-    
-    if (result.success) {
-      refetch();
-    } else {
-      alert(`Lỗi: ${result.error}`);
+export default function AssignmentList({ lessonId, courseId }: AssignmentListProps) {
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [lessonId]);
+
+  const fetchAssignments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await authenticatedFetch(`/api/assignments?lessonId=${lessonId}&isPublished=true&page=1&pageSize=100`);
+      const result = await safeJsonParse(response);
+
+      if (isSuccessfulResponse(result)) {
+        const data = extractResult(result);
+        let assignmentsArray = [];
+        
+        if (Array.isArray(data)) {
+          assignmentsArray = data;
+        } else if (data?.Items || data?.items) {
+          assignmentsArray = data.Items || data.items;
+        }
+
+        const transformedAssignments = assignmentsArray.map((a: any) => ({
+          id: a.Id || a.id,
+          lessonId: a.LessonId || a.lessonId,
+          title: a.Title || a.title,
+          description: a.Description || a.description,
+          maxScore: a.MaxScore || a.maxScore || 0,
+          timeLimit: a.TimeLimit || a.timeLimit,
+          maxAttempts: a.MaxAttempts || a.maxAttempts || 1,
+          dueDate: a.DueDate || a.dueDate,
+          isPublished: a.IsPublished ?? a.isPublished ?? false,
+          passingScore: a.PassingScore || a.passingScore,
+          userAttempts: (a.UserAttempts || a.userAttempts || []).map((ua: any) => ({
+            id: ua.Id || ua.id,
+            score: ua.Score || ua.score,
+            isCompleted: ua.IsCompleted ?? ua.isCompleted ?? false,
+            startedAt: ua.StartedAt || ua.startedAt,
+          })),
+        }));
+
+        setAssignments(transformedAssignments);
+      } else {
+        setError(extractMessage(result) || 'Không thể tải danh sách bài tập');
+      }
+    } catch (err) {
+      console.error('Error fetching assignments:', err);
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
+    } finally {
+      setLoading(false);
     }
-    
-    setDeletingId(null);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return null;
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: vi });
+    } catch {
+      return dateString;
+    }
   };
 
-  const getStatusBadge = (assignment: Assignment) => {
-    if (assignment.isPublished) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          Đã xuất bản
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-        Bản nháp
-      </span>
-    );
+  const getBestScore = (assignment: Assignment) => {
+    if (!assignment.userAttempts || assignment.userAttempts.length === 0) return null;
+    const scores = assignment.userAttempts
+      .filter(a => a.isCompleted && a.score !== null && a.score !== undefined)
+      .map(a => a.score!);
+    return scores.length > 0 ? Math.max(...scores) : null;
+  };
+
+  const getAttemptCount = (assignment: Assignment) => {
+    return assignment.userAttempts?.length || 0;
+  };
+
+  const canAttempt = (assignment: Assignment) => {
+    const attemptCount = getAttemptCount(assignment);
+    return attemptCount < assignment.maxAttempts;
+  };
+
+  const isPassed = (assignment: Assignment) => {
+    const bestScore = getBestScore(assignment);
+    if (bestScore === null || !assignment.passingScore) return null;
+    return bestScore >= assignment.passingScore;
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Đang tải bài tập...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">Lỗi: {error}</p>
-        <button 
-          onClick={refetch}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Thử lại
-        </button>
-      </div>
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="pt-6">
+          <div className="text-red-600 text-center">
+            <p className="font-medium">Lỗi tải bài tập</p>
+            <p className="text-sm mt-1">{error}</p>
+            <Button 
+              onClick={fetchAssignments} 
+              variant="outline" 
+              className="mt-4 border-red-300 text-red-600 hover:bg-red-100"
+            >
+              Thử lại
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (assignments.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">Chưa có bài tập nào cho bài học này</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            {lessonId ? 'Bài tập của bài học' : 'Tất cả bài tập'}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            {assignments.length} bài tập
-          </p>
-        </div>
-        
-        <div className="flex space-x-3">
-          {onImport && (
-            <button
-              onClick={onImport}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <DocumentArrowUpIcon className="h-4 w-4 mr-2" />
-              Import từ Word
-            </button>
-          )}
-          
-          {onCreate && (
-            <button
-              onClick={onCreate}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Tạo bài tập mới
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-4">
+      {assignments.map((assignment) => {
+        const bestScore = getBestScore(assignment);
+        const attemptCount = getAttemptCount(assignment);
+        const passed = isPassed(assignment);
+        const canDo = canAttempt(assignment);
+        const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date();
 
-      {/* Assignment List */}
-      {assignments.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <AcademicCapIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có bài tập</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {lessonId ? 'Bài học này chưa có bài tập nào.' : 'Chưa có bài tập nào được tạo.'}
-          </p>
-          {onCreate && (
-            <div className="mt-6">
-              <button
-                onClick={onCreate}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Tạo bài tập đầu tiên
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {assignments.map((assignment) => (
-            <div key={assignment.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              {/* Header */}
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-                  {assignment.title}
-                </h3>
-                {getStatusBadge(assignment)}
-              </div>
-
-              {/* Description */}
-              <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                {assignment.description}
-              </p>
-
-              {/* Lesson Info */}
-              {assignment.lesson && (
-                <div className="mb-4">
-                  <p className="text-xs text-gray-500">Bài học:</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {assignment.lesson.title}
-                  </p>
-                </div>
-              )}
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                <div>
-                  <p className="text-gray-500">Điểm tối đa</p>
-                  <p className="font-semibold text-gray-900">{assignment.maxScore}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500">Số lần làm</p>
-                  <p className="font-semibold text-gray-900">{assignment.maxAttempts}</p>
-                </div>
-                {assignment.timeLimit && (
-                  <div>
-                    <p className="text-gray-500">Thời gian</p>
-                    <p className="font-semibold text-gray-900">{assignment.timeLimit} phút</p>
+        return (
+          <Card key={assignment.id} className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-lg mb-2">{assignment.title}</CardTitle>
+                  {assignment.description && (
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                      {assignment.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                    <Badge variant="outline" className="text-xs">
+                      Điểm tối đa: {assignment.maxScore}
+                    </Badge>
+                    {assignment.passingScore && (
+                      <Badge variant="outline" className="text-xs">
+                        Điểm đạt: {assignment.passingScore}
+                      </Badge>
+                    )}
+                    {assignment.timeLimit && (
+                      <span className="flex items-center gap-1">
+                        <ClockIcon className="h-4 w-4" />
+                        {assignment.timeLimit} phút
+                      </span>
+                    )}
+                    <span>Số lần làm: {attemptCount}/{assignment.maxAttempts}</span>
+                    {assignment.dueDate && (
+                      <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                        Hạn nộp: {formatDate(assignment.dueDate)}
+                      </span>
+                    )}
                   </div>
-                )}
-                {assignment.passingScore && (
-                  <div>
-                    <p className="text-gray-500">Điểm đạt</p>
-                    <p className="font-semibold text-gray-900">{assignment.passingScore}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Due Date */}
-              {assignment.dueDate && (
-                <div className="mb-4 flex items-center text-sm text-gray-600">
-                  <ClockIcon className="h-4 w-4 mr-1" />
-                  Hạn nộp: {formatDate(assignment.dueDate)}
                 </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex justify-end space-x-2">
-                {onView && (
-                  <button
-                    onClick={() => onView(assignment)}
-                    className="p-2 text-gray-400 hover:text-gray-600"
-                    title="Xem chi tiết"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                )}
-                
-                {onEdit && (
-                  <button
-                    onClick={() => onEdit(assignment)}
-                    className="p-2 text-gray-400 hover:text-blue-600"
-                    title="Chỉnh sửa"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                )}
-                
-                <button
-                  onClick={() => handleDelete(assignment.id)}
-                  disabled={deleteLoading && deletingId === assignment.id}
-                  className="p-2 text-gray-400 hover:text-red-600 disabled:opacity-50"
-                  title="Xóa"
+                <div className="flex flex-col items-end gap-2 ml-4">
+                  {bestScore !== null && (
+                    <div className="text-right">
+                      <div className="text-sm text-gray-600">Điểm cao nhất</div>
+                      <div className={`text-2xl font-bold ${passed ? 'text-green-600' : 'text-blue-600'}`}>
+                        {bestScore}/{assignment.maxScore}
+                      </div>
+                    </div>
+                  )}
+                  {passed === true && (
+                    <Badge className="bg-green-600 text-white">
+                      <CheckCircleIconSolid className="h-3 w-3 mr-1" />
+                      Đã đạt
+                    </Badge>
+                  )}
+                  {passed === false && (
+                    <Badge variant="outline" className="border-orange-300 text-orange-700">
+                      Chưa đạt
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {!canDo && (
+                    <Badge variant="outline" className="text-xs text-gray-500">
+                      Đã hết lượt làm bài
+                    </Badge>
+                  )}
+                  {isOverdue && (
+                    <Badge variant="outline" className="text-xs text-red-600 border-red-300">
+                      Đã quá hạn
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  asChild
+                  variant={canDo ? "default" : "outline"}
+                  disabled={!canDo}
+                  className={canDo ? "bg-blue-600 hover:bg-blue-700" : ""}
                 >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                  <Link href={`/courses/${courseId}/lessons/${lessonId}/assignments/${assignment.id}`}>
+                    {bestScore !== null ? 'Xem lại' : 'Làm bài'}
+                    <ArrowRightIcon className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
