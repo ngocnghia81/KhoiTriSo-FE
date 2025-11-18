@@ -761,16 +761,8 @@ export const useAttachAssignmentQuestion = () => {
 
 // Grading Hooks
 
-export interface QuestionGradingRequest {
-  QuestionId: number;
-  PointsEarned: number;
-  Feedback?: string;
-}
-
 export interface AssignmentGradingRequest {
   AttemptId: number;
-  QuestionGrades: QuestionGradingRequest[];
-  Feedback?: string;
 }
 
 export const useGradeAssignment = () => {
@@ -907,4 +899,50 @@ export const useBatchInsertQuestions = () => {
   }, [authenticatedFetch]);
 
   return { batchInsert, loading, error };
+};
+
+// Redistribute Points
+export interface QuestionPointRequest {
+  QuestionId: number;
+  Points: number;
+}
+
+export interface RedistributePointsRequest {
+  QuestionPoints: QuestionPointRequest[];
+}
+
+export const useRedistributePoints = () => {
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const redistributePoints = useCallback(async (assignmentId: number, data: RedistributePointsRequest): Promise<{ success: boolean; error?: string }> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await authenticatedFetch(`${API_URLS.ASSIGNMENTS_BY_ID_BASE}/${assignmentId}/redistribute-points`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        return { success: true };
+      } else {
+        throw new Error(result.Message || 'Chia điểm lại thất bại');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  }, [authenticatedFetch]);
+
+  return { redistributePoints, loading, error };
 };

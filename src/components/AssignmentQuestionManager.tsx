@@ -380,11 +380,11 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
             .option-math .mjx-chtml { line-height: 1.2; }
           `}</style>
           {questions.map((q: any, index: number) => {
-            const questionId = q.Id || q.id;
-            const questionContent = q.QuestionContent || q.questionContent || q.question || '';
-            const questionType = q.QuestionType || q.questionType || 1;
-            const difficulty = q.DifficultyLevel !== undefined ? q.DifficultyLevel : (q.difficultyLevel || 1);
-            const options = q.Options || q.options || q.QuestionOptions || [];
+            const questionId = q.Id ?? q.id;
+            const questionContent = q.QuestionContent ?? q.questionContent ?? q.question ?? '';
+            const questionType = q.QuestionType ?? q.questionType ?? 0;
+            const difficulty = q.DifficultyLevel !== undefined ? q.DifficultyLevel : (q.difficultyLevel ?? 1);
+            const options = q.Options ?? q.options ?? q.QuestionOptions ?? [];
             
             // QuestionType = 3 (GroupTitle): hiển thị như tiêu đề
             if (questionType === 3) {
@@ -408,7 +408,10 @@ export function AssignmentQuestionManager({ assignmentId }: AssignmentQuestionMa
             }
             
             // Tính số thứ tự câu hỏi (không đếm GroupTitle)
-            const questionNumber = questions.slice(0, index + 1).filter((q: any) => (q.QuestionType || q.questionType) !== 3).length;
+            const questionNumber = questions.slice(0, index + 1).filter((q: any) => {
+              const qt = q.QuestionType ?? q.questionType;
+              return qt !== 3 && qt !== null && qt !== undefined;
+            }).length;
             
             return (
               <Card key={questionId || index}>
