@@ -675,6 +675,11 @@ class BookApiService {
     console.log('mapBookChapter - Questions:', questions);
     console.log('mapBookChapter - Questions length:', Array.isArray(questions) ? questions.length : 0);
     
+    // Map questions để đảm bảo ExplanationContent và các field khác được map đúng
+    const mappedQuestions = Array.isArray(questions) 
+      ? questions.map((q: any) => this.mapBookQuestion(q))
+      : [];
+    
     return {
       id: chapter.id || chapter.Id,
       bookId: chapter.bookId || chapter.BookId,
@@ -685,7 +690,7 @@ class BookApiService {
       isPublished: chapter.isPublished || chapter.IsPublished || true,
       canView: chapter.canView !== undefined ? chapter.canView : (chapter.CanView !== undefined ? chapter.CanView : true),
       questionCount: chapter.questionCount || chapter.QuestionCount || 0,
-      questions: Array.isArray(questions) ? questions : [],
+      questions: mappedQuestions,
       createdAt: chapter.createdAt || chapter.CreatedAt,
       updatedAt: chapter.updatedAt || chapter.UpdatedAt
     };
@@ -693,6 +698,30 @@ class BookApiService {
 
   private mapBookQuestion(question: any): BookQuestion {
     const chapterId = question.chapterId || question.ChapterId;
+    
+    // Map options để đảm bảo các field được map đúng
+    const rawOptions = question.options || question.Options || [];
+    const mappedOptions = Array.isArray(rawOptions) 
+      ? rawOptions.map((opt: any) => ({
+          Id: opt.Id || opt.id,
+          id: opt.id || opt.Id,
+          QuestionId: opt.QuestionId || opt.questionId,
+          questionId: opt.questionId || opt.QuestionId,
+          OptionText: opt.OptionText || opt.optionText,
+          optionText: opt.optionText || opt.OptionText,
+          IsCorrect: opt.IsCorrect !== undefined ? opt.IsCorrect : (opt.isCorrect !== undefined ? opt.isCorrect : false),
+          isCorrect: opt.isCorrect !== undefined ? opt.isCorrect : (opt.IsCorrect !== undefined ? opt.IsCorrect : false),
+          PointsValue: opt.PointsValue || opt.pointsValue,
+          pointsValue: opt.pointsValue || opt.PointsValue,
+          OrderIndex: opt.OrderIndex || opt.orderIndex,
+          orderIndex: opt.orderIndex || opt.OrderIndex,
+          CreatedAt: opt.CreatedAt || opt.createdAt,
+          createdAt: opt.createdAt || opt.CreatedAt,
+          UpdatedAt: opt.UpdatedAt || opt.updatedAt,
+          updatedAt: opt.updatedAt || opt.UpdatedAt
+        }))
+      : [];
+    
     const mapped = {
       id: question.id || question.Id,
       bookId: question.bookId || question.BookId || question.ContextId,
@@ -701,7 +730,7 @@ class BookApiService {
       QuestionContent: question.QuestionContent || question.question || question.Question,
       questionType: question.questionType || question.QuestionType || 1,
       QuestionType: question.QuestionType || question.questionType || 1,
-      options: question.options || question.Options || [],
+      options: mappedOptions,
       correctAnswer: question.correctAnswer || question.CorrectAnswer,
       explanation: question.explanation || question.Explanation || question.ExplanationContent,
       explanationContent: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation,
@@ -716,7 +745,9 @@ class BookApiService {
     console.log('mapBookQuestion:', { 
       originalChapterId: question.ChapterId || question.chapterId,
       mappedChapterId: mapped.chapterId,
-      questionId: mapped.id
+      questionId: mapped.id,
+      hasExplanation: !!mapped.explanationContent,
+      optionsCount: mappedOptions.length
     });
     return mapped;
   }

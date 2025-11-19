@@ -338,6 +338,13 @@ export default function LearningPathsPage() {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
+                onClick={() => router.push('/instructor/courses/learning-paths/create')}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Tạo lộ trình
+              </Button>
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   setSortBy('createdAt');

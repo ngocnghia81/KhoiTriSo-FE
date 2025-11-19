@@ -41,7 +41,7 @@ interface AssignmentFormData {
   maxAttempts: number;
   dueDate: string;
   showAnswersAfter: 'immediately' | 'after_due' | 'never';
-  isPublished: boolean;
+  passingScore: number;
 }
 
 export default function CreateAssignmentPage() {
@@ -58,7 +58,7 @@ export default function CreateAssignmentPage() {
     maxAttempts: 1,
     dueDate: '',
     showAnswersAfter: 'after_due',
-    isPublished: false
+    passingScore: 5
   });
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -510,6 +510,24 @@ export default function CreateAssignmentPage() {
           <option value="after_due">Sau khi hết hạn nộp</option>
           <option value="never">Không hiển thị</option>
         </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Điểm đạt (0-10) *
+        </label>
+        <input
+          type="number"
+          min="0"
+          max="10"
+          step="0.1"
+          value={formData.passingScore}
+          onChange={(e) => setFormData({ ...formData, passingScore: parseFloat(e.target.value) || 0 })}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Điểm tối thiểu để đạt yêu cầu (mặc định: 5)
+        </p>
       </div>
 
     </div>

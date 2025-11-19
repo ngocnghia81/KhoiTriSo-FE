@@ -434,6 +434,15 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
   const [pendingLoading, setPendingLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'graded'>('all');
 
+  // Helper function to check if score is a valid number
+  const isValidScore = (score: any): boolean => {
+    return score !== null && 
+           score !== undefined && 
+           typeof score === 'number' && 
+           !isNaN(score) && 
+           isFinite(score);
+  };
+
   const submissions = data?.Items || data?.items || data?.Result || [];
   const pendingSubmissions = pendingData?.Items || pendingData?.items || pendingData?.Result || [];
 
@@ -459,13 +468,13 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
   }, [activeTab, assignmentId, authenticatedFetch]);
 
   const gradedSubmissions = submissions.filter((s: any) => {
-    const score = s.Score || s.score;
-    return score !== null && score !== undefined;
+    const score = s.Score ?? s.score;
+    return isValidScore(score);
   });
 
   const allPendingSubmissions = pendingSubmissions.filter((s: any) => {
-    const score = s.Score || s.score;
-    return score === null || score === undefined;
+    const score = s.Score ?? s.score;
+    return !isValidScore(score);
   });
 
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set());
@@ -564,7 +573,12 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
   };
 
   const getScoreColor = (score?: number, maxScore?: number) => {
-    if (!score || !maxScore) return 'text-gray-600';
+    // Kiểm tra score và maxScore có phải là số hợp lệ không (bao gồm cả 0)
+    if (score === null || score === undefined || maxScore === null || maxScore === undefined || 
+        typeof score !== 'number' || typeof maxScore !== 'number' || 
+        isNaN(score) || isNaN(maxScore) || !isFinite(score) || !isFinite(maxScore)) {
+      return 'text-gray-600';
+    }
     const percentage = (score / maxScore) * 100;
     if (percentage >= 80) return 'text-green-600';
     if (percentage >= 50) return 'text-yellow-600';
@@ -627,10 +641,10 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                   return attemptB - attemptA; // Mới nhất trước
                 });
 
-                const maxScore = sortedSubmissions[0]?.MaxScore || sortedSubmissions[0]?.maxScore || 100;
+                const maxScore = sortedSubmissions[0]?.MaxScore ?? sortedSubmissions[0]?.maxScore ?? 100;
                 const scores = sortedSubmissions
-                  .map((s: any) => s.Score || s.score)
-                  .filter((s: any) => s !== null && s !== undefined) as number[];
+                  .map((s: any) => s.Score ?? s.score)
+                  .filter((s: any) => isValidScore(s)) as number[];
                 
                 const bestScore = scores.length > 0 ? Math.max(...scores) : null;
                 const avgScore = scores.length > 0 
@@ -638,13 +652,13 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                   : null;
                 
                 const gradedCount = sortedSubmissions.filter((s: any) => {
-                  const score = s.Score || s.score;
-                  return score !== null && score !== undefined;
+                  const score = s.Score ?? s.score;
+                  return isValidScore(score);
                 }).length;
                 
                 const pendingCount = sortedSubmissions.filter((s: any) => {
-                  const score = s.Score || s.score;
-                  return score === null || score === undefined;
+                  const score = s.Score ?? s.score;
+                  return !isValidScore(score);
                 }).length;
 
                 const isExpanded = expandedUsers.has(userId);
@@ -738,8 +752,8 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                             size="sm"
                             onClick={() => {
                               const firstPending = sortedSubmissions.find((s: any) => {
-                                const score = s.Score || s.score;
-                                return score === null || score === undefined;
+                                const score = s.Score ?? s.score;
+                                return !isValidScore(score);
                               });
                               if (firstPending) {
                                 handleGrade(firstPending);
@@ -753,10 +767,10 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                       </TableCell>
                     </TableRow>
                     {isExpanded && sortedSubmissions.map((submission: any) => {
-                      const attemptId = submission.Id || submission.id;
-                      const score = submission.Score || submission.score;
-                      const isCompleted = submission.IsCompleted || submission.isCompleted;
-                      const isGraded = score !== null && score !== undefined;
+                      const attemptId = submission.Id ?? submission.id;
+                      const score = submission.Score ?? submission.score;
+                      const isCompleted = submission.IsCompleted ?? submission.isCompleted;
+                      const isGraded = isValidScore(score);
 
                       return (
                         <TableRow key={attemptId} className="bg-white">
@@ -775,8 +789,8 @@ export function AssignmentSubmissions({ assignmentId }: AssignmentSubmissionsPro
                               : <span className="text-gray-400">Chưa hoàn thành</span>}
                           </TableCell>
                           <TableCell>
-                            <span className={`font-medium ${getScoreColor(score, maxScore)}`}>
-                              {score !== null && score !== undefined 
+                            <span className={`font-medium ${isGraded ? getScoreColor(score, maxScore) : 'text-gray-400'}`}>
+                              {isGraded 
                                 ? `${score}/${maxScore}` 
                                 : 'Chưa chấm'}
                             </span>

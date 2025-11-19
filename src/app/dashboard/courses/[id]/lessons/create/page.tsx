@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useUpload } from '@/hooks/useUpload';
@@ -30,6 +30,7 @@ function CreateLessonClient() {
     duration: 0,
     lessonOrder: 1,
     isPublished: false,
+    isFree: true, // Default to free
     videoUrl: '',
     materialUrls: [] as string[]
   });
@@ -41,6 +42,37 @@ function CreateLessonClient() {
   const [loadingDuration, setLoadingDuration] = useState(false);
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [materialInfos, setMaterialInfos] = useState<Array<{ url: string; fileName: string; fileSize: number; fileType: string }>>([]);
+  const [course, setCourse] = useState<any>(null);
+  const [loadingCourse, setLoadingCourse] = useState(true);
+
+  // Fetch course info to check if it's paid
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        setLoadingCourse(true);
+        const resp = await authenticatedFetch(`/api/courses/${courseId}`);
+        const data = await resp.json();
+        
+        if (resp.ok) {
+          const courseInfo = data?.Result?.Result ?? data?.Result ?? data;
+          setCourse(courseInfo);
+          // If course is free, lesson should default to free
+          const courseIsFree = courseInfo?.IsFree ?? courseInfo?.isFree ?? (courseInfo?.Price === 0 || courseInfo?.price === 0);
+          if (courseIsFree) {
+            setFormData(prev => ({ ...prev, isFree: true }));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err);
+      } finally {
+        setLoadingCourse(false);
+      }
+    };
+
+    if (courseId) {
+      fetchCourse();
+    }
+  }, [courseId, authenticatedFetch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +91,7 @@ function CreateLessonClient() {
         LessonOrder: formData.lessonOrder,
         StaticPagePath: '', // Can be empty
         IsPublished: formData.isPublished, // Lấy từ form
-        IsFree: true // Default to free
+        IsFree: formData.isFree // Lấy từ form
       };
       
       // Debug: Log payload để kiểm tra
@@ -682,6 +714,32 @@ function CreateLessonClient() {
                 </div>
               </div>
             </div>
+
+            {/* IsFree - Only show if course is paid */}
+            {course && !(course.IsFree ?? course.isFree ?? (course.Price === 0 || course.price === 0)) && (
+              <div className="md:col-span-2">
+                <label htmlFor="isFree" className="block text-sm font-medium text-gray-700 mb-2">
+                  Bài học miễn phí?
+                </label>
+                <div className="flex items-center">
+                  <select
+                    id="isFree"
+                    name="isFree"
+                    value={formData.isFree ? 'yes' : 'no'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isFree: e.target.value === 'yes' }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="no">Trả phí (cần mua khóa học)</option>
+                    <option value="yes">Miễn phí (xem được mà không cần mua)</option>
+                  </select>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.isFree 
+                    ? 'Bài học này sẽ được xem miễn phí, ngay cả khi khóa học trả phí'
+                    : 'Học viên cần mua khóa học để xem bài học này'}
+                </p>
+              </div>
+            )}
 
             {/* Published */}
             <div className="md:col-span-2">

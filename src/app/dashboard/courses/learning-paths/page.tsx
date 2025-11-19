@@ -55,6 +55,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { learningPathApi, LearningPath } from '@/services/learningPathApi';
 import { cn } from '@/lib/utils';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import RejectLearningPathModal from '@/components/modals/RejectLearningPathModal';
 
 const difficultyColors: Record<string, string> = {
   NhanBiet: 'bg-sky-100 text-sky-700',
@@ -82,6 +84,9 @@ export default function LearningPathsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pathToDelete, setPathToDelete] = useState<LearningPath | null>(null);
   const [processing, setProcessing] = useState(false);
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedPathForReject, setSelectedPathForReject] = useState<LearningPath | null>(null);
 
   const fetchLearningPaths = useCallback(async () => {
     try {
@@ -154,6 +159,63 @@ export default function LearningPathsPage() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleApproveLearningPath = async (pathId: number) => {
+    if (!confirm('Bạn có chắc muốn duyệt lộ trình học này?')) return;
+    
+    try {
+      setProcessing(true);
+      const resp = await authenticatedFetch(`/api/admin/learning-paths/${pathId}/approve`, {
+        method: 'POST'
+      });
+      
+      if (resp.ok) {
+        alert('Đã duyệt lộ trình học thành công!');
+        await fetchLearningPaths();
+      } else {
+        const data = await resp.json();
+        alert(data?.Message || 'Có lỗi xảy ra');
+      }
+    } catch (err) {
+      alert('Có lỗi xảy ra khi duyệt lộ trình học');
+      console.error('Approve learning path error:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRejectLearningPath = async (reason: string) => {
+    if (!selectedPathForReject) return;
+    
+    try {
+      setProcessing(true);
+      const resp = await authenticatedFetch(`/api/admin/learning-paths/${selectedPathForReject.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Reason: reason })
+      });
+      
+      if (resp.ok) {
+        alert('Đã từ chối lộ trình học. Giảng viên sẽ nhận được thông báo với lý do từ chối.');
+        setRejectModalOpen(false);
+        setSelectedPathForReject(null);
+        await fetchLearningPaths();
+      } else {
+        const data = await resp.json();
+        alert(data?.Message || 'Có lỗi xảy ra');
+      }
+    } catch (err) {
+      alert('Có lỗi xảy ra khi từ chối lộ trình học');
+      console.error('Reject learning path error:', err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openRejectModal = (path: LearningPath) => {
+    setSelectedPathForReject(path);
+    setRejectModalOpen(true);
   };
 
   const analytics = useMemo(() => {
@@ -527,6 +589,25 @@ export default function LearningPathsPage() {
                               <Edit className="w-4 h-4 mr-2" />
                               Chỉnh sửa
                             </DropdownMenuItem>
+                            {path.approvalStatusName === 'Pending' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleApproveLearningPath(path.id)}
+                                  className="text-green-600 focus:text-green-600"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Duyệt
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openRejectModal(path)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Từ chối
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             <DropdownMenuSeparator />
                             {path.isActive === false ? (
                               <DropdownMenuItem
@@ -788,6 +869,17 @@ export default function LearningPathsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reject Learning Path Modal */}
+      <RejectLearningPathModal
+        isOpen={rejectModalOpen}
+        pathTitle={selectedPathForReject?.title || ''}
+        onClose={() => {
+          setRejectModalOpen(false);
+          setSelectedPathForReject(null);
+        }}
+        onConfirm={handleRejectLearningPath}
+      />
     </div>
   );
 }

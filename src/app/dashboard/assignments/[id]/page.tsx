@@ -416,18 +416,28 @@ export default function AssignmentDetailPage() {
                       <div className="p-4 bg-yellow-50 rounded-lg">
                         <p className="text-sm text-gray-600">Điểm trung bình</p>
                         <p className="text-2xl font-bold text-yellow-600 mt-1">
-                          {results.AverageScore || results.averageScore 
-                            ? `${(results.AverageScore || results.averageScore).toFixed(1)}/${results.MaxScore || results.maxScore || 100}`
-                            : 'N/A'}
+                          {(() => {
+                            const avg = results.AverageScore ?? results.averageScore;
+                            const max = results.MaxScore ?? results.maxScore ?? 100;
+                            // Kiểm tra avg có phải là số hợp lệ không
+                            if (avg !== null && avg !== undefined && typeof avg === 'number' && !isNaN(avg) && isFinite(avg)) {
+                              return `${avg.toFixed(1)}/${max}`;
+                            }
+                            return 'Chưa chấm';
+                          })()}
                         </p>
                       </div>
                       <div className="p-4 bg-purple-50 rounded-lg">
                         <p className="text-sm text-gray-600">Điểm cao nhất</p>
                         <p className="text-2xl font-bold text-purple-600 mt-1">
                           {(() => {
-                            const best = (results.BestScore ?? results.bestScore);
-                            const max = (results.MaxScore ?? results.maxScore ?? 100);
-                            return typeof best === 'number' ? `${best.toFixed(1)}/${max}` : 'N/A';
+                            const best = results.BestScore ?? results.bestScore;
+                            const max = results.MaxScore ?? results.maxScore ?? 100;
+                            // Kiểm tra best có phải là số hợp lệ không
+                            if (best !== null && best !== undefined && typeof best === 'number' && !isNaN(best) && isFinite(best)) {
+                              return `${best.toFixed(1)}/${max}`;
+                            }
+                            return 'Chưa chấm';
                           })()}
                         </p>
                       </div>
@@ -437,11 +447,23 @@ export default function AssignmentDetailPage() {
                       <div className="p-4 bg-gray-50 rounded-lg">
                         <p className="text-sm text-gray-600">Tỷ lệ đạt:</p>
                         <p className="text-lg font-semibold">
-                          {results.IsPassed || results.isPassed ? (
-                            <Badge className="bg-green-100 text-green-700">Đạt</Badge>
-                          ) : (
-                            <Badge className="bg-red-100 text-red-700">Chưa đạt</Badge>
-                          )}
+                          {(() => {
+                            const best = results.BestScore ?? results.bestScore;
+                            const passingScore = results.PassingScore ?? results.passingScore ?? 0;
+                            const maxScore = results.MaxScore ?? results.maxScore ?? 100;
+                            
+                            // Chỉ tính tỷ lệ đạt nếu best là số hợp lệ
+                            if (best !== null && best !== undefined && typeof best === 'number' && !isNaN(best) && isFinite(best)) {
+                              const percentage = (best / maxScore) * 100;
+                              const isPassed = percentage >= passingScore;
+                              return isPassed ? (
+                                <Badge className="bg-green-100 text-green-700">Đạt</Badge>
+                              ) : (
+                                <Badge className="bg-red-100 text-red-700">Chưa đạt</Badge>
+                              );
+                            }
+                            return <Badge className="bg-gray-100 text-gray-700">Chưa chấm</Badge>;
+                          })()}
                         </p>
                         <p className="text-sm text-gray-500 mt-1">
                           Điểm đạt yêu cầu: {results.PassingScore || results.passingScore}%

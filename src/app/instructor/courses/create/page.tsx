@@ -23,7 +23,6 @@ export default function CreateCoursePage() {
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [level, setLevel] = useState<number>(0); // 0: Cơ bản, ...
   const [isFree, setIsFree] = useState<boolean>(true);
-  const [isPublished, setIsPublished] = useState<boolean>(false);
   const [price, setPrice] = useState<number>(0);
   const [priceInput, setPriceInput] = useState<string>('0');
   const [staticPagePath, setStaticPagePath] = useState('');
@@ -154,7 +153,7 @@ export default function CreateCoursePage() {
           .split('\n')
           .map(s=>s.trim())
           .filter(Boolean),
-        IsPublished: isPublished, // Admin có thể xuất bản trực tiếp
+        IsPublished: false, // Instructor không thể xuất bản trực tiếp, cần admin duyệt
       } as any;
 
       const resp = await authenticatedFetch('/api/courses', {
@@ -423,20 +422,14 @@ export default function CreateCoursePage() {
           <button 
             disabled={saving || uploadingThumbnail || !thumbnail} 
             type="submit" 
-            className={`px-5 py-2 rounded text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed ${
-              isPublished 
-                ? 'bg-green-600 hover:bg-green-700' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
+            className="px-5 py-2 rounded text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700"
             title={!thumbnail ? 'Vui lòng upload thumbnail trước' : uploadingThumbnail ? 'Đang upload thumbnail...' : ''}
           >
             {uploadingThumbnail
               ? 'Đang upload thumbnail...'
               : saving 
                 ? 'Đang tạo...' 
-                : isPublished 
-                  ? 'Tạo và xuất bản khóa học' 
-                  : 'Tạo khóa học'
+                : 'Tạo khóa học'
             }
           </button>
           <button 
