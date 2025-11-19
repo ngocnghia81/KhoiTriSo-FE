@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { SignalRProvider } from "@/contexts/SignalRContext";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import Script from "next/script";
 import "@/utils/suppressWarnings";
@@ -125,10 +126,12 @@ export default function RootLayout({
         />
         <LanguageProvider>
           <AuthProvider>
-            <ConditionalLayout>
-              {children}
-            </ConditionalLayout>
-            <Toaster position="top-right" richColors />
+            <SignalRProvider>
+              <ConditionalLayout>
+                {children}
+              </ConditionalLayout>
+              <Toaster position="top-right" richColors />
+            </SignalRProvider>
           </AuthProvider>
         </LanguageProvider>
       </body>

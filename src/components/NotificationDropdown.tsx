@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { BellIcon } from '@heroicons/react/24/outline';
 import { BellIcon as BellIconSolid } from '@heroicons/react/24/solid';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSignalR } from '@/contexts/SignalRContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,8 +23,18 @@ interface Notification {
   actionUrl?: string;
 }
 
-export default function NotificationBell() {
-  const { isAuthenticated } = useAuth();
+interface NotificationDropdownProps {
+  className?: string;
+  buttonClassName?: string;
+  showConnectionStatus?: boolean;
+}
+
+export default function NotificationDropdown({ 
+  className = '', 
+  buttonClassName = '',
+  showConnectionStatus = false 
+}: NotificationDropdownProps) {
+  const { user, isAuthenticated } = useAuth();
   const { data, unreadCount, loading, refetch, markAsRead, markAllAsRead } = useNotifications({ 
     page: 1, 
     pageSize: 10 
@@ -98,7 +106,7 @@ export default function NotificationBell() {
   };
 
   // Setup SignalR connection
-  useSignalR(handleNotificationReceived);
+  const { isConnected, connectionState } = useSignalR(handleNotificationReceived);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -135,12 +143,10 @@ export default function NotificationBell() {
   };
 
   const getNotificationLink = (notification: Notification) => {
-    // Use ActionUrl if available (from backend)
     if (notification.actionUrl) {
       return notification.actionUrl;
     }
     
-    // Fallback to relatedId/relatedType logic
     if (notification.relatedId && notification.relatedType) {
       switch (notification.relatedType.toLowerCase()) {
         case 'course':
@@ -159,18 +165,49 @@ export default function NotificationBell() {
   };
 
   const getNotificationIcon = (type: number) => {
-    switch (type) {
-      case 1: // Course
-        return '📚';
-      case 2: // Assignment
-        return '📝';
-      case 3: // Lesson
-        return '🎥';
-      case 4: // Forum
-        return '💬';
-      default:
-        return '🔔';
-    }
+    const typeIcons: Record<number, string> = {
+      1: '🔔', // System
+      2: '📚', // Course
+      3: '🎥', // Lesson
+      4: '📝', // Assignment
+      5: '🛒', // Order
+      6: '💳', // Payment
+      7: '🏆', // Certificate
+      8: '💬', // Forum
+      9: '⭐', // Review
+      10: '📢', // Announcement
+      11: '📹', // LiveClass
+      12: '🗺️', // LearningPath
+      13: '📖', // Book
+      14: '❤️', // Wishlist
+      15: '🎫', // Coupon
+      16: '💭', // LessonDiscussion
+      17: '💬', // ForumAnswer
+    };
+    return typeIcons[type] || '🔔';
+  };
+
+  const getNotificationTypeColor = (type: number) => {
+    const typeColors: Record<number, string> = {
+      1: 'border-gray-500', // System
+      2: 'border-green-500', // Course
+      3: 'border-blue-500', // Lesson
+      4: 'border-orange-500', // Assignment
+      5: 'border-yellow-500', // Order
+      6: 'border-indigo-500', // Payment
+      7: 'border-pink-500', // Certificate
+      8: 'border-cyan-500', // Forum
+      9: 'border-purple-500', // Review
+      10: 'border-red-500', // Announcement
+      11: 'border-violet-500', // LiveClass
+      12: 'border-teal-500', // LearningPath
+      13: 'border-emerald-500', // Book
+      14: 'border-rose-500', // Wishlist
+      15: 'border-amber-500', // Coupon
+      16: 'border-lime-500', // LessonDiscussion
+      17: 'border-sky-500', // ForumAnswer
+    };
+    return typeColors[type] || 'border-gray-500';
   };
 
   if (!isAuthenticated) {
@@ -178,49 +215,58 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <Button
-        variant="ghost"
-        size="sm"
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative"
+        className={`p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-md relative ${buttonClassName}`}
       >
-        <div className="relative flex items-center justify-center">
-          {unreadCount > 0 ? (
-            <BellIconSolid className={`h-5 w-5 text-gray-700 transition-transform ${isOpen ? 'scale-95' : ''}`} />
-          ) : (
-            <BellIcon className="h-5 w-5 text-gray-700" />
-          )}
-          {unreadCount > 0 && (
-            <span 
-              className="absolute -top-1.5 -right-1.5 h-4 min-w-[18px] px-1 flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-r from-red-500 via-rose-500 to-red-600 rounded-full border border-white shadow-lg pointer-events-none"
-              style={{
-                animation: 'cart-badge-pulse 2s ease-in-out infinite',
-                boxShadow: '0 4px 12px rgba(244, 63, 94, 0.35)',
-              }}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </div>
-      </Button>
+        {unreadCount > 0 ? (
+          <BellIconSolid className="h-5 w-5" />
+        ) : (
+          <BellIcon className="h-5 w-5" />
+        )}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+        {showConnectionStatus && (
+          <span 
+            className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ${
+              isConnected ? 'bg-green-500' : 'bg-gray-400'
+            }`}
+            title={isConnected ? 'Đã kết nối SignalR' : 'Chưa kết nối SignalR'}
+          />
+        )}
+      </button>
 
       {isOpen && (
-        <Card className="absolute right-0 top-full mt-2 w-80 lg:w-96 shadow-xl border border-gray-200 rounded-xl overflow-hidden z-50">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-              <h3 className="font-semibold text-gray-900">Thông báo</h3>
-              {unreadCount > 0 && (
-                <button
-                  onClick={handleMarkAllAsRead}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Đánh dấu tất cả đã đọc
-                </button>
-              )}
+        <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
+          <div className="py-2">
+            <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-900">Thông báo</h3>
+              <div className="flex items-center gap-2">
+                {showConnectionStatus && (
+                  <span 
+                    className={`h-2 w-2 rounded-full ${
+                      isConnected ? 'bg-green-500' : 'bg-gray-400'
+                    }`}
+                    title={connectionState}
+                  />
+                )}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Đánh dấu tất cả đã đọc
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="max-h-96 overflow-y-auto">
+            
+            <div className="max-h-64 overflow-y-auto">
               {loading ? (
                 <div className="p-8 text-center text-gray-500">
                   Đang tải...
@@ -242,12 +288,12 @@ export default function NotificationBell() {
                         }
                         setIsOpen(false);
                       }}
-                      className={`block p-4 hover:bg-gray-50 transition-colors ${
-                        !notification.isRead ? 'bg-blue-50' : ''
-                      }`}
+                      className={`block px-4 py-3 hover:bg-gray-50 cursor-pointer border-l-4 ${
+                        getNotificationTypeColor(notification.type)
+                      } ${!notification.isRead ? 'bg-blue-50' : ''}`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="text-2xl flex-shrink-0">
+                        <div className="text-xl flex-shrink-0">
                           {getNotificationIcon(notification.type)}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -274,11 +320,11 @@ export default function NotificationBell() {
                 </div>
               )}
             </div>
-
+            
             {notifications.length > 0 && (
-              <div className="p-3 border-t bg-gray-50 text-center">
+              <div className="px-4 py-2 border-t border-gray-200 text-center">
                 <Link
-                  href="/notifications"
+                  href="/dashboard/notifications"
                   className="text-sm text-blue-600 hover:text-blue-800"
                   onClick={() => setIsOpen(false)}
                 >
@@ -286,8 +332,8 @@ export default function NotificationBell() {
                 </Link>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
