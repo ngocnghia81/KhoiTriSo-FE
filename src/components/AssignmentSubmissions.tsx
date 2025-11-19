@@ -92,6 +92,10 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
     return submission.Answers?.find((a: any) => (a.QuestionId ?? a.questionId) === questionId);
   };
 
+  const getAnswersForQuestion = (questionId: number) => {
+    return submission.Answers?.filter((a: any) => (a.QuestionId ?? a.questionId) === questionId) || [];
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-10 mx-auto p-6 border w-full max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
@@ -142,18 +146,188 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {answer && (
+                  {/* Hiển thị tất cả options với đánh dấu đáp án đúng và đáp án học viên chọn */}
+                  {options.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium mb-2">Câu trả lời của học sinh:</p>
-                      <div className="p-3 bg-gray-50 rounded border">
-                        {questionType === 2 ? (
-                          <div className="text-sm" dangerouslySetInnerHTML={renderHTML(answer.AnswerText ?? answer.answerText ?? 'Không có câu trả lời')} />
-                        ) : (
-                          <p className="text-sm">
-                            {answer.AnswerText ?? answer.answerText ?? 
-                             (answer.OptionId != null ? `Đã chọn đáp án ${answer.OptionId}` : 'Không có câu trả lời')}
-                          </p>
-                        )}
+                      <p className="text-sm font-medium mb-2">Các đáp án:</p>
+                      <div className="space-y-2">
+                        {options.map((opt: any, optIndex: number) => {
+                          const optionId = opt.Id ?? opt.id ?? optIndex;
+                          const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
+                          const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
+                          
+                          // Tìm answer tương ứng với option này
+                          let userAnswer: any = null;
+                          if (questionType === 1) {
+                            // TrueFalse: tìm answer có OptionId trùng
+                            userAnswer = getAnswersForQuestion(questionId).find((a: any) => 
+                              (a.OptionId ?? a.optionId) === optionId
+                            );
+                          } else {
+                            // MultipleChoice: chỉ có 1 answer
+                            const ans = getAnswerForQuestion(questionId);
+                            if (ans && (ans.OptionId ?? ans.optionId) === optionId) {
+                              userAnswer = ans;
+                            }
+                          }
+                          
+                          const isSelected = userAnswer != null;
+                          
+                          // Với TrueFalse: so sánh option.isCorrect với bool từ answerText
+                          let userAnswerIsCorrect = false;
+                          let userBoolValue: boolean | null = null;
+                          if (questionType === 1 && isSelected) {
+                            const answerText = userAnswer?.AnswerText ?? userAnswer?.answerText ?? '';
+                            if (answerText === 'true' || answerText === 'True') {
+                              userBoolValue = true;
+                            } else if (answerText === 'false' || answerText === 'False') {
+                              userBoolValue = false;
+                            }
+                            // So khớp: option.isCorrect == userBoolValue
+                            if (userBoolValue !== null) {
+                              userAnswerIsCorrect = isCorrect === userBoolValue;
+                            } else {
+                              userAnswerIsCorrect = userAnswer?.IsCorrect ?? userAnswer?.isCorrect ?? false;
+                            }
+                          } else {
+                            // MultipleChoice: dùng isCorrect từ answer
+                            userAnswerIsCorrect = userAnswer?.IsCorrect ?? userAnswer?.isCorrect ?? false;
+                          }
+                          
+                          // Xác định màu sắc và icon
+                          let bgColor = 'bg-gray-50';
+                          let borderColor = 'border-gray-200';
+                          let textColor = 'text-gray-900';
+                          let icon = null;
+                          
+                          if (questionType === 1) {
+                            // TrueFalse: logic riêng
+                            if (isSelected && userAnswerIsCorrect) {
+                              // Học viên chọn đúng (isCorrect === userBoolValue)
+                              bgColor = 'bg-green-50';
+                              borderColor = 'border-green-300';
+                              textColor = 'text-green-800';
+                              icon = <CheckCircle2 className="w-4 h-4 text-green-600" />;
+                            } else if (isSelected && !userAnswerIsCorrect) {
+                              // Học viên chọn sai (isCorrect !== userBoolValue)
+                              bgColor = 'bg-red-50';
+                              borderColor = 'border-red-300';
+                              textColor = 'text-red-800';
+                              icon = <XCircle className="w-4 h-4 text-red-600" />;
+                            } else if (!isSelected) {
+                              // Học viên chưa chọn
+                              bgColor = 'bg-gray-50';
+                              borderColor = 'border-gray-200';
+                              textColor = 'text-gray-700';
+                            }
+                          } else {
+                            // MultipleChoice: logic cũ
+                            if (isSelected && isCorrect && userAnswerIsCorrect) {
+                              // Học viên chọn đúng
+                              bgColor = 'bg-green-50';
+                              borderColor = 'border-green-300';
+                              textColor = 'text-green-800';
+                              icon = <CheckCircle2 className="w-4 h-4 text-green-600" />;
+                            } else if (isSelected && !isCorrect) {
+                              // Học viên chọn sai
+                              bgColor = 'bg-red-50';
+                              borderColor = 'border-red-300';
+                              textColor = 'text-red-800';
+                              icon = <XCircle className="w-4 h-4 text-red-600" />;
+                            } else if (isCorrect && !isSelected) {
+                              // Đáp án đúng nhưng học viên không chọn
+                              bgColor = 'bg-yellow-50';
+                              borderColor = 'border-yellow-300';
+                              textColor = 'text-yellow-800';
+                              icon = <CheckCircle2 className="w-4 h-4 text-yellow-600" />;
+                            } else if (isSelected) {
+                              // Học viên chọn nhưng chưa biết đúng/sai
+                              bgColor = 'bg-blue-50';
+                              borderColor = 'border-blue-300';
+                              textColor = 'text-blue-800';
+                              icon = <Clock className="w-4 h-4 text-blue-600" />;
+                            }
+                          }
+                          
+                          return (
+                            <div
+                              key={optIndex}
+                              className={`p-3 rounded border-2 ${bgColor} ${borderColor} ${textColor}`}
+                            >
+                              <div className="flex items-start gap-2">
+                                {icon && <div className="mt-0.5">{icon}</div>}
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium">
+                                      {String.fromCharCode(65 + optIndex)}.
+                                    </span>
+                                    {questionType === 1 && (
+                                      <Badge variant="outline" className={`text-xs ${
+                                        isCorrect 
+                                          ? 'bg-green-100 text-green-700 border-green-300' 
+                                          : 'bg-red-100 text-red-700 border-red-300'
+                                      }`}>
+                                        {isCorrect ? 'Đúng' : 'Sai'}
+                                      </Badge>
+                                    )}
+                                    {questionType !== 1 && isCorrect && (
+                                      <Badge variant="outline" className="bg-green-100 text-green-700 text-xs">
+                                        Đáp án đúng
+                                      </Badge>
+                                    )}
+                                    {isSelected && (
+                                      <Badge variant="outline" className="bg-blue-100 text-blue-700 text-xs">
+                                        Học viên chọn
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div 
+                                    className="text-sm option-math" 
+                                    dangerouslySetInnerHTML={renderHTML(optionText)} 
+                                  />
+                                  {questionType === 1 && isSelected && userBoolValue !== null && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <span className="text-xs font-medium text-gray-700">Học sinh chọn:</span>
+                                      <Badge variant="outline" className={`text-xs ${
+                                        userBoolValue 
+                                          ? 'bg-green-100 text-green-700 border-green-300' 
+                                          : 'bg-red-100 text-red-700 border-red-300'
+                                      }`}>
+                                        {userBoolValue ? 'Đúng' : 'Sai'}
+                                      </Badge>
+                                      {userAnswerIsCorrect ? (
+                                        <Badge variant="outline" className="bg-green-100 text-green-700 text-xs">
+                                          ✓ Đúng
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-red-100 text-red-700 text-xs">
+                                          ✗ Sai
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hiển thị câu trả lời tự luận */}
+                  {questionType === 2 && answer && (
+                    <div>
+                      <p className="text-sm font-medium mb-2">Đáp án của học sinh:</p>
+                      <div className={`p-3 rounded border-2 ${
+                        (answer.IsCorrect ?? answer.isCorrect) 
+                          ? 'bg-green-50 border-green-300' 
+                          : 'bg-red-50 border-red-300'
+                      }`}>
+                        <div 
+                          className="text-sm" 
+                          dangerouslySetInnerHTML={renderHTML(answer.AnswerText ?? answer.answerText ?? 'Không có câu trả lời')} 
+                        />
                         {answer.IsCorrect !== undefined && (
                           <div className="mt-2">
                             {(answer.IsCorrect ?? answer.isCorrect) ? (
@@ -170,61 +344,64 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
 
-                  {questionType === 2 && options.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">Đáp án đúng:</p>
-                      <div className="p-3 bg-green-50 rounded border border-green-200">
-                        {options.map((opt: any, optIndex: number) => {
-                          const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
-                          const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
-                          if (!isCorrect) return null;
-                          
-                          // Split bởi "|" nếu có
-                          const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
-                          
-                          return (
-                            <div key={optIndex} className="space-y-1">
-                              {answers.length > 0 ? (
-                                answers.map((answer: string, answerIndex: number) => (
-                                  <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
-                                    <span className="text-sm font-medium text-green-700">•</span>
-                                    <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
-                                  <span className="text-sm font-medium text-green-700">•</span>
-                                  <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
+                      {/* Hiển thị đáp án đúng cho tự luận */}
+                      {options.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-sm font-medium mb-2">Đáp án đúng:</p>
+                          <div className="p-3 bg-green-50 rounded border border-green-200">
+                            {options.map((opt: any, optIndex: number) => {
+                              const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
+                              const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
+                              if (!isCorrect) return null;
+                              
+                              // Split bởi "|" nếu có
+                              const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
+                              
+                              return (
+                                <div key={optIndex} className="space-y-1">
+                                  {answers.length > 0 ? (
+                                    answers.map((answer: string, answerIndex: number) => (
+                                      <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                        <span className="text-sm font-medium text-green-700">•</span>
+                                        <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                      <span className="text-sm font-medium text-green-700">•</span>
+                                      <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Hiển thị điểm số */}
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Điểm số (tự động chấm)
+                      Điểm số
                       </label>
-                      <div className="p-2 bg-gray-100 rounded border text-sm">
-                        {answer?.PointsEarned !== undefined && answer?.PointsEarned !== null
-                          ? `${answer.PointsEarned ?? answer.pointsEarned ?? 0} / ${maxPoints}`
-                          : 'Chưa chấm (sẽ tự động chấm)'}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Nhận xét
-                      </label>
-                      <div className="p-2 bg-gray-50 rounded border text-sm text-gray-600">
-                        {answer?.Feedback ?? answer?.feedback ?? 'Chưa có nhận xét'}
-                      </div>
+                    <div className="p-2 bg-gray-100 rounded border text-sm font-semibold">
+                      {(() => {
+                        let totalPointsEarned = 0;
+                        if (questionType === 1) {
+                          // TrueFalse: tổng điểm từ tất cả answers
+                          const answers = getAnswersForQuestion(questionId);
+                          totalPointsEarned = answers.reduce((sum: number, a: any) => {
+                            return sum + (a.PointsEarned ?? a.pointsEarned ?? 0);
+                          }, 0);
+                        } else {
+                          // MultipleChoice hoặc ShortAnswer: điểm từ 1 answer
+                          totalPointsEarned = answer?.PointsEarned ?? answer?.pointsEarned ?? 0;
+                        }
+                        return `${totalPointsEarned.toFixed(2)} / ${maxPoints}`;
+                      })()}
                     </div>
                   </div>
                 </CardContent>
