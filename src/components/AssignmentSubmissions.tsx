@@ -348,35 +348,35 @@ function GradingModal({ submission, questions, onClose, onSave, loading }: Gradi
                       {/* Hiển thị đáp án đúng cho tự luận */}
                       {options.length > 0 && (
                         <div className="mt-3">
-                          <p className="text-sm font-medium mb-2">Đáp án đúng:</p>
-                          <div className="p-3 bg-green-50 rounded border border-green-200">
-                            {options.map((opt: any, optIndex: number) => {
-                              const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
-                              const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
-                              if (!isCorrect) return null;
-                              
-                              // Split bởi "|" nếu có
-                              const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
-                              
-                              return (
-                                <div key={optIndex} className="space-y-1">
-                                  {answers.length > 0 ? (
-                                    answers.map((answer: string, answerIndex: number) => (
-                                      <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
-                                        <span className="text-sm font-medium text-green-700">•</span>
-                                        <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
-                                      </div>
-                                    ))
-                                  ) : (
-                                    <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
-                                      <span className="text-sm font-medium text-green-700">•</span>
-                                      <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
-                                    </div>
-                                  )}
+                      <p className="text-sm font-medium mb-2">Đáp án đúng:</p>
+                      <div className="p-3 bg-green-50 rounded border border-green-200">
+                        {options.map((opt: any, optIndex: number) => {
+                          const optionText = opt.OptionText ?? opt.optionText ?? opt.OptionContent ?? opt.optionContent ?? '';
+                          const isCorrect = opt.IsCorrect ?? opt.isCorrect ?? false;
+                          if (!isCorrect) return null;
+                          
+                          // Split bởi "|" nếu có
+                          const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
+                          
+                          return (
+                            <div key={optIndex} className="space-y-1">
+                              {answers.length > 0 ? (
+                                answers.map((answer: string, answerIndex: number) => (
+                                  <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                    <span className="text-sm font-medium text-green-700">•</span>
+                                    <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(answer)} />
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                  <span className="text-sm font-medium text-green-700">•</span>
+                                  <span className="flex-1 text-sm option-math text-green-800" dangerouslySetInnerHTML={renderHTML(optionText)} />
                                 </div>
-                              );
-                            })}
-                          </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                         </div>
                       )}
                     </div>
