@@ -18,8 +18,9 @@ import {
   ClockIcon,
   DocumentTextIcon,
   CheckCircleIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { Loader2 } from 'lucide-react';
+import { Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -311,7 +312,8 @@ export default function AssignmentDetailPage() {
       return;
     }
     // Chọn 1 đáp án (trắc nghiệm - type 0)
-    if (isNaN(optionId) && optionId !== 0) {
+    // Kiểm tra optionId phải là số hợp lệ (bao gồm cả 0)
+    if (isNaN(optionId)) {
       console.warn('Invalid optionId:', optionId);
       return;
     }
@@ -346,46 +348,70 @@ export default function AssignmentDetailPage() {
     setAnswers(prev => ({ ...prev, [questionId]: text }));
   };
 
+  const formatAnswersForSubmission = () => {
+    console.log('formatAnswersForSubmission - answers:', answers);
+    return Object.entries(answers).flatMap(([questionId, optionIdOrTextOrObject]) => {
+      const qId = parseInt(questionId);
+      const question = questions.find(q => q.id === qId);
+      if (!question || question.questionType === 3) {
+        console.log('Bỏ qua question:', { questionId: qId, question, questionType: question?.questionType });
+        return []; // Bỏ qua GroupTitle
+      }
+      
+      console.log('Processing question:', { questionId: qId, questionType: question.questionType, answer: optionIdOrTextOrObject });
+      
+      if (question.questionType === 2) {
+        // Tự luận điền đáp án
+        const answerText = typeof optionIdOrTextOrObject === 'string' ? optionIdOrTextOrObject : '';
+        if (!answerText.trim()) return [];
+        return [{
+          QuestionId: qId,
+          AnswerText: answerText,
+        }];
+      } else if (question.questionType === 1) {
+        // Đúng/Sai: mỗi option là một answer riêng
+        if (typeof optionIdOrTextOrObject === 'object' && optionIdOrTextOrObject !== null) {
+          const optionAnswers = optionIdOrTextOrObject as { [optionId: number]: boolean };
+          return Object.entries(optionAnswers).map(([optId, isTrue]) => ({
+            QuestionId: qId,
+            OptionId: parseInt(optId),
+            AnswerText: isTrue ? 'true' : 'false',
+          }));
+        }
+        return [];
+      } else if (question.questionType === 0) {
+        // Trắc nghiệm: chọn 1 đáp án
+        const optionId = typeof optionIdOrTextOrObject === 'number' ? optionIdOrTextOrObject : undefined;
+        if (optionId === undefined || isNaN(optionId)) {
+          console.warn('Trắc nghiệm: optionId không hợp lệ', { questionId: qId, optionIdOrTextOrObject, optionId, type: typeof optionIdOrTextOrObject });
+          return [];
+        }
+        console.log('Trắc nghiệm: format answer', { QuestionId: qId, OptionId: optionId });
+        return [{
+          QuestionId: qId,
+          OptionId: optionId,
+          AnswerText: '',
+        }];
+      } else {
+        console.warn('Unknown question type:', { questionId: qId, questionType: question.questionType });
+        return [];
+      }
+    });
+  };
+
   const handleAutoSubmit = async () => {
     if (submitting) return;
     try {
       setSubmitting(true);
+      const formattedAnswers = formatAnswersForSubmission();
+      
       const response = await authenticatedFetch(`/api/assignments/${assignmentId}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          answers: Object.entries(answers).flatMap(([questionId, optionIdOrTextOrObject]) => {
-            const question = questions.find(q => q.id === parseInt(questionId));
-            if (!question) return [];
-            
-            if (question.questionType === 2) {
-              // Tự luận điền đáp án
-              return [{
-                questionId: parseInt(questionId),
-                answerText: typeof optionIdOrTextOrObject === 'string' ? optionIdOrTextOrObject : '',
-              }];
-            } else if (question.questionType === 1) {
-              // Đúng/Sai: mỗi option là một answer riêng
-              if (typeof optionIdOrTextOrObject === 'object' && optionIdOrTextOrObject !== null) {
-                const optionAnswers = optionIdOrTextOrObject as { [optionId: number]: boolean };
-                return Object.entries(optionAnswers).map(([optId, isTrue]) => ({
-                  questionId: parseInt(questionId),
-                  optionId: parseInt(optId),
-                  answerText: isTrue ? 'true' : 'false',
-                }));
-              }
-              return [];
-            } else {
-              // Trắc nghiệm: chọn 1 đáp án
-              return [{
-                questionId: parseInt(questionId),
-                optionId: typeof optionIdOrTextOrObject === 'number' ? optionIdOrTextOrObject : undefined,
-                answerText: '',
-              }];
-            }
-          }),
+          Answers: formattedAnswers,
         }),
       });
 
@@ -437,47 +463,14 @@ export default function AssignmentDetailPage() {
     console.log('All answers state:', answers);
     console.log('Questions:', questions.map(q => ({ id: q.id, type: q.questionType })));
     
-    const formattedAnswers = validAnswers.flatMap(([questionId, optionIdOrTextOrObject]) => {
-      const question = questions.find(q => q.id === parseInt(questionId));
-      if (!question) {
-        console.warn('Question not found for ID:', questionId);
-        return [];
-      }
-      
-      if (question.questionType === 2) {
-        // Tự luận điền đáp án
-        const answer = {
-          questionId: parseInt(questionId),
-          answerText: typeof optionIdOrTextOrObject === 'string' ? optionIdOrTextOrObject : '',
-        };
-        console.log('Formatted answer (type 2):', answer);
-        return [answer];
-      } else if (question.questionType === 1) {
-        // Đúng/Sai: mỗi option là một answer riêng
-        if (typeof optionIdOrTextOrObject === 'object' && optionIdOrTextOrObject !== null) {
-          const optionAnswers = optionIdOrTextOrObject as { [optionId: number]: boolean };
-          const answers = Object.entries(optionAnswers).map(([optId, isTrue]) => ({
-            questionId: parseInt(questionId),
-            optionId: parseInt(optId),
-            answerText: isTrue ? 'true' : 'false', // Backend có thể cần format này
-          }));
-          console.log('Formatted answers (type 1):', answers);
-          return answers;
-        }
-        return [];
-      } else {
-        // Trắc nghiệm: chọn 1 đáp án
-        const answer = {
-          questionId: parseInt(questionId),
-          optionId: typeof optionIdOrTextOrObject === 'number' ? optionIdOrTextOrObject : undefined,
-          answerText: '',
-        };
-        console.log('Formatted answer (type 0):', answer);
-        return [answer];
-      }
-    });
+    const formattedAnswers = formatAnswersForSubmission();
     
     console.log('Final formatted answers to send:', formattedAnswers);
+    
+    if (formattedAnswers.length === 0 && !isAuto) {
+      toast.error('Vui lòng chọn ít nhất một đáp án');
+      return;
+    }
     
     try {
       setSubmitting(true);
@@ -487,7 +480,7 @@ export default function AssignmentDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          answers: formattedAnswers,
+          Answers: formattedAnswers,
         }),
       });
 
@@ -725,8 +718,10 @@ export default function AssignmentDetailPage() {
                       });
                     }
                     
-                    // Tính điểm tổng cho câu hỏi
-                    const totalPoints = questionAnswers.reduce((sum: number, a: any) => sum + (a.points || 0), 0);
+                    // Tính điểm tổng cho câu hỏi (PointsEarned)
+                    const totalPointsEarned = questionAnswers.reduce((sum: number, a: any) => {
+                      return sum + (a.points || a.PointsEarned || a.pointsEarned || 0);
+                    }, 0);
                     const isFullyCorrect = questionAnswers.length > 0 && questionAnswers.every((a: any) => a.isCorrect);
                     
                     // Với type 2 (tự luận), lấy answer đầu tiên
@@ -737,16 +732,6 @@ export default function AssignmentDetailPage() {
                     const selectedOptionIds = questionAnswers
                       .map((a: any) => a.selectedOptionId || a.optionId)
                       .filter((id: any) => id !== undefined && id !== null);
-                    
-                    // Debug log cho multiple choice
-                    if (question.questionType === 0 && questionAnswers.length > 0) {
-                      console.log('Multiple choice answer found:', {
-                        questionId: question.id,
-                        questionAnswers,
-                        selectedOptionIds,
-                        optionIds: question.options.map(opt => opt.id)
-                      });
-                    }
 
                     return (
                       <div key={question.id} className="border-b pb-6 last:border-0">
@@ -756,7 +741,7 @@ export default function AssignmentDetailPage() {
                               Câu {questionNumber}:
                             </span>
                           <Badge variant={isFullyCorrect ? "default" : "destructive"} className={isFullyCorrect ? "bg-green-600" : ""}>
-                            {isFullyCorrect ? 'Đúng' : 'Sai'} ({totalPoints}/{question.defaultPoints} điểm)
+                            {isFullyCorrect ? 'Đúng' : 'Sai'} ({totalPointsEarned.toFixed(2)}/{question.defaultPoints} điểm)
                           </Badge>
                           {question.questionType === 1 && (
                             <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
@@ -784,6 +769,123 @@ export default function AssignmentDetailPage() {
                         )}
                       </div>
 
+                      {/* Hiển thị tất cả options với đánh dấu đáp án đúng và đáp án học viên chọn */}
+                      {question.options.length > 0 && question.questionType !== 2 && (
+                        <div>
+                          <p className="text-sm font-medium mb-2">Các đáp án:</p>
+                          <div className="space-y-2">
+                            {question.options.map((option, optIndex) => {
+                              const isCorrectOption = (option as any).isCorrect ?? false;
+                              
+                              // Tìm answer tương ứng với option này
+                              let userAnswer: any = null;
+                              if (question.questionType === 1) {
+                                // TrueFalse: tìm answer có OptionId trùng
+                                userAnswer = questionAnswers.find((a: any) => 
+                                  (a.optionId || a.selectedOptionId) === option.id
+                                );
+                              } else {
+                                // MultipleChoice: chỉ có 1 answer
+                                userAnswer = questionAnswers.find((a: any) => 
+                                  (a.optionId || a.selectedOptionId) === option.id
+                                );
+                              }
+                              
+                              const isSelected = userAnswer != null;
+                              
+                              // Với TrueFalse: so sánh option.isCorrect với bool từ answerText
+                              let userAnswerIsCorrect = false;
+                              if (question.questionType === 1 && isSelected) {
+                                const answerText = userAnswer?.answerText || '';
+                                let userBoolValue: boolean | null = null;
+                                if (answerText === 'true' || answerText === 'True') {
+                                  userBoolValue = true;
+                                } else if (answerText === 'false' || answerText === 'False') {
+                                  userBoolValue = false;
+                                }
+                                // So khớp: option.isCorrect == userBoolValue
+                                if (userBoolValue !== null) {
+                                  userAnswerIsCorrect = isCorrectOption === userBoolValue;
+                                } else {
+                                  userAnswerIsCorrect = userAnswer?.isCorrect ?? false;
+                                }
+                              } else {
+                                // MultipleChoice: dùng isCorrect từ answer
+                                userAnswerIsCorrect = userAnswer?.isCorrect ?? false;
+                              }
+                              
+                              // Xác định màu sắc và icon
+                              let bgColor = 'bg-gray-50';
+                              let borderColor = 'border-gray-200';
+                              let textColor = 'text-gray-900';
+                              let icon = null;
+                              
+                              if (isSelected && isCorrectOption && userAnswerIsCorrect) {
+                                // Học viên chọn đúng
+                                bgColor = 'bg-green-50';
+                                borderColor = 'border-green-300';
+                                textColor = 'text-green-800';
+                                icon = <CheckCircleIcon className="h-5 w-5 text-green-600" />;
+                              } else if (isSelected && !userAnswerIsCorrect) {
+                                // Học viên chọn sai (không khớp với đáp án đúng)
+                                bgColor = 'bg-red-50';
+                                borderColor = 'border-red-300';
+                                textColor = 'text-red-800';
+                                icon = <XCircleIcon className="h-5 w-5 text-red-600" />;
+                              } else if (isCorrectOption && !isSelected) {
+                                // Đáp án đúng nhưng học viên không chọn
+                                bgColor = 'bg-yellow-50';
+                                borderColor = 'border-yellow-300';
+                                textColor = 'text-yellow-800';
+                                icon = <CheckCircleIcon className="h-5 w-5 text-yellow-600" />;
+                              } else if (isSelected) {
+                                // Học viên chọn nhưng chưa biết đúng/sai
+                                bgColor = 'bg-blue-50';
+                                borderColor = 'border-blue-300';
+                                textColor = 'text-blue-800';
+                              }
+                              
+                              return (
+                                <div
+                                  key={option.id}
+                                  className={`p-3 rounded border-2 ${bgColor} ${borderColor} ${textColor}`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {icon && <div className="mt-0.5">{icon}</div>}
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-medium">
+                                          {String.fromCharCode(65 + optIndex)}.
+                                        </span>
+                                        {isCorrectOption && (
+                                          <Badge variant="outline" className="bg-green-100 text-green-700 text-xs">
+                                            Đáp án đúng
+                                          </Badge>
+                                        )}
+                                        {isSelected && (
+                                          <Badge variant="outline" className="bg-blue-100 text-blue-700 text-xs">
+                                            Bạn đã chọn
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div 
+                                        className="text-sm prose prose-sm max-w-none" 
+                                        dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} 
+                                      />
+                                      {question.questionType === 1 && isSelected && userAnswer?.answerText && (
+                                        <div className="mt-1 text-xs text-gray-600">
+                                          Giá trị: {userAnswer.answerText}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {isTextAnswer ? (
                         // Type 2: Hiển thị đáp án text
                         <div className={`p-4 rounded-lg border-2 ${
@@ -802,178 +904,35 @@ export default function AssignmentDetailPage() {
                               <div>
                                 <Label className="text-sm font-medium text-gray-700">Đáp án đúng:</Label>
                                 <div className="mt-1 space-y-1">
-                                  {question.options.filter(opt => opt.optionText).map((option) => (
-                                    <p key={option.id} className="text-gray-700">
-                                      <span dangerouslySetInnerHTML={{ __html: option.optionText }} />
-                                    </p>
-                                  ))}
+                                  {question.options.filter((opt: any) => opt.isCorrect).map((option) => {
+                                    const optionText = option.optionText || '';
+                                    // Split bởi "|" nếu có
+                                    const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
+                                    
+                                    return (
+                                      <div key={option.id} className="space-y-1">
+                                        {answers.length > 0 ? (
+                                          answers.map((answer: string, answerIndex: number) => (
+                                            <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                              <span className="text-sm font-medium text-green-700">•</span>
+                                              <span className="flex-1 text-sm prose prose-sm max-w-none text-green-800" dangerouslySetInnerHTML={{ __html: renderContent(answer) }} />
+                                            </div>
+                                          ))
+                                        ) : (
+                                          <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
+                                            <span className="text-sm font-medium text-green-700">•</span>
+                                            <span className="flex-1 text-sm prose prose-sm max-w-none text-green-800" dangerouslySetInnerHTML={{ __html: renderContent(optionText) }} />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
                           </div>
                         </div>
-                      ) : question.questionType === 1 ? (
-                        // Type 1: Đúng/Sai - hiển thị kết quả cho từng ý
-                        <div className="space-y-4">
-                          {question.options.map((option) => {
-                            // Parse JSON từ answerText nếu có (format mới)
-                            let optionAnswer: any = null;
-                            let userChoseTrue = false;
-                            
-                            if (questionAnswers.length > 0) {
-                              const mainAnswer = questionAnswers[0];
-                              if (mainAnswer.answerText) {
-                                try {
-                                  // Thử parse JSON (format mới: backend lưu JSON cho True/False)
-                                  const jsonData = JSON.parse(mainAnswer.answerText);
-                                  if (Array.isArray(jsonData)) {
-                                    const optionData = jsonData.find((item: any) => 
-                                      (item.OptionId === option.id) || (item.optionId === option.id)
-                                    );
-                                    if (optionData) {
-                                      userChoseTrue = optionData.AnswerText === 'true' || optionData.AnswerText === 'True' || 
-                                                      optionData.answerText === 'true' || optionData.answerText === 'True';
-                                      optionAnswer = { ...mainAnswer, selectedOptionId: option.id, optionId: option.id, answerText: optionData.AnswerText || optionData.answerText };
-                                    }
-                                  }
-                                } catch {
-                                  // Nếu không phải JSON, tìm answer có selectedOptionId hoặc optionId = option.id
-                                  optionAnswer = questionAnswers.find((a: any) => 
-                                    (a.selectedOptionId === option.id) || (a.optionId === option.id)
-                                  );
-                                  if (optionAnswer) {
-                                    userChoseTrue = optionAnswer.answerText === 'true' || optionAnswer.answerText === 'True';
-                                  }
-                                }
-                              } else {
-                                // Tìm answer có selectedOptionId hoặc optionId = option.id
-                                optionAnswer = questionAnswers.find((a: any) => 
-                                  (a.selectedOptionId === option.id) || (a.optionId === option.id)
-                                );
-                                if (optionAnswer) {
-                                  userChoseTrue = optionAnswer.answerText === 'true' || optionAnswer.answerText === 'True';
-                                }
-                              }
-                            }
-                            
-                            const isSelected = !!optionAnswer;
-                            const isCorrect = optionAnswer?.isCorrect ?? false;
-                            
-                            return (
-                              <div key={option.id} className="border border-gray-200 rounded-lg p-4">
-                                <div className="mb-3 prose prose-sm max-w-none">
-                                  <span dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} />
-                                </div>
-                                <div className="flex gap-3">
-                                  <div className={`flex-1 p-3 rounded-lg border-2 text-center ${
-                                    isSelected && userChoseTrue && isCorrect
-                                      ? 'border-green-500 bg-green-50'
-                                      : isSelected && userChoseTrue && !isCorrect
-                                      ? 'border-red-500 bg-red-50'
-                                      : 'border-gray-200 bg-gray-50'
-                                  }`}>
-                                    <div className="flex items-center justify-center gap-2">
-                                      {isSelected && userChoseTrue && (
-                                        <CheckCircleIcon className={`h-5 w-5 ${isCorrect ? 'text-green-600' : 'text-red-600'}`} />
-                                      )}
-                                      <span className={`text-base font-semibold ${
-                                        isSelected && userChoseTrue
-                                          ? (isCorrect ? 'text-green-700' : 'text-red-700')
-                                          : 'text-gray-500'
-                                      }`}>
-                                        ✓ Đúng
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className={`flex-1 p-3 rounded-lg border-2 text-center ${
-                                    isSelected && !userChoseTrue && isCorrect
-                                      ? 'border-green-500 bg-green-50'
-                                      : isSelected && !userChoseTrue && !isCorrect
-                                      ? 'border-red-500 bg-red-50'
-                                      : 'border-gray-200 bg-gray-50'
-                                  }`}>
-                                    <div className="flex items-center justify-center gap-2">
-                                      {isSelected && !userChoseTrue && (
-                                        <CheckCircleIcon className={`h-5 w-5 ${isCorrect ? 'text-green-600' : 'text-red-600'}`} />
-                                      )}
-                                      <span className={`text-base font-semibold ${
-                                        isSelected && !userChoseTrue
-                                          ? (isCorrect ? 'text-green-700' : 'text-red-700')
-                                          : 'text-gray-500'
-                                      }`}>
-                                        ✗ Sai
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        // Type 0: Hiển thị options trắc nghiệm
-                        <div className="space-y-2">
-                          {questionAnswers.length === 0 && (
-                            <div className="p-3 rounded-lg border-2 border-yellow-300 bg-yellow-50 mb-2">
-                              <p className="text-sm text-yellow-700">Bạn chưa trả lời câu hỏi này</p>
-                            </div>
-                          )}
-                          {question.options.map((option) => {
-                            // Tìm answer có selectedOptionId hoặc optionId khớp với option.id
-                            const optionAnswer = questionAnswers.find((a: any) => {
-                              const selectedId = a.selectedOptionId || a.optionId;
-                              return selectedId === option.id;
-                            });
-                            const isSelected = !!optionAnswer || selectedOptionIds.includes(option.id);
-                            const isCorrectOption = optionAnswer?.isCorrect ?? false;
-                            // Lấy đáp án đúng từ question.options (cần check backend trả về isCorrect)
-                            const isCorrectAnswer = (question.options as any[]).find((opt: any) => opt.id === option.id)?.isCorrect ?? false;
-                            
-                            // Debug log
-                            if (isSelected) {
-                              console.log('Option selected:', {
-                                questionId: question.id,
-                                optionId: option.id,
-                                optionAnswer,
-                                isSelected,
-                                isCorrectOption,
-                                allQuestionAnswers: questionAnswers
-                              });
-                            }
-
-                            return (
-                              <div
-                                key={option.id}
-                                className={`p-3 rounded-lg border-2 ${
-                                  isSelected && isCorrectOption
-                                    ? 'border-green-500 bg-green-50'
-                                    : isSelected && !isCorrectOption
-                                    ? 'border-red-500 bg-red-50'
-                                    : isCorrectAnswer
-                                    ? 'border-blue-200 bg-blue-50'
-                                    : 'border-gray-200'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isSelected && (
-                                    <CheckCircleIcon className={`h-5 w-5 ${isCorrectOption ? 'text-green-600' : 'text-red-600'}`} />
-                                  )}
-                                  {!isSelected && isCorrectAnswer && (
-                                    <span className="text-xs text-blue-600 font-medium">(Đáp án đúng)</span>
-                                  )}
-                                  {isSelected && (
-                                    <span className="text-xs font-medium text-gray-600">(Bạn đã chọn)</span>
-                                  )}
-                                  <span 
-                                    className={isSelected ? (isCorrectOption ? 'text-green-700 font-medium' : 'text-red-700 font-medium') : 'text-gray-700'}
-                                    dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                   });
@@ -1372,34 +1331,43 @@ export default function AssignmentDetailPage() {
                         ) : (
                           // Type 0: Radio buttons - trắc nghiệm
                           <RadioGroup
-                            value={typeof selectedAnswer === 'number' ? selectedAnswer.toString() : ''}
+                            value={typeof selectedAnswer === 'number' ? selectedAnswer.toString() : typeof selectedAnswer === 'string' ? selectedAnswer : ''}
                             onValueChange={(value) => {
+                              if (!value || value === '') {
+                                console.warn('Empty value from RadioGroup');
+                                return;
+                              }
+                              console.log('RadioGroup onValueChange - raw value:', value, 'question:', { id: question.id, type: question.questionType });
                               const optionId = parseInt(value, 10);
                               console.log('RadioGroup onValueChange:', { questionId: question.id, questionType: question.questionType, value, optionId, isNaN: isNaN(optionId) });
-                              if (!isNaN(optionId) || optionId === 0) {
+                              // Kiểm tra optionId phải là số hợp lệ (bao gồm cả 0)
+                              if (!isNaN(optionId) && isFinite(optionId)) {
                                 console.log('Calling handleAnswerChange with:', { questionId: question.id, optionId, questionType: question.questionType });
                                 handleAnswerChange(question.id, optionId, question.questionType);
                               } else {
-                                console.warn('Invalid optionId from RadioGroup:', value, optionId);
+                                console.warn('Invalid optionId from RadioGroup:', { value, optionId, parsed: parseInt(value, 10) });
                               }
                             }}
                           >
                             <div className="space-y-2">
-                              {question.options.map((option) => (
-                                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-50 border border-gray-200">
-                                  <RadioGroupItem 
-                                    value={option.id.toString()} 
-                                    id={`q${question.id}-opt${option.id}`}
-                                    name={`question-${question.id}`}
-                                  />
-                                  <Label
-                                    htmlFor={`q${question.id}-opt${option.id}`}
-                                    className="flex-1 cursor-pointer text-gray-700 prose prose-sm max-w-none"
-                                  >
-                                    <span dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} />
-                                  </Label>
-                                </div>
-                              ))}
+                              {question.options.map((option) => {
+                                const optionIdStr = String(option.id ?? '');
+                                return (
+                                  <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-50 border border-gray-200">
+                                    <RadioGroupItem 
+                                      value={optionIdStr}
+                                      id={`q${question.id}-opt${option.id}`}
+                                      name={`question-${question.id}`}
+                                    />
+                                    <Label
+                                      htmlFor={`q${question.id}-opt${option.id}`}
+                                      className="flex-1 cursor-pointer text-gray-700 prose prose-sm max-w-none"
+                                    >
+                                      <span dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} />
+                                    </Label>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </RadioGroup>
                         )}
