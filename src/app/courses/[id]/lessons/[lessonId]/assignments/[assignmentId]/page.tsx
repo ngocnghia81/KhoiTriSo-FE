@@ -792,7 +792,7 @@ export default function AssignmentDetailPage() {
 
                       {/* Hiển thị tất cả options với đánh dấu đáp án đúng và đáp án học viên chọn */}
                       {question.options.length > 0 && question.questionType !== 2 && (
-                        <div>
+                            <div>
                           <p className="text-sm font-medium mb-2">Các đáp án:</p>
                           <div className="space-y-2">
                             {question.options.map((option, optIndex) => {
@@ -827,7 +827,7 @@ export default function AssignmentDetailPage() {
                                 // So khớp: option.isCorrect == userBoolValue
                                 if (userBoolValue !== null) {
                                   userAnswerIsCorrect = isCorrectOption === userBoolValue;
-                                } else {
+                              } else {
                                   userAnswerIsCorrect = userAnswer?.isCorrect ?? false;
                                 }
                               } else {
@@ -865,8 +865,8 @@ export default function AssignmentDetailPage() {
                                 borderColor = 'border-blue-300';
                                 textColor = 'text-blue-800';
                               }
-                              
-                              return (
+                            
+                            return (
                                 <div
                                   key={option.id}
                                   className={`p-3 rounded border-2 ${bgColor} ${borderColor} ${textColor}`}
@@ -877,7 +877,7 @@ export default function AssignmentDetailPage() {
                                       <div className="flex items-center gap-2 mb-1">
                                         <span className="font-medium">
                                           {String.fromCharCode(65 + optIndex)}.
-                                        </span>
+                                      </span>
                                         {isCorrectOption && (
                                           <Badge variant="outline" className="bg-green-100 text-green-700 text-xs">
                                             Đáp án đúng
@@ -888,7 +888,7 @@ export default function AssignmentDetailPage() {
                                             Bạn đã chọn
                                           </Badge>
                                         )}
-                                      </div>
+                                    </div>
                                       <div 
                                         className="text-sm prose prose-sm max-w-none" 
                                         dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} 
@@ -896,16 +896,16 @@ export default function AssignmentDetailPage() {
                                       {question.questionType === 1 && isSelected && userAnswer?.answerText && (
                                         <div className="mt-1 text-xs text-gray-600">
                                           Giá trị: {userAnswer.answerText}
-                                        </div>
+                                  </div>
                                       )}
-                                    </div>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
+                            </div>
+                          )}
 
                       {isTextAnswer ? (
                         // Type 2: Hiển thị đáp án text
@@ -929,15 +929,15 @@ export default function AssignmentDetailPage() {
                                     const optionText = option.optionText || '';
                                     // Split bởi "|" nếu có
                                     const answers = optionText.split('|').map((a: string) => a.trim()).filter((a: string) => a.length > 0);
-                                    
-                                    return (
+
+                            return (
                                       <div key={option.id} className="space-y-1">
                                         {answers.length > 0 ? (
                                           answers.map((answer: string, answerIndex: number) => (
                                             <div key={answerIndex} className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
                                               <span className="text-sm font-medium text-green-700">•</span>
                                               <span className="flex-1 text-sm prose prose-sm max-w-none text-green-800" dangerouslySetInnerHTML={{ __html: renderContent(answer) }} />
-                                            </div>
+                                </div>
                                           ))
                                         ) : (
                                           <div className="flex items-start gap-2 p-2 bg-white border border-green-300 rounded">
@@ -945,12 +945,12 @@ export default function AssignmentDetailPage() {
                                             <span className="flex-1 text-sm prose prose-sm max-w-none text-green-800" dangerouslySetInnerHTML={{ __html: renderContent(optionText) }} />
                                           </div>
                                         )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
                               </div>
-                            )}
+                            );
+                          })}
+                                </div>
+                        </div>
+                      )}
                           </div>
                         </div>
                       ) : null}
@@ -1374,19 +1374,19 @@ export default function AssignmentDetailPage() {
                               {question.options.map((option) => {
                                 const optionIdStr = String(option.id ?? '');
                                 return (
-                                  <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-50 border border-gray-200">
-                                    <RadioGroupItem 
+                                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-50 border border-gray-200">
+                                  <RadioGroupItem 
                                       value={optionIdStr}
-                                      id={`q${question.id}-opt${option.id}`}
-                                      name={`question-${question.id}`}
-                                    />
-                                    <Label
-                                      htmlFor={`q${question.id}-opt${option.id}`}
-                                      className="flex-1 cursor-pointer text-gray-700 prose prose-sm max-w-none"
-                                    >
-                                      <span dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} />
-                                    </Label>
-                                  </div>
+                                    id={`q${question.id}-opt${option.id}`}
+                                    name={`question-${question.id}`}
+                                  />
+                                  <Label
+                                    htmlFor={`q${question.id}-opt${option.id}`}
+                                    className="flex-1 cursor-pointer text-gray-700 prose prose-sm max-w-none"
+                                  >
+                                    <span dangerouslySetInnerHTML={{ __html: renderContent(option.optionText) }} />
+                                  </Label>
+                                </div>
                                 );
                               })}
                             </div>
