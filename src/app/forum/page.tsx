@@ -422,7 +422,7 @@ export default function ForumPage() {
                           )}
                           <Link
                             href={`/forum/${question.id}`}
-                              className="text-lg font-semibold text-gray-900 hover:text-blue-600 line-clamp-2 flex-1"
+                            className="text-lg font-semibold text-gray-900 hover:text-blue-600 line-clamp-2 flex-1"
                           >
                             {question.title}
                           </Link>

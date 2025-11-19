@@ -379,19 +379,40 @@ export default function AssignmentDetailPage() {
           }));
         }
         return [];
-      } else if (question.questionType === 0) {
-        // Trắc nghiệm: chọn 1 đáp án
-        const optionId = typeof optionIdOrTextOrObject === 'number' ? optionIdOrTextOrObject : undefined;
-        if (optionId === undefined || isNaN(optionId)) {
-          console.warn('Trắc nghiệm: optionId không hợp lệ', { questionId: qId, optionIdOrTextOrObject, optionId, type: typeof optionIdOrTextOrObject });
+      }else if (question.questionType === 0) {
+        // Trắc nghiệm: chọn 1 đáp án - FIX LỖI Ở ĐÂY
+        console.log('Trắc nghiệm - raw answer:', optionIdOrTextOrObject);
+        
+        let optionId: number | undefined;
+        
+        // Xử lý nhiều kiểu dữ liệu có thể có
+        if (typeof optionIdOrTextOrObject === 'number') {
+          optionId = optionIdOrTextOrObject;
+        } else if (typeof optionIdOrTextOrObject === 'string') {
+          // Nếu là string, thử parse thành number
+          const parsed = parseInt(optionIdOrTextOrObject);
+          if (!isNaN(parsed)) optionId = parsed;
+        }
+        
+        console.log('Trắc nghiệm - processed optionId:', optionId);
+        
+        // Kiểm tra optionId có hợp lệ và tồn tại trong danh sách options không
+        if (optionId !== undefined && !isNaN(optionId) && question.options.some(opt => opt.id === optionId)) {
+          console.log('Trắc nghiệm - valid answer:', { QuestionId: qId, OptionId: optionId });
+          return [{
+            QuestionId: qId,
+            OptionId: optionId,
+            AnswerText: '',
+          }];
+        } else {
+          console.warn('Trắc nghiệm - invalid optionId:', { 
+            questionId: qId, 
+            optionId, 
+            availableOptions: question.options.map(opt => opt.id),
+            rawAnswer: optionIdOrTextOrObject 
+          });
           return [];
         }
-        console.log('Trắc nghiệm: format answer', { QuestionId: qId, OptionId: optionId });
-        return [{
-          QuestionId: qId,
-          OptionId: optionId,
-          AnswerText: '',
-        }];
       } else {
         console.warn('Unknown question type:', { questionId: qId, questionType: question.questionType });
         return [];

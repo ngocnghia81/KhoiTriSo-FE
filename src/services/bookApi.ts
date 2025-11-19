@@ -14,6 +14,8 @@ export interface Book {
   isFree: boolean;
   isOwned?: boolean; // User đã mua/kích hoạt sách này chưa
   approvalStatus: number;
+  rating?: number; // Average rating from reviews
+  totalReviews?: number; // Total number of reviews
   totalQuestions?: number;
   totalChapters?: number;
   chapters?: BookChapter[]; // Chapters từ GetBookById
@@ -658,7 +660,8 @@ class BookApiService {
       isFree: (book.price || book.Price || 0) === 0,
       isOwned: book.isOwned !== undefined ? book.isOwned : (book.IsOwned !== undefined ? book.IsOwned : false),
       approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
-      isActive: book.isActive !== undefined ? book.isActive : (book.IsActive !== undefined ? book.IsActive : true),
+      rating: book.rating !== undefined ? book.rating : (book.Rating !== undefined ? book.Rating : undefined),
+      totalReviews: book.totalReviews || book.TotalReviews,
       totalQuestions: book.totalQuestions || book.TotalQuestions,
       totalChapters: book.totalChapters || book.TotalChapters || (mappedChapters?.length || 0),
       chapters: mappedChapters,

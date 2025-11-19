@@ -3,31 +3,10 @@ import { getAuthTokenFromRequest } from '@/lib/api/getAuthToken';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
-export async function GET(request: NextRequest) {
-  try {
-    const token = getAuthTokenFromRequest(request);
-    const { searchParams } = new URL(request.url);
-
-    const response = await fetch(`${API_URL}/api/Reviews?${searchParams.toString()}`, {
-      method: 'GET',
-      headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (error: any) {
-    console.error('Error fetching reviews:', error);
-    return NextResponse.json(
-      { Message: 'Lỗi khi tải đánh giá', Error: error.message },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const token = getAuthTokenFromRequest(request);
     if (!token) {
@@ -38,8 +17,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const response = await fetch(`${API_URL}/api/Reviews`, {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/api/Reviews/${params.id}`, {
+      method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -50,10 +29,43 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
-    console.error('Error creating review:', error);
+    console.error('Error updating review:', error);
     return NextResponse.json(
-      { Message: 'Lỗi khi tạo đánh giá', Error: error.message },
+      { Message: 'Lỗi khi cập nhật đánh giá', Error: error.message },
       { status: 500 }
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const token = getAuthTokenFromRequest(request);
+    if (!token) {
+      return NextResponse.json(
+        { Message: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const response = await fetch(`${API_URL}/api/Reviews/${params.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error: any) {
+    console.error('Error deleting review:', error);
+    return NextResponse.json(
+      { Message: 'Lỗi khi xóa đánh giá', Error: error.message },
+      { status: 500 }
+    );
+  }
+}
+

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { useAddToCart } from '@/hooks/useCart';
 import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage } from '@/utils/apiHelpers';
 import {
   ClockIcon,
@@ -28,6 +29,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 
 interface Lesson {
   id: number;
@@ -83,8 +85,8 @@ export default function CourseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const { addToCart } = useAddToCart();
 
   useEffect(() => {
     if (!courseId) {
@@ -217,33 +219,6 @@ export default function CourseDetailPage() {
     fetchCourse();
   }, [courseId, authenticatedFetch]);
 
-  // Fetch reviews
-  useEffect(() => {
-    if (!courseId) return;
-
-    const fetchReviews = async () => {
-      try {
-        setReviewsLoading(true);
-        // ItemType: 0 = Book, 1 = Course
-        const response = await authenticatedFetch(`/api/reviews?itemType=1&itemId=${courseId}&page=1&pageSize=5`);
-        const result = await safeJsonParse(response);
-        
-        if (isSuccessfulResponse(result)) {
-          const reviewsData = extractResult(result);
-          setReviews(reviewsData?.Items || reviewsData?.items || []);
-        }
-      } catch (err) {
-        console.error('Error fetching reviews:', err);
-      } finally {
-        setReviewsLoading(false);
-      }
-    };
-
-    if (course) {
-      fetchReviews();
-    }
-  }, [courseId, course, authenticatedFetch]);
-
   const handleEnroll = async () => {
     if (!isAuthenticated) {
       router.push('/auth/login');
@@ -273,6 +248,30 @@ export default function CourseDetailPage() {
       toast.error('Có lỗi xảy ra khi đăng ký');
     } finally {
       setEnrolling(false);
+    }
+  };
+
+  const handleAddCourseToCart = async () => {
+    if (!course) return;
+
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để thêm khóa học vào giỏ hàng');
+      router.push('/auth/login');
+      return;
+    }
+
+    try {
+      setAddingToCart(true);
+      await addToCart({ ItemId: course.id, ItemType: 1 });
+      toast.success(`Đã thêm "${stripHtml(course.title)}" vào giỏ hàng`);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('đã có trong giỏ hàng')) {
+        toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+      } else {
+        toast.error('Không thể thêm khóa học vào giỏ hàng');
+      }
+    } finally {
+      setAddingToCart(false);
     }
   };
 
@@ -594,69 +593,16 @@ export default function CourseDetailPage() {
             </Card>
 
             {/* Reviews Section */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Đánh giá học viên
-                  </h2>
-                  <div className="flex items-center">
-                    <StarIconSolid className="h-6 w-6 text-yellow-400 mr-2" />
-                    <span className="text-2xl font-bold text-gray-900">{(course.rating || 0).toFixed(1)}</span>
-                    <span className="text-gray-500 ml-2">({course.totalReviews || 0})</span>
-                  </div>
-                </div>
-
-                {reviewsLoading ? (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : reviews.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    Chưa có đánh giá nào cho khóa học này
-                  </p>
-                ) : (
-                  <div className="space-y-6">
-                    {reviews.map((review: any) => (
-                      <div key={review.Id || review.id} className="border-b border-gray-200 pb-6 last:border-0 last:pb-0">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-600 font-semibold">
-                                {(review.User?.Name || review.user?.name || 'U').charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">
-                                {review.User?.Name || review.user?.name || 'Người dùng'}
-                              </p>
-                              <div className="flex items-center mt-1">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <StarIconSolid
-                                    key={star}
-                                    className={`h-4 w-4 ${
-                                      star <= (review.Rating || review.rating || 0)
-                                        ? 'text-yellow-400'
-                                        : 'text-gray-300'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {new Date(review.CreatedAt || review.createdAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 mt-3">
-                          {review.Comment || review.comment || 'Không có bình luận'}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {courseId && (
+              <Card>
+                <CardContent className="p-6">
+                  <ReviewsSection
+                    itemType={1}
+                    itemId={courseId}
+                  />
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -726,14 +672,15 @@ export default function CourseDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     <Button
-                      asChild
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={handleAddCourseToCart}
+                      disabled={addingToCart}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-70 disabled:cursor-not-allowed"
                       size="lg"
                     >
-                      <Link href={`/checkout?courseId=${course.id}`}>
+                      <>
                         <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                        Mua khóa học
-                      </Link>
+                        {addingToCart ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
+                      </>
                     </Button>
                     {!isAuthenticated && (
                       <p className="text-sm text-center text-gray-500">

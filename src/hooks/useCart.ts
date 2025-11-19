@@ -19,6 +19,12 @@ export function useCart(): UseCartReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const triggerCartUpdated = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cart-updated'));
+    }
+  }, []);
+
   const fetchCart = useCallback(async () => {
     // Only fetch cart if user is authenticated
     if (!isAuthenticated) {
@@ -67,6 +73,7 @@ export function useCart(): UseCartReturn {
       setError(null);
       const updatedCart = await cartApiService.addToCart(request);
       setCart(updatedCart);
+      triggerCartUpdated();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add to cart';
       setError(errorMessage);
@@ -88,6 +95,7 @@ export function useCart(): UseCartReturn {
       await cartApiService.removeFromCart(itemId);
       // Refresh cart after removal
       await fetchCart();
+      triggerCartUpdated();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to remove from cart';
       setError(errorMessage);
@@ -108,6 +116,7 @@ export function useCart(): UseCartReturn {
       setError(null);
       await cartApiService.clearCart();
       setCart(null);
+      triggerCartUpdated();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to clear cart';
       setError(errorMessage);
@@ -125,6 +134,17 @@ export function useCart(): UseCartReturn {
   // Load cart on mount and when auth state changes
   useEffect(() => {
     fetchCart();
+  }, [fetchCart]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      fetchCart();
+    };
+    window.addEventListener('cart-updated', handler);
+    return () => {
+      window.removeEventListener('cart-updated', handler);
+    };
   }, [fetchCart]);
 
   return {
@@ -148,6 +168,9 @@ export function useAddToCart() {
       setLoading(true);
       setError(null);
       await cartApiService.addToCart(request);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('cart-updated'));
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add to cart';
       setError(errorMessage);

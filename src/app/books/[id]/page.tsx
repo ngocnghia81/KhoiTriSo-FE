@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { bookApiService, Book } from '@/services/bookApi';
 import { toast } from 'sonner';
+import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 
 export default function BookDetailPage() {
   const params = useParams();
@@ -466,6 +467,18 @@ export default function BookDetailPage() {
                       );
                     })}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Reviews Section */}
+            {bookId && (
+              <Card className="bg-white border border-gray-200 shadow-sm">
+                <CardContent className="p-6">
+                  <ReviewsSection
+                    itemType={0}
+                    itemId={bookId}
+                  />
                 </CardContent>
               </Card>
             )}

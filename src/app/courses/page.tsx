@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { 
   ClockIcon, 
   UserGroupIcon, 
@@ -19,7 +20,10 @@ import {
   ArrowRightIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import { toast } from 'sonner';
 import { useCourses } from '@/hooks/useCourses';
+import { useAddToCart } from '@/hooks/useCart';
+import { useAuth } from '@/contexts/AuthContext';
 
 const categories = [
   { id: null, name: 'Tất cả', count: 0 },
@@ -41,7 +45,11 @@ const sortOptions = [
 ];
 
 function CourseCard({ course }: { course: any }) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const { addToCart } = useAddToCart();
   const [favorited, setFavorited] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   const formatPrice = (price: number) => {
     if (price === 0) return 'Miễn phí';
@@ -49,6 +57,36 @@ function CourseCard({ course }: { course: any }) {
       style: 'currency',
       currency: 'VND'
     }).format(price);
+  };
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!course || course.isFree) {
+      router.push(`/courses/${course.id}`);
+      return;
+    }
+
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để thêm khóa học vào giỏ hàng');
+      router.push('/auth/login');
+      return;
+    }
+
+    try {
+      setAddingToCart(true);
+      await addToCart({ ItemId: course.id, ItemType: 1 });
+      toast.success(`Đã thêm "${stripHtml(course.title)}" vào giỏ hàng`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('đã có trong giỏ hàng')) {
+        toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+      } else {
+        toast.error('Không thể thêm khóa học vào giỏ hàng');
+      }
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   const formatDuration = (hours?: number) => {
@@ -241,13 +279,15 @@ function CourseCard({ course }: { course: any }) {
           </div>
 
           {!course.isFree ? (
-            <Link
-              href={`/courses/${course.id}`}
-              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-bold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg hover:scale-105"
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={addingToCart}
+              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-bold rounded-xl hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <PlayCircleIcon className="h-4 w-4 mr-1.5" />
-              Học ngay
-            </Link>
+              <ShoppingCartIcon className="h-4 w-4 mr-1.5" />
+              {addingToCart ? 'Đang thêm...' : 'Thêm giỏ hàng'}
+            </button>
           ) : (
             <Link
               href={`/courses/${course.id}`}

@@ -183,9 +183,9 @@ export default function NotificationBell() {
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative"
+        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative p-2"
       >
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center w-5 h-5">
           {unreadCount > 0 ? (
             <BellIconSolid className={`h-5 w-5 text-gray-700 transition-transform ${isOpen ? 'scale-95' : ''}`} />
           ) : (
@@ -193,10 +193,10 @@ export default function NotificationBell() {
           )}
           {unreadCount > 0 && (
             <span 
-              className="absolute -top-1.5 -right-1.5 h-4 min-w-[18px] px-1 flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-r from-red-500 via-rose-500 to-red-600 rounded-full border border-white shadow-lg pointer-events-none"
+              className="absolute -top-2 -right-2 h-5 min-w-[20px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-r from-red-500 via-rose-500 to-red-600 rounded-full border-2 border-white shadow-lg pointer-events-none z-10"
               style={{
                 animation: 'cart-badge-pulse 2s ease-in-out infinite',
-                boxShadow: '0 4px 12px rgba(244, 63, 94, 0.35)',
+                boxShadow: '0 6px 18px rgba(244, 63, 94, 0.45)',
               }}
             >
               {unreadCount > 99 ? '99+' : unreadCount > 9 ? '9+' : unreadCount}

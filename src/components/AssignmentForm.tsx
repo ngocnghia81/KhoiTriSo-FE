@@ -101,14 +101,19 @@ export function AssignmentForm({ lessonId, assignment, onClose, onSaved }: Assig
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
+    let nextValue: string | number | boolean = value;
+
+    if (type === 'checkbox') {
+      nextValue = (e.target as HTMLInputElement).checked;
+    } else if (type === 'number') {
+      nextValue = Number(value);
+    } else if (type === 'select-one' && name === 'showAnswersAfter') {
+      nextValue = Number(value);
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' 
-        ? (e.target as HTMLInputElement).checked
-        : type === 'number' 
-        ? Number(value)
-        : value
+      [name]: nextValue,
     }));
   };
 

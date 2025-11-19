@@ -22,7 +22,7 @@ export default function Logo({
     const { width, height } = sizeConfig[size];
 
     return (
-        <div className={`flex items-center ${className}`}>
+        <div className={`flex items-center gap-2 ${className}`}>
             <div className="relative flex-shrink-0">
                 <Image
                     src="/images/logo.svg"

@@ -16,6 +16,8 @@ import {
     HomeIcon,
     AcademicCapIcon,
     MapIcon,
+    ChatBubbleLeftRightIcon,
+    BookmarkIcon,
 } from "@heroicons/react/24/outline";
 import { Key } from "lucide-react";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
@@ -71,6 +73,11 @@ const navigation = [
     {
         name: "Diễn đàn",
         href: "/forum",
+        icon: ChatBubbleLeftRightIcon,
+        children: [
+            { name: "Danh sách câu hỏi", href: "/forum" },
+            { name: "Bookmarks của tôi", href: "/forum/bookmarks" },
+        ],
     },
     {
         name: "Liên hệ",
@@ -144,8 +151,8 @@ export default function Header() {
         <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 shadow-sm">
             <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8" aria-label="Global">
                 {/* Logo */}
-                <div className="flex lg:flex-1">
-                    <Link href="/" className="-m-1.5 p-1.5 flex items-center">
+                <div className="flex lg:flex-1 mr-4">
+                    <Link href="/" className="-m-1.5 p-1.5 flex items-center gap-2">
                         <Logo size="md" variant="light" showText={true} />
                     </Link>
                 </div>

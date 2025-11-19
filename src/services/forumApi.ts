@@ -119,6 +119,13 @@ export interface ForumQuestionFilters {
 class ForumApiService {
   private baseUrl = API_BASE_URL;
 
+  private buildUrl(path: string) {
+    if (typeof window !== 'undefined') {
+      return path;
+    }
+    return `${this.baseUrl}${path}`;
+  }
+
   // Normalize response data
   private normalizeQuestion(item: any): ForumQuestion {
     return {
@@ -136,7 +143,7 @@ class ForumApiService {
       isClosed: item.IsClosed || item.isClosed || false,
       isDeleted: item.IsDeleted || item.isDeleted || false,
       viewCount: item.ViewCount || item.viewCount || 0,
-      voteCount: item.VoteCount || item.voteCount || 0,
+      voteCount: item.VoteCount || item.voteCount || item.Votes || item.votes || 0,
       answerCount: item.AnswerCount || item.answerCount || 0,
       acceptedAnswerId: item.AcceptedAnswerId || item.acceptedAnswerId,
       createdAt: item.CreatedAt || item.createdAt || '',
@@ -156,7 +163,7 @@ class ForumApiService {
       userAvatar: item.UserAvatar || item.userAvatar,
       isAccepted: item.IsAccepted || item.isAccepted || false,
       isDeleted: item.IsDeleted || item.isDeleted || false,
-      voteCount: item.VoteCount || item.voteCount || 0,
+      voteCount: item.VoteCount || item.voteCount || item.Votes || item.votes || 0,
       commentCount: item.CommentCount || item.commentCount || 0,
       createdAt: item.CreatedAt || item.createdAt || '',
       updatedAt: item.UpdatedAt || item.updatedAt || '',
@@ -177,7 +184,7 @@ class ForumApiService {
     if (filters?.sortBy) params.append('sortBy', filters.sortBy);
     if (filters?.desc !== undefined) params.append('desc', filters.desc.toString());
 
-    const url = `${this.baseUrl}/api/forum/questions?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/questions?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -201,7 +208,7 @@ class ForumApiService {
   }
 
   async getQuestionById(id: string): Promise<ForumQuestion> {
-    const url = `${this.baseUrl}/api/forum/questions/${id}`;
+    const url = this.buildUrl(`/api/forum/questions/${id}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -223,7 +230,7 @@ class ForumApiService {
     categoryId?: string;
     categoryName?: string;
   }): Promise<ForumQuestion> {
-    const url = `${this.baseUrl}/api/forum/questions`;
+    const url = this.buildUrl(`/api/forum/questions`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -261,7 +268,7 @@ class ForumApiService {
     isPinned?: boolean;
     isClosed?: boolean;
   }): Promise<ForumQuestion> {
-    const url = `${this.baseUrl}/api/forum/questions/${id}`;
+    const url = this.buildUrl(`/api/forum/questions/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'PUT',
       headers: {
@@ -290,7 +297,7 @@ class ForumApiService {
   }
 
   async deleteQuestion(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/questions/${id}`;
+    const url = this.buildUrl(`/api/forum/questions/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'DELETE',
     });
@@ -303,7 +310,7 @@ class ForumApiService {
 
   // Answers
   async getAnswers(questionId: string): Promise<ForumAnswer[]> {
-    const url = `${this.baseUrl}/api/forum/questions/${questionId}/answers`;
+    const url = this.buildUrl(`/api/forum/questions/${questionId}/answers`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -322,7 +329,7 @@ class ForumApiService {
     userName: string;
     userAvatar?: string;
   }): Promise<ForumAnswer> {
-    const url = `${this.baseUrl}/api/forum/questions/${questionId}/answers`;
+    const url = this.buildUrl(`/api/forum/questions/${questionId}/answers`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -351,7 +358,7 @@ class ForumApiService {
     userAvatar?: string;
     attachments?: ForumAttachment[];
   }): Promise<ForumAnswer> {
-    const url = `${this.baseUrl}/api/forum/answers/${id}`;
+    const url = this.buildUrl(`/api/forum/answers/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'PUT',
       headers: {
@@ -375,7 +382,7 @@ class ForumApiService {
   }
 
   async deleteAnswer(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/answers/${id}`;
+    const url = this.buildUrl(`/api/forum/answers/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'DELETE',
     });
@@ -387,7 +394,7 @@ class ForumApiService {
   }
 
   async acceptAnswer(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/answers/${id}/accept`;
+    const url = this.buildUrl(`/api/forum/answers/${id}/accept`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
     });
@@ -399,7 +406,7 @@ class ForumApiService {
   }
 
   async unacceptAnswer(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/answers/${id}/unaccept`;
+    const url = this.buildUrl(`/api/forum/answers/${id}/unaccept`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
     });
@@ -412,7 +419,7 @@ class ForumApiService {
 
   // Comments
   async getComments(parentType: number, parentId: string): Promise<ForumComment[]> {
-    const url = `${this.baseUrl}/api/forum/${parentType}/${parentId}/comments`;
+    const url = this.buildUrl(`/api/forum/${parentType}/${parentId}/comments`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -443,7 +450,7 @@ class ForumApiService {
     userName: string;
     userAvatar?: string;
   }): Promise<ForumComment> {
-    const url = `${this.baseUrl}/api/forum/comments`;
+    const url = this.buildUrl(`/api/forum/comments`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -484,8 +491,8 @@ class ForumApiService {
     targetType: number;
     userId: number;
     voteType: number;
-  }): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/votes`;
+  }): Promise<{ total: number }> {
+    const url = this.buildUrl(`/api/forum/votes`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -503,10 +510,15 @@ class ForumApiService {
     if (!isSuccessfulResponse(result)) {
       throw new Error(extractMessage(result) || 'Failed to vote');
     }
+
+    const data = extractResult(result);
+    return {
+      total: data?.Total || data?.total || 0,
+    };
   }
 
   async getVotes(targetType: number, targetId: string): Promise<{ total: number }> {
-    const url = `${this.baseUrl}/api/forum/${targetType}/${targetId}/votes`;
+    const url = this.buildUrl(`/api/forum/${targetType}/${targetId}/votes`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -521,7 +533,7 @@ class ForumApiService {
   }
 
   async getUserVote(targetType: number, targetId: string, userId: number): Promise<{ voteType: number | null }> {
-    const url = `${this.baseUrl}/api/forum/${targetType}/${targetId}/user-vote?userId=${userId}`;
+    const url = this.buildUrl(`/api/forum/${targetType}/${targetId}/user-vote?userId=${userId}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -543,7 +555,7 @@ class ForumApiService {
     params.append('page', page.toString());
     params.append('pageSize', pageSize.toString());
     
-    const url = `${this.baseUrl}/api/forum/users/${userId}/votes?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/users/${userId}/votes?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -574,7 +586,7 @@ class ForumApiService {
     params.append('page', page.toString());
     params.append('pageSize', pageSize.toString());
     
-    const url = `${this.baseUrl}/api/forum/users/${userId}/questions?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/users/${userId}/questions?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -600,7 +612,7 @@ class ForumApiService {
     params.append('page', page.toString());
     params.append('pageSize', pageSize.toString());
     
-    const url = `${this.baseUrl}/api/forum/users/${userId}/answers?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/users/${userId}/answers?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -623,7 +635,7 @@ class ForumApiService {
 
   // Bookmarks
   async addBookmark(questionId: string, userId: number): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/bookmarks`;
+    const url = this.buildUrl(`/api/forum/bookmarks`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -642,7 +654,7 @@ class ForumApiService {
   }
 
   async removeBookmark(questionId: string, userId: number): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/bookmarks/${questionId}?userId=${userId}`;
+    const url = this.buildUrl(`/api/forum/bookmarks/${questionId}?userId=${userId}`);
     const response = await authenticatedFetch(url, {
       method: 'DELETE',
     });
@@ -654,7 +666,7 @@ class ForumApiService {
   }
 
   async isBookmarked(questionId: string, userId: number): Promise<boolean> {
-    const url = `${this.baseUrl}/api/forum/questions/${questionId}/bookmarked?userId=${userId}`;
+    const url = this.buildUrl(`/api/forum/questions/${questionId}/bookmarked?userId=${userId}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -672,7 +684,7 @@ class ForumApiService {
     params.append('page', page.toString());
     params.append('pageSize', pageSize.toString());
     
-    const url = `${this.baseUrl}/api/forum/bookmarks?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/bookmarks?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -700,7 +712,7 @@ class ForumApiService {
 
   // Categories
   async getCategories(includeInactive: boolean = false): Promise<ForumCategory[]> {
-    const url = `${this.baseUrl}/api/forum/categories`;
+    const url = this.buildUrl(`/api/forum/categories`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -731,7 +743,7 @@ class ForumApiService {
     icon?: string;
     sortOrder?: number;
   }): Promise<ForumCategory> {
-    const url = `${this.baseUrl}/api/forum/categories`;
+    const url = this.buildUrl(`/api/forum/categories`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -771,7 +783,7 @@ class ForumApiService {
     isActive?: boolean;
     sortOrder?: number;
   }): Promise<ForumCategory> {
-    const url = `${this.baseUrl}/api/forum/categories/${id}`;
+    const url = this.buildUrl(`/api/forum/categories/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'PUT',
       headers: {
@@ -805,7 +817,7 @@ class ForumApiService {
   }
 
   async deleteCategory(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/categories/${id}`;
+    const url = this.buildUrl(`/api/forum/categories/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'DELETE',
     });
@@ -821,7 +833,7 @@ class ForumApiService {
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
     
-    const url = `${this.baseUrl}/api/forum/tags?${params.toString()}`;
+    const url = this.buildUrl(`/api/forum/tags?${params.toString()}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 
@@ -853,7 +865,7 @@ class ForumApiService {
     description?: string;
     color?: string;
   }): Promise<ForumTag> {
-    const url = `${this.baseUrl}/api/forum/tags`;
+    const url = this.buildUrl(`/api/forum/tags`);
     const response = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
@@ -887,7 +899,7 @@ class ForumApiService {
     color?: string;
     isActive?: boolean;
   }): Promise<ForumTag> {
-    const url = `${this.baseUrl}/api/forum/tags/${id}`;
+    const url = this.buildUrl(`/api/forum/tags/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'PUT',
       headers: {
@@ -917,7 +929,7 @@ class ForumApiService {
   }
 
   async deleteTag(id: string): Promise<void> {
-    const url = `${this.baseUrl}/api/forum/tags/${id}`;
+    const url = this.buildUrl(`/api/forum/tags/${id}`);
     const response = await authenticatedFetch(url, {
       method: 'DELETE',
     });
@@ -935,7 +947,7 @@ class ForumApiService {
       params.append('userId', userId.toString());
     }
 
-    const url = `${this.baseUrl}/api/forum/analytics${params.toString() ? '?' + params.toString() : ''}`;
+    const url = this.buildUrl(`/api/forum/analytics${params.toString() ? '?' + params.toString() : ''}`);
     const response = await authenticatedFetch(url);
     const result = await safeJsonParse(response);
 

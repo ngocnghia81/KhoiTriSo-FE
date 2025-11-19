@@ -385,12 +385,14 @@ export default function BooksModern() {
                                 Miễn phí
                               </Badge>
                             )}
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-4">
-                              <div className="flex items-center space-x-2 text-white text-sm">
-                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span>4.5</span>
+                            {(book.rating !== undefined && book.rating !== null) && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-4">
+                                <div className="flex items-center space-x-2 text-white text-sm">
+                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                  <span>{book.rating.toFixed(1)}</span>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                           <div className="p-5 flex flex-col flex-1">
                             <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
