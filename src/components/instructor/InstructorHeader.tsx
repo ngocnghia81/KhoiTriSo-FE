@@ -15,50 +15,19 @@ import {
   Bars3Icon,
   PlusIcon,
   EyeIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInstructorDetail } from '@/hooks/useInstructors';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 export default function InstructorHeader() {
   const router = useRouter();
   const { toggleSidebar } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const { user, logout } = useAuth();
   const instructorId = user?.id ? Number(user.id) : 0;
   const { data: instructorDetail, loading: instructorLoading } = useInstructorDetail(instructorId);
-
-  const notifications = [
-    {
-      id: 1,
-      title: 'Khóa học được phê duyệt',
-      message: 'Khóa học "Toán học nâng cao" đã được phê duyệt và xuất bản',
-      time: '2 phút trước',
-      type: 'success',
-      unread: true,
-    },
-    {
-      id: 2,
-      title: 'Yêu cầu chỉnh sửa',
-      message: 'Sách "Vật lý 12" cần chỉnh sửa một số nội dung',
-      time: '1 giờ trước',
-      type: 'warning',
-      unread: true,
-    },
-    {
-      id: 3,
-      title: 'Thu nhập mới',
-      message: 'Bạn có thu nhập mới từ khóa học "Hóa học cơ bản"',
-      time: '3 giờ trước',
-      type: 'info',
-      unread: false,
-    },
-  ];
-
-  const unreadCount = notifications.filter(n => n.unread).length;
   const displayName = useMemo(() => {
     if (!user) return 'Giảng viên';
     return user.name || user.email || 'Giảng viên';
@@ -162,73 +131,7 @@ export default function InstructorHeader() {
             </button>
 
             {/* Notifications */}
-            <div className="relative">
-              <button
-                type="button"
-                className="p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-md relative"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <BellIcon className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notifications dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
-                  <div className="py-2">
-                    <div className="px-4 py-2 border-b border-gray-200">
-                      <h3 className="text-sm font-medium text-gray-900">Thông báo</h3>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-l-4 ${
-                            notification.type === 'success' ? 'border-green-500' :
-                            notification.type === 'warning' ? 'border-yellow-500' :
-                            'border-blue-500'
-                          } ${notification.unread ? 'bg-blue-50' : ''}`}
-                        >
-                          <div className="flex items-start">
-                            <div className="flex-shrink-0">
-                              {notification.type === 'success' && (
-                                <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                              )}
-                              {notification.type === 'warning' && (
-                                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />
-                              )}
-                              {notification.type === 'info' && (
-                                <CurrencyDollarIcon className="h-5 w-5 text-blue-500" />
-                              )}
-                            </div>
-                            <div className="ml-3 flex-1">
-                              <p className="text-sm font-medium text-gray-900">
-                                {notification.title}
-                              </p>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {notification.message}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-1">
-                                {notification.time}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="px-4 py-2 border-t border-gray-200">
-                      <button className="text-sm text-green-600 hover:text-green-800">
-                        Xem tất cả thông báo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationDropdown showConnectionStatus={true} />
 
             {/* User menu */}
             <div className="relative">

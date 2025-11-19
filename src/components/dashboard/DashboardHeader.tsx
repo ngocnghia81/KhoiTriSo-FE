@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSearch } from '@/contexts/SearchContext';
+import NotificationDropdown from '@/components/NotificationDropdown';
 import {
   MagnifyingGlassIcon,
-  BellIcon,
   UserCircleIcon,
   SunIcon,
   MoonIcon,
@@ -22,36 +22,6 @@ export default function DashboardHeader() {
   const { user, logout } = useAuth();
   const { searchQuery, setSearchQuery, clearSearch } = useSearch();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-
-  const notifications = [
-    {
-      id: 1,
-      title: 'Đơn hàng mới',
-      message: 'Có 3 đơn hàng mới cần xử lý',
-      time: '5 phút trước',
-      type: 'order',
-      unread: true
-    },
-    {
-      id: 2,
-      title: 'Người dùng mới',
-      message: '15 người dùng mới đăng ký hôm nay',
-      time: '1 giờ trước',
-      type: 'user',
-      unread: true
-    },
-    {
-      id: 3,
-      title: 'Báo cáo doanh thu',
-      message: 'Báo cáo doanh thu tuần đã sẵn sàng',
-      time: '2 giờ trước',
-      type: 'report',
-      unread: false
-    }
-  ];
-
-  const unreadCount = notifications.filter(n => n.unread).length;
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -105,66 +75,7 @@ export default function DashboardHeader() {
             </button>
 
             {/* Notifications */}
-            <div className="relative">
-              <button
-                type="button"
-                className="p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-md relative"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <BellIcon className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notifications dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">Thông báo</h3>
-                      <button className="text-xs text-blue-600 hover:text-blue-800">
-                        Đánh dấu tất cả đã đọc
-                      </button>
-                    </div>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`p-3 rounded-lg cursor-pointer hover:bg-gray-50 ${
-                            notification.unread ? 'bg-blue-50 border-l-2 border-blue-500' : ''
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900">
-                                {notification.title}
-                              </p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                {notification.message}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-2">
-                                {notification.time}
-                              </p>
-                            </div>
-                            {notification.unread && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full ml-2 mt-1"></div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <button className="w-full text-center text-sm text-blue-600 hover:text-blue-800">
-                        Xem tất cả thông báo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationDropdown showConnectionStatus={true} />
 
             {/* User menu */}
             <div className="relative">
