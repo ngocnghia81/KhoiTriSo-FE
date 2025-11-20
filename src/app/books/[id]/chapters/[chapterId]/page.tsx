@@ -415,13 +415,13 @@ export default function BookChapterDetailPage() {
                             </div>
                           )}
 
-                          {isAnswerVisible && question.explanationContent && (
+                          {isAnswerVisible && (question.explanationContent || question.ExplanationContent) && (
                             <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
                               <p className="text-sm font-semibold text-blue-900 mb-2">Giải thích:</p>
                               <div 
                                 className="text-blue-800 prose prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ 
-                                  __html: question.explanationContent || question.explanation || '' 
+                                  __html: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation || '' 
                                 }}
                               />
                             </div>

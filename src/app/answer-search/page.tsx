@@ -11,6 +11,56 @@ import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Helper function to map question data (similar to mapBookQuestion in bookApi.ts)
+function mapQuestion(question: any): any {
+  const chapterId = question.chapterId || question.ChapterId;
+  
+  // Map options để đảm bảo các field được map đúng
+  const rawOptions = question.options || question.Options || [];
+  const mappedOptions = Array.isArray(rawOptions) 
+    ? rawOptions.map((opt: any) => ({
+        Id: opt.Id || opt.id,
+        id: opt.id || opt.Id,
+        QuestionId: opt.QuestionId || opt.questionId,
+        questionId: opt.questionId || opt.QuestionId,
+        OptionText: opt.OptionText || opt.optionText,
+        optionText: opt.optionText || opt.OptionText,
+        IsCorrect: opt.IsCorrect !== undefined ? opt.IsCorrect : (opt.isCorrect !== undefined ? opt.isCorrect : false),
+        isCorrect: opt.isCorrect !== undefined ? opt.isCorrect : (opt.IsCorrect !== undefined ? opt.IsCorrect : false),
+        PointsValue: opt.PointsValue || opt.pointsValue,
+        pointsValue: opt.pointsValue || opt.PointsValue,
+        OrderIndex: opt.OrderIndex || opt.orderIndex,
+        orderIndex: opt.orderIndex || opt.OrderIndex,
+        CreatedAt: opt.CreatedAt || opt.createdAt,
+        createdAt: opt.createdAt || opt.CreatedAt,
+        UpdatedAt: opt.UpdatedAt || opt.updatedAt,
+        updatedAt: opt.updatedAt || opt.UpdatedAt
+      }))
+    : [];
+  
+  return {
+    id: question.id || question.Id,
+    bookId: question.bookId || question.BookId || question.ContextId,
+    chapterId: chapterId,
+    question: question.question || question.Question || question.QuestionContent,
+    QuestionContent: question.QuestionContent || question.question || question.Question,
+    questionContent: question.QuestionContent || question.questionContent || question.question || question.Question,
+    questionType: question.questionType || question.QuestionType || 1,
+    QuestionType: question.QuestionType || question.questionType || 1,
+    options: mappedOptions,
+    correctAnswer: question.correctAnswer || question.CorrectAnswer,
+    explanation: question.explanation || question.Explanation || question.ExplanationContent,
+    explanationContent: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation,
+    ExplanationContent: question.ExplanationContent || question.explanationContent || question.explanation || question.Explanation,
+    videoUrl: question.videoUrl || question.VideoUrl,
+    VideoUrl: question.VideoUrl || question.videoUrl,
+    difficulty: question.difficulty || question.Difficulty || question.DifficultyLevel || 1,
+    DifficultyLevel: question.DifficultyLevel || question.difficulty || question.Difficulty || 1,
+    orderIndex: question.orderIndex || question.OrderIndex || 0,
+    OrderIndex: question.OrderIndex || question.orderIndex || 0
+  };
+}
+
 export default function AnswerSearchPage() {
   const router = useRouter();
   const { authenticatedFetch } = useAuthenticatedFetch();
@@ -59,7 +109,9 @@ export default function AnswerSearchPage() {
       const data = await response.json();
       
       if (data.Result) {
-        setQuestion(data.Result);
+        // Map question để đảm bảo các field được map đúng (giống như mapBookQuestion)
+        const mappedQuestion = mapQuestion(data.Result);
+        setQuestion(mappedQuestion);
       } else if (data.Result === null) {
         setError(data.Message || 'Không tìm thấy câu hỏi');
       } else {
@@ -213,13 +265,13 @@ export default function AnswerSearchPage() {
               )}
 
               {/* Explanation */}
-              {question.explanationContent && (
+              {(question.explanationContent || question.ExplanationContent) && (
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
                   <p className="text-sm font-semibold text-blue-900 mb-2">Giải thích:</p>
                   <div 
                     className="text-blue-800 prose prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ 
-                      __html: question.explanationContent || question.explanation || '' 
+                      __html: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation || '' 
                     }}
                   />
                 </div>
