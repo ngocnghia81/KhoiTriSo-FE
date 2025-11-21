@@ -285,6 +285,26 @@ class LiveClassApiService {
       attendanceDuration: p.attendanceDuration ?? p.AttendanceDuration ?? 0,
     }));
   }
+
+  async joinLiveClass(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    id: number
+  ): Promise<LiveClassDTO> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${id}/join`, {
+      method: 'POST',
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to join live class');
+    }
+
+    const data = extractResult<any>(result);
+    if (!data) {
+      throw new Error('No data received from API');
+    }
+    return this.normalize(data);
+  }
 }
 
 export const liveClassApiService = new LiveClassApiService();

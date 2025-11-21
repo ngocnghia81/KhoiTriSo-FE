@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useUpload } from '@/hooks/useUpload';
+import { useAuth } from '@/contexts/AuthContext';
+import { renameFileWithTimestamp } from '@/utils/fileUtils';
 import { CloudArrowUpIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useCategories } from '@/hooks/useCategories';
@@ -12,6 +14,7 @@ import { useMemo } from 'react';
 export default function CreateCoursePage() {
   const router = useRouter();
   const { authenticatedFetch } = useAuthenticatedFetch();
+  const { user } = useAuth();
 
   const { uploadFileWithPresign, uploading: uploadingThumbnail, progress: uploadProgress } = useUpload();
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
@@ -85,8 +88,11 @@ export default function CreateCoursePage() {
     setError(null);
 
     try {
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedFile = renameFileWithTimestamp(file, user?.id);
+      
       // Upload thumbnail immediately
-      const result = await uploadFileWithPresign(file, {
+      const result = await uploadFileWithPresign(renamedFile, {
         folder: 'course-thumbnails',
         accessRole: 'GUEST',
         onProgress: (progress) => {

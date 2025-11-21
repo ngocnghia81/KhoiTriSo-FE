@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Logo from "./Logo";
 import UserMenu from "./UserMenu";
+import NotificationDropdown from "./NotificationDropdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -293,6 +294,16 @@ export default function HeaderModern() {
                                 <Globe className="h-5 w-5" />
                             </Button>
                         </motion.div>
+
+                        {/* Notifications */}
+                        {isAuthenticated && (
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                                <NotificationDropdown 
+                                    className="rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50"
+                                    buttonClassName="rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-600"
+                                />
+                            </motion.div>
+                        )}
 
                         {/* User Menu */}
                         {isClient && (

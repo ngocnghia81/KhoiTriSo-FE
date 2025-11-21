@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useUpload } from '@/hooks/useUpload';
+import { useAuth } from '@/contexts/AuthContext';
+import { renameFileWithTimestamp } from '@/utils/fileUtils';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   ArrowLeftIcon,
@@ -18,6 +20,7 @@ import {
 
 function CreateLessonClient() {
   const { authenticatedFetch } = useAuthenticatedFetch();
+  const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
   const courseId = params?.id as string;
@@ -213,7 +216,10 @@ function CreateLessonClient() {
         setLoadingDuration(false);
       }
       
-      const result = await uploadFileWithPresign(videoFile, {
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedVideoFile = renameFileWithTimestamp(videoFile, user?.id);
+      
+      const result = await uploadFileWithPresign(renamedVideoFile, {
         folder: 'lesson-videos',
         accessRole: 'GUEST',
         onProgress: (progress) => {
@@ -282,7 +288,10 @@ function CreateLessonClient() {
       setUploadingMaterials(prev => ({ ...prev, [index]: true }));
       console.log('Starting material upload:', { fileName: file.name, size: file.size, type: file.type });
       
-      const result = await uploadFileWithPresign(file, {
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedFile = renameFileWithTimestamp(file, user?.id);
+      
+      const result = await uploadFileWithPresign(renamedFile, {
         folder: 'lesson-materials',
         accessRole: 'GUEST',
         onProgress: (progress) => {
