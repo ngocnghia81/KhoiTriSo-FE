@@ -117,6 +117,7 @@ export default function LessonPlayerPage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasInitializedLessonProgress, setHasInitializedLessonProgress] = useState(false);
 
   useEffect(() => {
     if (!courseId || !lessonId) {
@@ -168,6 +169,8 @@ export default function LessonPlayerPage() {
           if (isAuthenticated && transformedLesson.userProgress) {
             setCurrentTime(transformedLesson.userProgress.watchTime);
             setIsVideoCompleted(transformedLesson.userProgress.isCompleted);
+            // Mark as initialized since progress already exists
+            setHasInitializedLessonProgress(true);
           }
 
           // Fetch video progress
@@ -512,7 +515,7 @@ export default function LessonPlayerPage() {
     });
   };
 
-  // Define saveProgress function
+  // Define saveProgress function for UserVideoProgress
   const saveProgressRef = useRef<((position: number, videoDuration: number, completed: boolean) => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -535,7 +538,31 @@ export default function LessonPlayerPage() {
           }),
         });
       } catch (err) {
-        console.error('Error saving progress:', err);
+        console.error('Error saving video progress:', err);
+      }
+    };
+  }, [isAuthenticated, lessonId, authenticatedFetch]);
+
+  // Define saveLessonProgress function for UserLessonProgress
+  const saveLessonProgressRef = useRef<((watchTime: number, isCompleted: boolean) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    saveLessonProgressRef.current = async (watchTime: number, isCompleted: boolean) => {
+      if (!isAuthenticated || !lessonId) return;
+
+      try {
+        await authenticatedFetch(`/api/lessons/${lessonId}/progress`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            watchTime: Math.floor(watchTime), // Convert to integer seconds
+            isCompleted: isCompleted,
+          }),
+        });
+      } catch (err) {
+        console.error('Error saving lesson progress:', err);
       }
     };
   }, [isAuthenticated, lessonId, authenticatedFetch]);
@@ -564,6 +591,8 @@ export default function LessonPlayerPage() {
         if (percentage >= 90 && !isVideoCompleted) {
           setIsVideoCompleted(true);
           saveProgressRef.current?.(current, total, true).catch(console.error);
+          // Update UserLessonProgress: completed = true
+          saveLessonProgressRef.current?.(current, true).catch(console.error);
         }
       }
     };
@@ -577,9 +606,23 @@ export default function LessonPlayerPage() {
       }
     };
 
+    // Initialize UserLessonProgress when video starts playing for the first time
+    const handlePlay = () => {
+      if (!hasInitializedLessonProgress && video.duration > 0) {
+        // Create UserLessonProgress with initial watchTime = 0
+        saveLessonProgressRef.current?.(0, false).catch(console.error);
+        setHasInitializedLessonProgress(true);
+      }
+    };
+
+    video.addEventListener('play', handlePlay);
+
     const handleEnded = () => {
       if (video.duration > 0) {
-        saveProgressRef.current?.(video.duration, video.duration, true).catch(console.error);
+        const total = video.duration;
+        saveProgressRef.current?.(total, total, true).catch(console.error);
+        // Update UserLessonProgress: completed = true, watchTime = total
+        saveLessonProgressRef.current?.(total, true).catch(console.error);
         setIsVideoCompleted(true);
       }
     };
@@ -591,7 +634,13 @@ export default function LessonPlayerPage() {
     // Auto-save progress every 10 seconds
     progressSaveIntervalRef.current = setInterval(() => {
       if (video && !video.paused && video.duration > 0) {
-        saveProgressRef.current?.(video.currentTime, video.duration, false).catch(console.error);
+        const current = video.currentTime;
+        const total = video.duration;
+        // Update UserVideoProgress
+        saveProgressRef.current?.(current, total, false).catch(console.error);
+        // Update UserLessonProgress (watchTime, chưa completed nếu chưa đạt 90%)
+        const percentage = (current / total) * 100;
+        saveLessonProgressRef.current?.(current, percentage >= 90).catch(console.error);
       }
     }, 10000);
 
@@ -599,11 +648,12 @@ export default function LessonPlayerPage() {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('play', handlePlay);
       if (progressSaveIntervalRef.current) {
         clearInterval(progressSaveIntervalRef.current);
       }
     };
-  }, [isAuthenticated, lessonId, duration, currentTime, isVideoCompleted]);
+  }, [isAuthenticated, lessonId, duration, currentTime, isVideoCompleted, hasInitializedLessonProgress]);
 
   const formatDuration = (seconds: number | undefined | null) => {
     // Validate input

@@ -37,6 +37,9 @@ export async function POST(request: NextRequest) {
           revalidatePath(`/courses/${id}`);
           revalidatePath(`/courses/${id}`, 'page');
           revalidateTag(`course-${id}`);
+          // Also revalidate courses list page
+          revalidatePath('/courses');
+          revalidateTag('courses-list');
           break;
         case 'lesson':
           revalidatePath(`/courses/${body.courseId}/lessons/${id}`);
@@ -52,6 +55,9 @@ export async function POST(request: NextRequest) {
           revalidatePath(`/books/${id}`);
           revalidatePath(`/books/${id}`, 'page');
           revalidateTag(`book-${id}`);
+          // Also revalidate books list page
+          revalidatePath('/books');
+          revalidateTag('books-list');
           break;
         case 'forum':
         case 'question':

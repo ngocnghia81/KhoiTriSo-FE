@@ -22,6 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { useBooks } from '@/hooks/useBooks';
 import { bookApiService, Book, BookQuestion, BookChapter } from '@/services/bookApi';
 import { solutionsApi } from '@/services/solutionsApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { renameFileWithTimestamp } from '@/utils/fileUtils';
 import LatexPreview from '@/components/LatexPreview';
 
 declare global {
@@ -32,6 +34,7 @@ declare global {
 
 export default function SolutionsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [bookQuery, setBookQuery] = useState('');
   const [bookPage, setBookPage] = useState(1);
   const { books: searchBooks, loading: searchLoading } = useBooks({ page: bookPage, pageSize: 10, search: bookQuery });
@@ -324,8 +327,11 @@ export default function SolutionsPage() {
       setUploadingVideo(true);
       console.log('Starting video upload:', { fileName: videoFile.name, size: videoFile.size, type: videoFile.type });
       
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedVideoFile = renameFileWithTimestamp(videoFile, user?.id);
+      
       // Step 1: Upload video
-      const uploadedUrl = await solutionsApi.uploadVideo(videoFile);
+      const uploadedUrl = await solutionsApi.uploadVideo(renamedVideoFile);
       console.log('Video uploaded successfully, URL:', uploadedUrl);
       
       // Step 2: Automatically update VideoUrl in database

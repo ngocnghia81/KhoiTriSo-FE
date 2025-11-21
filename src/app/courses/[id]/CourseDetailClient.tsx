@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -13,12 +13,10 @@ import {
   UserGroupIcon,
   PlayCircleIcon,
   AcademicCapIcon,
-  BookOpenIcon,
   CheckIcon,
-  StarIcon,
   LockClosedIcon,
   ShoppingCartIcon,
-  XMarkIcon,
+  VideoCameraIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { Button } from '@/components/ui/button';
@@ -27,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
+import { liveClassApiService, LiveClassDTO } from '@/services/liveClassApi';
 
 export interface Lesson {
   id: number;
@@ -77,13 +76,15 @@ interface CourseDetailClientProps {
 
 export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClientProps) {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { authenticatedFetch } = useAuthenticatedFetch();
   const { addToCart } = useAddToCart();
 
   const [course, setCourse] = useState<CourseDetail>(initialCourse);
   const [enrolling, setEnrolling] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [liveClasses, setLiveClasses] = useState<LiveClassDTO[]>([]);
+  const [joiningLiveClass, setJoiningLiveClass] = useState<number | null>(null);
 
   const handleEnroll = async () => {
     if (!isAuthenticated) {
@@ -159,6 +160,74 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
   };
 
   const canViewAllLessons = course?.isFree || course?.isEnrolled;
+
+  // Fetch LiveClasses for this course
+  useEffect(() => {
+    const fetchLiveClasses = async () => {
+      if (!isAuthenticated || !courseId) return;
+      
+      try {
+        const result = await liveClassApiService.getLiveClasses(authenticatedFetch, {
+          courseId: courseId,
+          page: 1,
+          pageSize: 100, // Get all live classes for this course
+        });
+        setLiveClasses(result.items);
+      } catch (err) {
+        console.error('Error fetching live classes:', err);
+        // Don't show error toast, just silently fail
+      }
+    };
+
+    fetchLiveClasses();
+  }, [isAuthenticated, courseId, authenticatedFetch]);
+
+  const handleJoinLiveClass = async (liveClassId: number, meetingUrl: string) => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    // Check if user can join (course is free or user is enrolled)
+    if (!course.isFree && !course.isEnrolled) {
+      toast.error('Bạn cần đăng ký khóa học để tham gia lớp học trực tuyến');
+      return;
+    }
+
+    try {
+      setJoiningLiveClass(liveClassId);
+      await liveClassApiService.joinLiveClass(authenticatedFetch, liveClassId);
+      toast.success('Tham gia lớp học thành công!');
+      // Open meeting URL in new tab
+      window.open(meetingUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('Error joining live class:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Không thể tham gia lớp học';
+      toast.error(errorMessage);
+    } finally {
+      setJoiningLiveClass(null);
+    }
+  };
+
+  const getStatusLabel = (status: number) => {
+    switch (status) {
+      case 0: return 'Đã lên lịch';
+      case 1: return 'Đang diễn ra';
+      case 2: return 'Đã kết thúc';
+      case 3: return 'Đã hủy';
+      default: return 'Không xác định';
+    }
+  };
+
+  const getStatusColor = (status: number) => {
+    switch (status) {
+      case 0: return 'bg-blue-100 text-blue-700';
+      case 1: return 'bg-green-100 text-green-700';
+      case 2: return 'bg-gray-100 text-gray-700';
+      case 3: return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
 
   // Strip HTML tags
   const stripHtml = (html: string | undefined | null): string => {
@@ -429,6 +498,95 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
                 )}
               </CardContent>
             </Card>
+
+            {/* Live Classes Section */}
+            {liveClasses.length > 0 && (
+              <Card>
+                <CardContent className="p-6">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                    Lớp học trực tuyến
+                  </h2>
+                  <div className="space-y-4">
+                    {liveClasses.map((liveClass) => {
+                      const canJoin = (course.isFree || course.isEnrolled) && liveClass.status === 1;
+                      const isJoining = joiningLiveClass === liveClass.id;
+                      
+                      return (
+                        <div
+                          key={liveClass.id}
+                          className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-all"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <VideoCameraIcon className="h-5 w-5 text-blue-600" />
+                                <h3 className="text-lg font-semibold text-gray-900">
+                                  {stripHtml(liveClass.title)}
+                                </h3>
+                                <Badge className={getStatusColor(liveClass.status)}>
+                                  {getStatusLabel(liveClass.status)}
+                                </Badge>
+                              </div>
+                              {liveClass.description && (
+                                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                                  {stripHtml(liveClass.description)}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                                <div className="flex items-center">
+                                  <ClockIcon className="h-4 w-4 mr-1" />
+                                  {new Date(liveClass.scheduledAt).toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                  })}
+                                </div>
+                                <div className="flex items-center">
+                                  <ClockIcon className="h-4 w-4 mr-1" />
+                                  {new Date(liveClass.scheduledAt).toLocaleTimeString('vi-VN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })} ({liveClass.durationMinutes} phút)
+                                </div>
+                                {liveClass.maxParticipants && (
+                                  <div className="flex items-center">
+                                    <UserGroupIcon className="h-4 w-4 mr-1" />
+                                    Tối đa {liveClass.maxParticipants} học viên
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              {canJoin ? (
+                                <Button
+                                  onClick={() => handleJoinLiveClass(liveClass.id, liveClass.meetingUrl)}
+                                  disabled={isJoining}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {isJoining ? 'Đang tham gia...' : 'Tham gia'}
+                                </Button>
+                              ) : !course.isFree && !course.isEnrolled ? (
+                                <Badge variant="outline" className="text-orange-600 border-orange-300">
+                                  Cần đăng ký
+                                </Badge>
+                              ) : liveClass.status === 0 ? (
+                                <Badge variant="outline" className="text-blue-600 border-blue-300">
+                                  Chưa bắt đầu
+                                </Badge>
+                              ) : liveClass.status === 2 ? (
+                                <Badge variant="outline" className="text-gray-600 border-gray-300">
+                                  Đã kết thúc
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Reviews Section */}
             {courseId && (

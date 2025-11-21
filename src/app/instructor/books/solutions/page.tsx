@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { useBooks } from '@/hooks/useBooks';
 import { bookApiService, Book, BookQuestion, BookChapter } from '@/services/bookApi';
 import { solutionsApi } from '@/services/solutionsApi';
+import { renameFileWithTimestamp } from '@/utils/fileUtils';
 import LatexPreview from '@/components/LatexPreview';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -337,8 +338,11 @@ export default function SolutionsPage() {
       setUploadingVideo(true);
       console.log('Starting video upload:', { fileName: videoFile.name, size: videoFile.size, type: videoFile.type });
       
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedVideoFile = renameFileWithTimestamp(videoFile, user?.id);
+      
       // Step 1: Upload video
-      const uploadedUrl = await solutionsApi.uploadVideo(videoFile);
+      const uploadedUrl = await solutionsApi.uploadVideo(renamedVideoFile);
       console.log('Video uploaded successfully, URL:', uploadedUrl);
       
       // Step 2: Automatically update VideoUrl in database

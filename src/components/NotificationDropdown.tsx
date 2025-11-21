@@ -8,6 +8,7 @@ import { useSignalR } from '@/contexts/SignalRContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 interface Notification {
@@ -35,12 +36,24 @@ export default function NotificationDropdown({
   showConnectionStatus = false 
 }: NotificationDropdownProps) {
   const { user, isAuthenticated } = useAuth();
+  const pathname = usePathname();
   const { data, unreadCount, loading, refetch, markAsRead, markAllAsRead } = useNotifications({ 
     page: 1, 
     pageSize: 10 
   });
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Determine notifications page URL based on current path
+  const getNotificationsUrl = () => {
+    if (pathname?.startsWith('/dashboard')) {
+      return '/dashboard/notifications';
+    } else if (pathname?.startsWith('/instructor')) {
+      return '/instructor/notifications';
+    } else {
+      return '/notifications';
+    }
+  };
 
   // Convert API data to Notification format
   const notifications: Notification[] = data.map((n: any) => ({
@@ -324,7 +337,7 @@ export default function NotificationDropdown({
             {notifications.length > 0 && (
               <div className="px-4 py-2 border-t border-gray-200 text-center">
                 <Link
-                  href="/dashboard/notifications"
+                  href={getNotificationsUrl()}
                   className="text-sm text-blue-600 hover:text-blue-800"
                   onClick={() => setIsOpen(false)}
                 >

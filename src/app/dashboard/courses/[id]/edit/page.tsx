@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthenticatedFetch } from "@/hooks/useAuthenticatedFetch";
 import { useUpload } from "@/hooks/useUpload";
+import { useAuth } from '@/contexts/AuthContext';
+import { renameFileWithTimestamp } from '@/utils/fileUtils';
 import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   ArrowLeftIcon,
@@ -58,6 +60,7 @@ export default function EditCoursePage() {
   const courseId = Number(params?.id);
 
   const { authenticatedFetch } = useAuthenticatedFetch();
+  const { user } = useAuth();
   const {
     uploadFileWithPresign,
     uploading: uploadingThumbnail,
@@ -218,7 +221,10 @@ export default function EditCoursePage() {
     setError(null);
 
     try {
-      const result = await uploadFileWithPresign(file, {
+      // Đổi tên file trước khi upload để tránh trùng tên
+      const renamedFile = renameFileWithTimestamp(file, user?.id);
+      
+      const result = await uploadFileWithPresign(renamedFile, {
         folder: "course-thumbnails",
         accessRole: "GUEST",
       });
