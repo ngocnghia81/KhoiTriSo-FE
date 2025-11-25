@@ -250,9 +250,10 @@ export default function ReviewGeneratedPage() {
     }
 
     // Normalize questions: đảm bảo GroupTitle (QuestionType === 3) luôn có DefaultPoints = 0
-    const normalizedQuestions = questions.map(q => ({
+    const normalizedQuestions = questions.map((q, idx) => ({
       ...q,
-      DefaultPoints: q.QuestionType === 3 ? 0 : q.DefaultPoints
+      DefaultPoints: q.QuestionType === 3 ? 0 : q.DefaultPoints,
+      OrderIndex: q.OrderIndex ?? idx
     }));
 
     const res = await batchInsert(id, { Questions: normalizedQuestions });

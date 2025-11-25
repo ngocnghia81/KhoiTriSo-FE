@@ -63,6 +63,65 @@ export default function QuestionDetailPage() {
   const [commentContents, setCommentContents] = useState<Record<string, string>>({});
   const [submittingComments, setSubmittingComments] = useState<Record<string, boolean>>({});
 
+  // Load MathJax để render MathML
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as Window & { MathJax?: unknown };
+    if (!w.MathJax) {
+      w.MathJax = {
+        loader: { load: ['input/mml', 'input/tex', 'output/chtml'] },
+        options: {
+          renderActions: { addMenu: [0, '', ''] },
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'tex2jax_ignore',
+          processHtmlClass: 'tex2jax_process',
+        },
+        chtml: { scale: 1, displayAlign: "center" },
+        startup: {
+          ready: () => {
+            if (w.MathJax && typeof w.MathJax === 'object' && 'startup' in w.MathJax) {
+              const mj = w.MathJax as { startup?: { defaultReady?: () => void } };
+              mj.startup?.defaultReady?.();
+            }
+          },
+        },
+      } as unknown;
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/mml-chtml.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Render HTML content với MathML và images
+  const renderQuestionContent = (content: string) => {
+    if (!content) return '';
+    
+    // Tạo một div tạm để parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Xử lý images
+    doc.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('data:image') || src.startsWith('http'))) {
+        // Giữ nguyên base64 image hoặc URL
+        img.setAttribute('style', 'max-width: 100%; height: auto; display: block; margin: 10px 0;');
+      }
+    });
+    
+    // Đảm bảo MathML có namespace đúng và format đúng
+    doc.querySelectorAll('math').forEach(math => {
+      if (!math.getAttribute('xmlns')) {
+        math.setAttribute('xmlns', 'http://www.w3.org/1998/Math/MathML');
+      }
+      // Đảm bảo MathML được format đúng để MathJax có thể parse
+      math.setAttribute('display', 'inline');
+    });
+    
+    return doc.body.innerHTML;
+  };
+
   useEffect(() => {
     if (questionId) {
       loadQuestion();
@@ -485,7 +544,26 @@ export default function QuestionDetailPage() {
                 className={`prose prose-sm max-w-none mb-4 ${
                   question.isDeleted ? 'line-through opacity-60' : ''
                 }`}
-                dangerouslySetInnerHTML={{ __html: question.content }}
+                dangerouslySetInnerHTML={{ __html: renderQuestionContent(question.content) }}
+                ref={(el) => {
+                  if (el) {
+                    // Typeset MathML sau khi element được render
+                    const typeset = () => {
+                      const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                      if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                        const mathElements = el.querySelectorAll('math');
+                        if (mathElements.length > 0) {
+                          w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                        } else {
+                          w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                        }
+                      }
+                    };
+                    typeset();
+                    setTimeout(typeset, 100);
+                    setTimeout(typeset, 300);
+                  }
+                }}
               />
 
               {/* Tags */}
@@ -534,7 +612,28 @@ export default function QuestionDetailPage() {
                 <div className="mt-4 space-y-2">
                   {comments[questionId].map((comment) => (
                     <div key={comment.id} className="text-sm text-gray-600 pl-4 border-l-2 border-gray-200">
-                      <div dangerouslySetInnerHTML={{ __html: comment.content }} />
+                      <div 
+                        dangerouslySetInnerHTML={{ __html: renderQuestionContent(comment.content) }}
+                        ref={(el) => {
+                          if (el) {
+                            // Typeset MathML sau khi element được render
+                            const typeset = () => {
+                              const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                              if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                const mathElements = el.querySelectorAll('math');
+                                if (mathElements.length > 0) {
+                                  w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                } else {
+                                  w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                }
+                              }
+                            };
+                            typeset();
+                            setTimeout(typeset, 100);
+                            setTimeout(typeset, 300);
+                          }
+                        }}
+                      />
                       <div className="mt-1 text-xs text-gray-500">
                         {comment.userName} • {formatTimeAgo(comment.createdAt)}
                       </div>
@@ -548,12 +647,11 @@ export default function QuestionDetailPage() {
                 <div className="mt-4">
                   {showCommentForms[questionId] ? (
                     <div className="space-y-2">
-                      <textarea
+                      <RichTextEditor
                         value={commentContents[questionId] || ''}
-                        onChange={(e) => setCommentContents(prev => ({ ...prev, [questionId]: e.target.value }))}
+                        onChange={(value) => setCommentContents(prev => ({ ...prev, [questionId]: value }))}
                         placeholder="Thêm bình luận..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={3}
+                        className="w-full"
                       />
                       <div className="flex gap-2">
                         <button
@@ -706,7 +804,26 @@ export default function QuestionDetailPage() {
                         className={`prose prose-sm max-w-none mb-4 ${
                           answer.isDeleted ? 'line-through opacity-60' : ''
                         }`}
-                        dangerouslySetInnerHTML={{ __html: answer.content }}
+                        dangerouslySetInnerHTML={{ __html: renderQuestionContent(answer.content) }}
+                        ref={(el) => {
+                          if (el) {
+                            // Typeset MathML sau khi element được render
+                            const typeset = () => {
+                              const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                              if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                const mathElements = el.querySelectorAll('math');
+                                if (mathElements.length > 0) {
+                                  w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                } else {
+                                  w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                }
+                              }
+                            };
+                            typeset();
+                            setTimeout(typeset, 100);
+                            setTimeout(typeset, 300);
+                          }
+                        }}
                       />
 
                       {/* Meta */}
@@ -738,7 +855,28 @@ export default function QuestionDetailPage() {
                         <div className="mt-4 space-y-2">
                           {comments[answer.id].map((comment) => (
                             <div key={comment.id} className="text-sm text-gray-600 pl-4 border-l-2 border-gray-200">
-                              <div dangerouslySetInnerHTML={{ __html: comment.content }} />
+                              <div 
+                                dangerouslySetInnerHTML={{ __html: renderQuestionContent(comment.content) }}
+                                ref={(el) => {
+                                  if (el) {
+                                    // Typeset MathML sau khi element được render
+                                    const typeset = () => {
+                                      const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                                      if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                        const mathElements = el.querySelectorAll('math');
+                                        if (mathElements.length > 0) {
+                                          w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                        } else {
+                                          w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                        }
+                                      }
+                                    };
+                                    typeset();
+                                    setTimeout(typeset, 100);
+                                    setTimeout(typeset, 300);
+                                  }
+                                }}
+                              />
                               <div className="mt-1 text-xs text-gray-500">
                                 {comment.userName} • {formatTimeAgo(comment.createdAt)}
                               </div>
@@ -752,12 +890,11 @@ export default function QuestionDetailPage() {
                         <div className="mt-4">
                           {showCommentForms[answer.id] ? (
                             <div className="space-y-2">
-                              <textarea
+                              <RichTextEditor
                                 value={commentContents[answer.id] || ''}
-                                onChange={(e) => setCommentContents(prev => ({ ...prev, [answer.id]: e.target.value }))}
+                                onChange={(value) => setCommentContents(prev => ({ ...prev, [answer.id]: value }))}
                                 placeholder="Thêm bình luận..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                rows={3}
+                                className="w-full"
                               />
                               <div className="flex gap-2">
                                 <button

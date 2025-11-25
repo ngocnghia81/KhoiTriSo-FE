@@ -153,6 +153,64 @@ export default function BookChapterDetailPage() {
     return html.replace(/<[^>]*>/g, '').trim();
   };
 
+  // Load MathJax để render MathML
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+    if (!w.MathJax) {
+      w.MathJax = {
+        loader: { load: ['input/mml', 'input/tex', 'output/chtml'] },
+        options: {
+          renderActions: { addMenu: [0, '', ''] },
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'tex2jax_ignore',
+          processHtmlClass: 'tex2jax_process',
+        },
+        chtml: { scale: 1, displayAlign: "center" },
+        startup: {
+          ready: () => {
+            if (w.MathJax && w.MathJax.startup) {
+              w.MathJax.startup.defaultReady && w.MathJax.startup.defaultReady();
+            }
+          },
+        },
+      };
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/mml-chtml.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Render HTML content với MathML và images
+  const renderQuestionContent = (content: string) => {
+    if (!content) return '';
+    
+    // Tạo một div tạm để parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Xử lý images
+    doc.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('data:image') || src.startsWith('http'))) {
+        // Giữ nguyên base64 image hoặc URL
+        img.setAttribute('style', 'max-width: 100%; height: auto; display: block; margin: 10px 0;');
+      }
+    });
+    
+    // Đảm bảo MathML có namespace đúng và format đúng
+    doc.querySelectorAll('math').forEach(math => {
+      if (!math.getAttribute('xmlns')) {
+        math.setAttribute('xmlns', 'http://www.w3.org/1998/Math/MathML');
+      }
+      // Đảm bảo MathML được format đúng để MathJax có thể parse
+      math.setAttribute('display', 'inline');
+    });
+    
+    return doc.body.innerHTML;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -434,12 +492,28 @@ export default function BookChapterDetailPage() {
                             <div 
                               className="text-gray-900 text-lg leading-relaxed prose prose-lg max-w-none flex-1"
                               dangerouslySetInnerHTML={{ 
-                                __html: formatRichText(
-                                  question.QuestionContent ||
-                                    question.questionContent ||
-                                    question.question ||
-                                    ''
-                                )
+                                __html: renderQuestionContent(question.QuestionContent || question.questionContent || question.question || '')
+                              }}
+                              ref={(el) => {
+                                if (el) {
+                                  // Typeset MathML sau khi element được render
+                                  const typeset = () => {
+                                    const w = window as any;
+                                    if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                      const mathElements = el.querySelectorAll('math');
+                                      if (mathElements.length > 0) {
+                                        w.MathJax.typesetPromise(mathElements as any).catch(() => {});
+                                      } else {
+                                        // Nếu không có math elements, vẫn typeset để đảm bảo
+                                        w.MathJax.typesetPromise([el] as any).catch(() => {});
+                                      }
+                                    }
+                                  };
+                                  // Typeset ngay lập tức và sau một delay
+                                  typeset();
+                                  setTimeout(typeset, 100);
+                                  setTimeout(typeset, 300);
+                                }
                               }}
                             />
                             {/* Chỉ hiện nút "Xem lựa chọn" cho trắc nghiệm, đúng/sai, nhiều đáp án - không hiện cho tự luận */}
@@ -517,22 +591,33 @@ export default function BookChapterDetailPage() {
                                     </div>
                                     <div className="flex-1">
                                       <span className="font-medium text-gray-700 mr-2">
-                                        {String.fromCharCode(65 + optIndex)}:
+                                        {String.fromCharCode(65 + optIndex)}.
                                       </span>
-                                      <span
-                                        className={`${showCorrect ? 'text-green-800 font-medium' : 'text-gray-700'}`}
-                                        dangerouslySetInnerHTML={{
-                                          __html: (() => {
-                                            const optionText =
-                                              option.optionText ||
-                                              option.OptionText ||
-                                              option.optionContent ||
-                                              option.OptionContent ||
-                                              '';
-                                            return formatRichText(
-                                              optionText.replace(/^[A-D][\.:]?\s*/i, '')
-                                            );
-                                          })(),
+                                      <span 
+                                        className={`prose max-w-none ${showCorrect ? 'text-green-800 font-medium' : 'text-gray-700'}`}
+                                        dangerouslySetInnerHTML={{ 
+                                          __html: renderQuestionContent(option.optionText || option.OptionText || option.optionContent || option.OptionContent || '')
+                                        }}
+                                        ref={(el) => {
+                                          if (el) {
+                                            // Typeset MathML sau khi element được render
+                                            const typeset = () => {
+                                              const w = window as any;
+                                              if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                                const mathElements = el.querySelectorAll('math');
+                                                if (mathElements.length > 0) {
+                                                  w.MathJax.typesetPromise(mathElements as any).catch(() => {});
+                                                } else {
+                                                  // Nếu không có math elements, vẫn typeset để đảm bảo
+                                                  w.MathJax.typesetPromise([el] as any).catch(() => {});
+                                                }
+                                              }
+                                            };
+                                            // Typeset ngay lập tức và sau một delay
+                                            typeset();
+                                            setTimeout(typeset, 100);
+                                            setTimeout(typeset, 300);
+                                          }
                                         }}
                                       />
                                     </div>
@@ -552,13 +637,28 @@ export default function BookChapterDetailPage() {
                               <div 
                                 className="text-blue-800 prose prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ 
-                                  __html: formatRichText(
-                                    question.explanationContent ||
-                                      question.ExplanationContent ||
-                                      question.explanation ||
-                                      question.Explanation ||
-                                      ''
-                                  ) 
+                                  __html: renderQuestionContent(question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation || '')
+                                }}
+                                ref={(el) => {
+                                  if (el) {
+                                    // Typeset MathML sau khi element được render
+                                    const typeset = () => {
+                                      const w = window as any;
+                                      if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                        const mathElements = el.querySelectorAll('math');
+                                        if (mathElements.length > 0) {
+                                          w.MathJax.typesetPromise(mathElements as any).catch(() => {});
+                                        } else {
+                                          // Nếu không có math elements, vẫn typeset để đảm bảo
+                                          w.MathJax.typesetPromise([el] as any).catch(() => {});
+                                        }
+                                      }
+                                    };
+                                    // Typeset ngay lập tức và sau một delay
+                                    typeset();
+                                    setTimeout(typeset, 100);
+                                    setTimeout(typeset, 300);
+                                  }
                                 }}
                               />
                             </div>

@@ -249,6 +249,7 @@ export function ImportQuestionsFromWord({ assignmentId, onClose, onImported }: I
           ExplanationContent: wrapMathML(explanation),
           DefaultPoints: q.DefaultPoints ?? 1,
           QuestionType: q.QuestionType,
+          OrderIndex: idx,
           Options: options
         } as AIGeneratedQuestion as any;
       };
