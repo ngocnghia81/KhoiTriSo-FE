@@ -931,15 +931,23 @@ export default function BookChapterDetailPage() {
                                           }}
                                           ref={(el) => {
                                             if (el) {
-                                              setTimeout(() => {
+                                              // Typeset MathML sau khi element được render
+                                              const typeset = () => {
                                                 const w = window as any;
                                                 if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
                                                   const mathElements = el.querySelectorAll('math');
                                                   if (mathElements.length > 0) {
                                                     w.MathJax.typesetPromise(mathElements as any).catch(() => {});
+                                                  } else {
+                                                    // Nếu không có math elements, vẫn typeset để đảm bảo
+                                                    w.MathJax.typesetPromise([el] as any).catch(() => {});
                                                   }
                                                 }
-                                              }, 100);
+                                              };
+                                              // Typeset ngay lập tức và sau một delay
+                                              typeset();
+                                              setTimeout(typeset, 100);
+                                              setTimeout(typeset, 300);
                                             }
                                           }}
                                         />
@@ -967,15 +975,23 @@ export default function BookChapterDetailPage() {
                                   }}
                                   ref={(el) => {
                                     if (el) {
-                                      setTimeout(() => {
+                                      // Typeset MathML sau khi element được render
+                                      const typeset = () => {
                                         const w = window as any;
                                         if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
                                           const mathElements = el.querySelectorAll('math');
                                           if (mathElements.length > 0) {
                                             w.MathJax.typesetPromise(mathElements as any).catch(() => {});
+                                          } else {
+                                            // Nếu không có math elements, vẫn typeset để đảm bảo
+                                            w.MathJax.typesetPromise([el] as any).catch(() => {});
                                           }
                                         }
-                                      }, 100);
+                                      };
+                                      // Typeset ngay lập tức và sau một delay
+                                      typeset();
+                                      setTimeout(typeset, 100);
+                                      setTimeout(typeset, 300);
                                     }
                                   }}
                                 />

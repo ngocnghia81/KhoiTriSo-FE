@@ -58,7 +58,7 @@ export function ImportQuestionsFromWordForBook({ bookId, chapterId, onClose, onI
         const genResult = await generateFromWord(result.url);
         if (genResult.success && genResult.data) {
           // Map questions và thêm chapterId, đồng thời chuẩn hóa Options
-          const questionsWithChapter = genResult.data.map((q: AIGeneratedQuestion) => {
+          const questionsWithChapter = genResult.data.map((q: AIGeneratedQuestion, idx: number) => {
             // Chuẩn hóa Options: đảm bảo có cả OptionText và Content
             const normalizedOptions = (q.Options || []).map((opt: any) => ({
               ...opt,
@@ -69,6 +69,7 @@ export function ImportQuestionsFromWordForBook({ bookId, chapterId, onClose, onI
             return {
               ...q,
               ChapterId: chapterId,
+              OrderIndex: idx,
               Options: normalizedOptions,
             };
           });
@@ -96,7 +97,7 @@ export function ImportQuestionsFromWordForBook({ bookId, chapterId, onClose, onI
       setError(null);
 
       // Chuẩn hóa questions trước khi gửi: chuyển Content thành OptionText
-      const normalizedQuestions = questions.map((q) => {
+      const normalizedQuestions = questions.map((q, idx) => {
         const normalizedOptions = (q.Options || []).map((opt: any) => ({
           OptionText: opt.OptionText || opt.Content || '',
           IsCorrect: opt.IsCorrect || false,
@@ -111,6 +112,7 @@ export function ImportQuestionsFromWordForBook({ bookId, chapterId, onClose, onI
           DefaultPoints: q.DefaultPoints ?? 1,
           ExplanationContent: q.ExplanationContent || '',
           ChapterId: q.ChapterId || chapterId,
+          OrderIndex: q.OrderIndex ?? idx,
           Options: normalizedOptions,
         };
       });
