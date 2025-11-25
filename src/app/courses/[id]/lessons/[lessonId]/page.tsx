@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import AssignmentList from '@/components/AssignmentList';
+import { RichTextEditor } from '@/components/RichTextEditor';
 
 interface Lesson {
   id: number;
@@ -280,6 +281,65 @@ export default function LessonPlayerPage() {
     } finally {
       setMaterialsLoading(false);
     }
+  };
+
+  // Load MathJax để render MathML
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as Window & { MathJax?: unknown };
+    if (!w.MathJax) {
+      w.MathJax = {
+        loader: { load: ['input/mml', 'input/tex', 'output/chtml'] },
+        options: {
+          renderActions: { addMenu: [0, '', ''] },
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoreHtmlClass: 'tex2jax_ignore',
+          processHtmlClass: 'tex2jax_process',
+        },
+        chtml: { scale: 1, displayAlign: "center" },
+        startup: {
+          ready: () => {
+            if (w.MathJax && typeof w.MathJax === 'object' && 'startup' in w.MathJax) {
+              const mj = w.MathJax as { startup?: { defaultReady?: () => void } };
+              mj.startup?.defaultReady?.();
+            }
+          },
+        },
+      } as unknown;
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/mml-chtml.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Render HTML content với MathML và images
+  const renderQuestionContent = (content: string) => {
+    if (!content) return '';
+    
+    // Tạo một div tạm để parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    
+    // Xử lý images
+    doc.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('data:image') || src.startsWith('http'))) {
+        // Giữ nguyên base64 image hoặc URL
+        img.setAttribute('style', 'max-width: 100%; height: auto; display: block; margin: 10px 0;');
+      }
+    });
+    
+    // Đảm bảo MathML có namespace đúng và format đúng
+    doc.querySelectorAll('math').forEach(math => {
+      if (!math.getAttribute('xmlns')) {
+        math.setAttribute('xmlns', 'http://www.w3.org/1998/Math/MathML');
+      }
+      // Đảm bảo MathML được format đúng để MathJax có thể parse
+      math.setAttribute('display', 'inline');
+    });
+    
+    return doc.body.innerHTML;
   };
 
   const fetchDiscussions = async () => {
@@ -877,12 +937,11 @@ export default function LessonPlayerPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        <Textarea
+                        <RichTextEditor
                           placeholder="Nhập câu hỏi của bạn về bài học này..."
                           value={newDiscussionContent}
-                          onChange={(e) => setNewDiscussionContent(e.target.value)}
-                          rows={4}
-                          className="resize-none"
+                          onChange={setNewDiscussionContent}
+                          className="w-full"
                         />
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -981,7 +1040,29 @@ export default function LessonPlayerPage() {
                                   {formatDate(discussion.createdAt)}
                                 </span>
                               </div>
-                              <p className="text-gray-700 mb-4 whitespace-pre-wrap">{discussion.content}</p>
+                              <div 
+                                className="text-gray-700 mb-4 prose max-w-none"
+                                dangerouslySetInnerHTML={{ __html: renderQuestionContent(discussion.content) }}
+                                ref={(el) => {
+                                  if (el) {
+                                    // Typeset MathML sau khi element được render
+                                    const typeset = () => {
+                                      const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                                      if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                        const mathElements = el.querySelectorAll('math');
+                                        if (mathElements.length > 0) {
+                                          w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                        } else {
+                                          w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                        }
+                                      }
+                                    };
+                                    typeset();
+                                    setTimeout(typeset, 100);
+                                    setTimeout(typeset, 300);
+                                  }
+                                }}
+                              />
                               
                               {/* Actions */}
                               <div className="flex items-center gap-4 mt-3">
@@ -1013,12 +1094,11 @@ export default function LessonPlayerPage() {
                               {replyingTo === discussion.id && (
                                 <div className="mt-4 pl-4 border-l-2 border-blue-200">
                                   <div className="space-y-3">
-                                    <Textarea
+                                    <RichTextEditor
                                       placeholder="Viết trả lời..."
                                       value={replyContent[discussion.id] || ''}
-                                      onChange={(e) => setReplyContent(prev => ({ ...prev, [discussion.id]: e.target.value }))}
-                                      rows={3}
-                                      className="resize-none"
+                                      onChange={(value) => setReplyContent(prev => ({ ...prev, [discussion.id]: value }))}
+                                      className="w-full"
                                     />
                                     <div className="flex items-center justify-end gap-2">
                                       <Button
@@ -1079,7 +1159,29 @@ export default function LessonPlayerPage() {
                                                 {formatDate(reply.createdAt)}
                                               </span>
                                             </div>
-                                            <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{reply.content}</p>
+                                            <div 
+                                              className="text-sm text-gray-700 mb-2 prose max-w-none"
+                                              dangerouslySetInnerHTML={{ __html: renderQuestionContent(reply.content) }}
+                                              ref={(el) => {
+                                                if (el) {
+                                                  // Typeset MathML sau khi element được render
+                                                  const typeset = () => {
+                                                    const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                                                    if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                                      const mathElements = el.querySelectorAll('math');
+                                                      if (mathElements.length > 0) {
+                                                        w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                                      } else {
+                                                        w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                                      }
+                                                    }
+                                                  };
+                                                  typeset();
+                                                  setTimeout(typeset, 100);
+                                                  setTimeout(typeset, 300);
+                                                }
+                                              }}
+                                            />
                                             <div className="flex items-center gap-3">
                                               <Button
                                                 variant="ghost"
@@ -1108,12 +1210,11 @@ export default function LessonPlayerPage() {
                                             {replyingTo === reply.id && (
                                               <div className="mt-3 pl-4 border-l-2 border-blue-200">
                                                 <div className="space-y-2">
-                                                  <Textarea
+                                                  <RichTextEditor
                                                     placeholder="Viết trả lời..."
                                                     value={replyContent[reply.id] || ''}
-                                                    onChange={(e) => setReplyContent(prev => ({ ...prev, [reply.id]: e.target.value }))}
-                                                    rows={2}
-                                                    className="resize-none text-sm"
+                                                    onChange={(value) => setReplyContent(prev => ({ ...prev, [reply.id]: value }))}
+                                                    className="w-full"
                                                   />
                                                   <div className="flex items-center justify-end gap-2">
                                                     <Button
@@ -1192,7 +1293,29 @@ export default function LessonPlayerPage() {
                                               {formatDate(reply.createdAt)}
                                             </span>
                                           </div>
-                                          <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{reply.content}</p>
+                                          <div 
+                                            className="text-sm text-gray-700 mb-2 prose max-w-none"
+                                            dangerouslySetInnerHTML={{ __html: renderQuestionContent(reply.content) }}
+                                            ref={(el) => {
+                                              if (el) {
+                                                // Typeset MathML sau khi element được render
+                                                const typeset = () => {
+                                                  const w = window as Window & { MathJax?: { typesetPromise?: (elements?: unknown) => Promise<unknown> } };
+                                                  if (w.MathJax && typeof w.MathJax.typesetPromise === 'function') {
+                                                    const mathElements = el.querySelectorAll('math');
+                                                    if (mathElements.length > 0) {
+                                                      w.MathJax.typesetPromise(mathElements as unknown).catch(() => {});
+                                                    } else {
+                                                      w.MathJax.typesetPromise([el] as unknown).catch(() => {});
+                                                    }
+                                                  }
+                                                };
+                                                typeset();
+                                                setTimeout(typeset, 100);
+                                                setTimeout(typeset, 300);
+                                              }
+                                            }}
+                                          />
                                           <div className="flex items-center gap-3">
                                             <Button
                                               variant="ghost"
@@ -1221,12 +1344,11 @@ export default function LessonPlayerPage() {
                                           {replyingTo === reply.id && (
                                             <div className="mt-3 pl-4 border-l-2 border-blue-200">
                                               <div className="space-y-2">
-                                                <Textarea
+                                                <RichTextEditor
                                                   placeholder="Viết trả lời..."
                                                   value={replyContent[reply.id] || ''}
-                                                  onChange={(e) => setReplyContent(prev => ({ ...prev, [reply.id]: e.target.value }))}
-                                                  rows={2}
-                                                  className="resize-none text-sm"
+                                                  onChange={(value) => setReplyContent(prev => ({ ...prev, [reply.id]: value }))}
+                                                  className="w-full"
                                                 />
                                                 <div className="flex items-center justify-end gap-2">
                                                   <Button
