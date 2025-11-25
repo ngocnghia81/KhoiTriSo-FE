@@ -24,6 +24,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { bookApiService, BookChapter } from '@/services/bookApi';
 
+declare global {
+  interface Window {
+    MathJax?: any;
+  }
+}
+
 export default function BookChapterDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,6 +43,49 @@ export default function BookChapterDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAnswers, setShowAnswers] = useState<Record<number, boolean>>({});
+  let visibleQuestionIndex = 0;
+
+  const formatRichText = (content: string | undefined | null): string => {
+    if (!content) return '';
+    return content
+      .replace(/\\textbf\{([^}]*)\}/g, '<strong>$1</strong>')
+      .replace(/\\textit\{([^}]*)\}/g, '<em>$1</em>')
+      .replace(/\\textcolor\{[^}]+\}\{([^}]*)\}/g, '$1')
+      .replace(/\n/g, '<br />');
+  };
+
+  // Load MathJax script once
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+
+    if (!w.MathJax) {
+      w.MathJax = {
+        loader: { load: ['input/tex', 'input/mml', 'output/chtml'] },
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true,
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+        },
+      };
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const typesetMath = () => {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+    if (w.MathJax?.typesetPromise) {
+      w.MathJax.typesetPromise().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     if (!bookId || !chapterId) {
@@ -61,6 +110,8 @@ export default function BookChapterDetailPage() {
         // Fetch all chapters để có navigation
         try {
           const chaptersData = await bookApiService.getBookChapters(bookId);
+          console.log('Fetched all chapters:', chaptersData);
+          console.log('Current chapter in allChapters:', chaptersData.find(c => c.id === chapterId));
           setAllChapters(chaptersData);
         } catch (err) {
           console.warn('Could not load chapters:', err);
@@ -69,21 +120,33 @@ export default function BookChapterDetailPage() {
         // Fetch chapter details
         try {
           const chapterData = await bookApiService.getBookChapterById(bookId, chapterId);
+          console.log('Fetched chapter detail:', chapterData);
+          console.log('Chapter canView:', chapterData.canView);
           setChapter(chapterData);
         } catch (err: any) {
           console.error('Error fetching chapter:', err);
-          setError(err.message || 'Không thể tải thông tin chương');
+          // Only set error if it's a real error, not just missing data
+          if (err.message && !err.message.includes('No chapter data')) {
+            setError(err.message || 'Không thể tải thông tin chương');
+          }
         }
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Có lỗi xảy ra');
-      } finally {
-        setLoading(false);
-      }
-    };
+        } finally {
+          setLoading(false);
+          typesetMath();
+        }
+      };
 
-    fetchData();
-  }, [bookId, chapterId]);
+      fetchData();
+    }, [bookId, chapterId]);
+
+  // Re-typeset Math when answers toggle or chapter changes
+  useEffect(() => {
+    if (!chapter) return;
+    typesetMath();
+  }, [chapter, showAnswers]);
 
   const stripHtml = (html: string | undefined | null): string => {
     if (!html) return '';
@@ -139,6 +202,16 @@ export default function BookChapterDetailPage() {
   const currentChapterIndex = allChapters.findIndex(c => c.id === chapterId);
   const prevChapter = currentChapterIndex > 0 ? allChapters[currentChapterIndex - 1] : null;
   const nextChapter = currentChapterIndex < allChapters.length - 1 ? allChapters[currentChapterIndex + 1] : null;
+  
+  // Debug canView
+  console.log('Chapter canView check:', {
+    'chapter.canView': chapter.canView,
+    'chapter object': chapter,
+    'allChapters current': allChapters[currentChapterIndex]?.canView,
+    'currentChapterIndex': currentChapterIndex
+  });
+  
+  // canView is true if explicitly true, or if undefined/null (default to true)
   const canView = chapter.canView !== false;
 
   return (
@@ -172,6 +245,7 @@ export default function BookChapterDetailPage() {
         <nav className="p-2">
           {allChapters.map((ch, index) => {
             const isActive = ch.id === chapterId;
+            // canView is true if explicitly true, or if undefined/null (default to true)
             const canViewChapter = ch.canView !== false;
             
             return (
@@ -300,8 +374,8 @@ export default function BookChapterDetailPage() {
             )}
           </div>
 
-          {/* Questions */}
-          {chapter.questions && chapter.questions.length > 0 && (
+            {/* Questions */}
+            {chapter.questions && chapter.questions.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
               <div className="flex items-center gap-3 mb-6">
                 <FileQuestion className="w-6 h-6 text-blue-600" />
@@ -311,16 +385,43 @@ export default function BookChapterDetailPage() {
               </div>
               
               <div className="space-y-6">
-                {chapter.questions.map((question: any, index: number) => {
+                 {chapter.questions.map((question: any, index: number) => {
                   const questionId = question.id || question.Id || index;
                   const isAnswerVisible = showAnswers[questionId] || false;
+                   const questionType = question.questionType || question.QuestionType || 0;
+                   const isGroupTitle = questionType === 3;
+                   const isEssay = questionType === 2;
+
+                   if (isGroupTitle) {
+                     return (
+                       <div
+                         key={`group-${questionId}`}
+                         className="border-l-4 border-blue-500 bg-blue-50/70 rounded-md p-4 text-blue-900 font-semibold text-lg"
+                       >
+                        <div
+                          className="prose prose-lg max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: formatRichText(
+                              question.QuestionContent ||
+                                question.questionContent ||
+                                question.question ||
+                                question.description ||
+                                ''
+                            ),
+                          }}
+                        />
+                       </div>
+                     );
+                   }
+
+                   const questionNumber = ++visibleQuestionIndex;
                   
                   return (
                     <div key={questionId} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
                       <div className="flex items-start gap-4">
                         <div className="flex-shrink-0">
                           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                            {index + 1}
+                            {questionNumber}
                           </div>
                           {/* ID để search */}
                           <div className="mt-2 text-xs text-center">
@@ -333,14 +434,16 @@ export default function BookChapterDetailPage() {
                             <div 
                               className="text-gray-900 text-lg leading-relaxed prose prose-lg max-w-none flex-1"
                               dangerouslySetInnerHTML={{ 
-                                __html: question.QuestionContent || question.questionContent || question.question || '' 
+                                __html: formatRichText(
+                                  question.QuestionContent ||
+                                    question.questionContent ||
+                                    question.question ||
+                                    ''
+                                )
                               }}
                             />
                             {/* Chỉ hiện nút "Xem lựa chọn" cho trắc nghiệm, đúng/sai, nhiều đáp án - không hiện cho tự luận */}
                             {(() => {
-                              const questionType = question.questionType || question.QuestionType;
-                              // 0 = MultipleChoice, 1 = TrueFalse, 2 = ShortAnswer (tự luận), 3 = có thể là Essay
-                              const isEssay = questionType === 2 || questionType === 3;
                               const hasOptions = question.options && question.options.length > 0;
                               
                               // Chỉ hiện nút nếu không phải tự luận và có options
@@ -374,7 +477,22 @@ export default function BookChapterDetailPage() {
                             })()}
                           </div>
                           
-                          {question.options && question.options.length > 0 ? (
+                          {isEssay ? (
+                            <div className="mt-4 space-y-3">
+                              <p className="text-sm font-semibold text-gray-800">
+                                Câu hỏi tự luận – hãy nhập đáp án của bạn:
+                              </p>
+                              <textarea
+                                className="w-full rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-blue-500 p-3 text-sm text-gray-800"
+                                rows={4}
+                                placeholder="Nhập câu trả lời tại đây..."
+                                disabled
+                              />
+                              <p className="text-xs text-gray-500">
+                                Đáp án chính thức sẽ do giáo viên chấm, hệ thống không hiển thị đáp án mẫu cho dạng tự luận.
+                              </p>
+                            </div>
+                          ) : question.options && question.options.length > 0 ? (
                             <div className="mt-4 space-y-3">
                               <p className="text-sm font-medium text-gray-700 mb-2">Các phương án:</p>
                               {question.options.map((option: any, optIndex: number) => {
@@ -399,11 +517,24 @@ export default function BookChapterDetailPage() {
                                     </div>
                                     <div className="flex-1">
                                       <span className="font-medium text-gray-700 mr-2">
-                                        {String.fromCharCode(65 + optIndex)}.
+                                        {String.fromCharCode(65 + optIndex)}:
                                       </span>
-                                      <span className={`${showCorrect ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
-                                        {option.optionText || option.OptionText || option.optionContent || option.OptionContent || ''}
-                                      </span>
+                                      <span
+                                        className={`${showCorrect ? 'text-green-800 font-medium' : 'text-gray-700'}`}
+                                        dangerouslySetInnerHTML={{
+                                          __html: (() => {
+                                            const optionText =
+                                              option.optionText ||
+                                              option.OptionText ||
+                                              option.optionContent ||
+                                              option.OptionContent ||
+                                              '';
+                                            return formatRichText(
+                                              optionText.replace(/^[A-D][\.:]?\s*/i, '')
+                                            );
+                                          })(),
+                                        }}
+                                      />
                                     </div>
                                   </div>
                                 );
@@ -421,7 +552,13 @@ export default function BookChapterDetailPage() {
                               <div 
                                 className="text-blue-800 prose prose-sm max-w-none"
                                 dangerouslySetInnerHTML={{ 
-                                  __html: question.explanationContent || question.ExplanationContent || question.explanation || question.Explanation || '' 
+                                  __html: formatRichText(
+                                    question.explanationContent ||
+                                      question.ExplanationContent ||
+                                      question.explanation ||
+                                      question.Explanation ||
+                                      ''
+                                  ) 
                                 }}
                               />
                             </div>

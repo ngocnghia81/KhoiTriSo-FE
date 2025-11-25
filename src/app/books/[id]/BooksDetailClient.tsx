@@ -31,6 +31,7 @@ import { Separator } from '@/components/ui/separator';
 import { bookApiService, Book, BookChapter } from '@/services/bookApi';
 import { toast } from 'sonner';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BooksDetailClientProps {
   initialBook?: Book;
@@ -44,6 +45,7 @@ export default function BooksDetailClient({
   bookId 
 }: BooksDetailClientProps) {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   
   const [book, setBook] = useState<Book | null>(initialBook || null);
   const [chapters, setChapters] = useState<BookChapter[]>(initialChapters || []);
@@ -100,7 +102,8 @@ export default function BooksDetailClient({
 
       fetchBookData();
     } else {
-      // Use initial data
+      // Use initial data, but refetch with auth if user is logged in
+      // to get correct canView status
       setLoading(false);
       if (initialChapters && initialChapters.length > 0) {
         const sortedChapters = [...initialChapters].sort((a, b) => 
@@ -108,8 +111,31 @@ export default function BooksDetailClient({
         );
         setChapters(sortedChapters);
       }
+
+      // Refetch book and chapters with authentication to get correct canView
+      if (isAuthenticated) {
+        const refetchWithAuth = async () => {
+          try {
+            // Refetch book to get updated isOwned status
+            const bookData = await bookApiService.getBookById(bookId);
+            setBook(bookData);
+            
+            // Refetch chapters to get correct canView status
+            const chaptersData = await bookApiService.getBookChapters(bookId);
+            const sortedChapters = [...chaptersData].sort((a, b) => 
+              (a.orderIndex || 0) - (b.orderIndex || 0)
+            );
+            setChapters(sortedChapters);
+          } catch (err) {
+            console.warn('Could not refetch book/chapters with auth:', err);
+            // Keep initial data if refetch fails
+          }
+        };
+        
+        refetchWithAuth();
+      }
     }
-  }, [bookId]);
+  }, [bookId, isAuthenticated]);
 
   const stripHtml = (html: string | undefined | null): string => {
     if (!html) return '';
@@ -309,7 +335,30 @@ export default function BooksDetailClient({
                 </div>
 
                 <div className="space-y-3">
-                  {book.isFree ? (
+                  {(book.isOwned || book.isFree) ? (
+                    <Button
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      size="lg"
+                      onClick={() => {
+                        if (chapters.length > 0) {
+                          const sortedChapters = [...chapters].sort((a, b) => 
+                            (a.orderIndex || 0) - (b.orderIndex || 0)
+                          );
+                          const firstChapter = sortedChapters.find(ch => ch.canView !== false) || sortedChapters[0];
+                          if (firstChapter) {
+                            router.push(`/books/${bookId}/chapters/${firstChapter.id}`);
+                          } else {
+                            toast.info('Sách này chưa có chương nào');
+                          }
+                        } else {
+                          toast.info('Sách này chưa có chương nào');
+                        }
+                      }}
+                    >
+                      <BookOpen className="w-5 h-5 mr-2" />
+                      {book.isFree ? 'Đọc ngay' : 'Đọc sách'}
+                    </Button>
+                  ) : book.isFree ? (
                     <Button
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                       size="lg"
@@ -515,12 +564,12 @@ export default function BooksDetailClient({
                 <CardContent className="space-y-4 text-sm">
                   <div>
                     <span className="text-gray-600">ID sách:</span>
-                    <p className="font-mono font-semibold text-gray-900 mt-1">{book.id}</p>
+                    <p className="font-mono font-semibold text-gray-900 mt-1">{book.id ?? bookId}</p>
                   </div>
                   <Separator />
                   <div>
                     <span className="text-gray-600">Danh mục:</span>
-                    <p className="font-semibold text-gray-900 mt-1">{book.categoryName || 'N/A'}</p>
+                    <p className="font-semibold text-gray-900 mt-1">{book.categoryName || 'Chưa cập nhật'}</p>
                   </div>
                   {book.isbn && (
                     <>

@@ -16,6 +16,7 @@ export interface Book {
   approvalStatus: number;
   rating?: number; // Average rating from reviews
   totalReviews?: number; // Total number of reviews
+  isbn?: string;
   totalQuestions?: number;
   totalChapters?: number;
   chapters?: BookChapter[]; // Chapters từ GetBookById
@@ -642,6 +643,9 @@ class BookApiService {
   }
 
   private mapBook(book: any): Book {
+    const categoryObj = book.category || book.Category || {};
+    const parsedRating = book.rating ?? book.Rating;
+
     const chapters = book.chapters || book.Chapters;
     const mappedChapters = chapters && Array.isArray(chapters) 
       ? chapters.map((ch: any) => this.mapBookChapter(ch))
@@ -653,15 +657,16 @@ class BookApiService {
       description: book.description || book.Description,
       authorId: book.authorId || book.AuthorId,
       authorName: book.authorName || book.AuthorName || (book.Author?.FullName || book.author?.fullName),
-      categoryId: book.categoryId || book.CategoryId || (book.Category?.Id || book.category?.id),
-      categoryName: book.categoryName || book.CategoryName || (book.Category?.Name || book.category?.name),
+      categoryId: book.categoryId || book.CategoryId || categoryObj.Id || categoryObj.id,
+      categoryName: book.categoryName || book.CategoryName || categoryObj.Name || categoryObj.name,
       coverImage: book.coverImage || book.CoverImage,
       price: book.price || book.Price || 0,
       isFree: (book.price || book.Price || 0) === 0,
       isOwned: book.isOwned !== undefined ? book.isOwned : (book.IsOwned !== undefined ? book.IsOwned : false),
       approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
-      rating: book.rating !== undefined ? book.rating : (book.Rating !== undefined ? book.Rating : undefined),
+      rating: typeof parsedRating === 'string' ? parseFloat(parsedRating) : parsedRating,
       totalReviews: book.totalReviews || book.TotalReviews,
+      isbn: book.isbn || book.Isbn,
       totalQuestions: book.totalQuestions || book.TotalQuestions,
       totalChapters: book.totalChapters || book.TotalChapters || (mappedChapters?.length || 0),
       chapters: mappedChapters,
@@ -680,6 +685,18 @@ class BookApiService {
       ? questions.map((q: any) => this.mapBookQuestion(q))
       : [];
     
+    // Map canView - ưu tiên canView (camelCase), sau đó CanView (PascalCase), mặc định true
+    const canViewValue = chapter.canView !== undefined 
+      ? chapter.canView 
+      : (chapter.CanView !== undefined ? chapter.CanView : true);
+    
+    console.log('mapBookChapter - canView mapping:', {
+      'chapter.canView': chapter.canView,
+      'chapter.CanView': chapter.CanView,
+      'mapped canView': canViewValue,
+      'chapter object': chapter
+    });
+    
     return {
       id: chapter.id || chapter.Id,
       bookId: chapter.bookId || chapter.BookId,
@@ -688,7 +705,7 @@ class BookApiService {
       description: chapter.description || chapter.Description || chapter.content || chapter.Content,
       orderIndex: chapter.orderIndex || chapter.OrderIndex || 0,
       isPublished: chapter.isPublished || chapter.IsPublished || true,
-      canView: chapter.canView !== undefined ? chapter.canView : (chapter.CanView !== undefined ? chapter.CanView : true),
+      canView: canViewValue,
       questionCount: chapter.questionCount || chapter.QuestionCount || 0,
       questions: mappedQuestions,
       createdAt: chapter.createdAt || chapter.CreatedAt,

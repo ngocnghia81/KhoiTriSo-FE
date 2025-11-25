@@ -37,14 +37,15 @@ async function fetchBookData(id: number): Promise<{
     }
     
     // Transform book
+    const categoryObj = bookResult.Category || bookResult.category;
     const book: Book = {
       id: bookResult.Id || bookResult.id || id,
       title: bookResult.Title || bookResult.title || '',
       description: bookResult.Description || bookResult.description,
       authorId: bookResult.AuthorId || bookResult.authorId || 0,
       authorName: bookResult.AuthorName || bookResult.authorName,
-      categoryId: bookResult.CategoryId || bookResult.categoryId,
-      categoryName: bookResult.CategoryName || bookResult.categoryName,
+      categoryId: bookResult.CategoryId || bookResult.categoryId || categoryObj?.Id || categoryObj?.id,
+      categoryName: bookResult.CategoryName || bookResult.categoryName || categoryObj?.Name || categoryObj?.name,
       coverImage: bookResult.CoverImage || bookResult.coverImage,
       price: bookResult.Price || bookResult.price || 0,
       isFree: bookResult.IsFree || bookResult.isFree || false,

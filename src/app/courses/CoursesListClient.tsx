@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -24,6 +24,8 @@ import { toast } from 'sonner';
 import { useCourses, Course, PaginationInfo } from '@/hooks/useCourses';
 import { useAddToCart } from '@/hooks/useCart';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { safeJsonParse, isSuccessfulResponse, extractResult } from '@/utils/apiHelpers';
 
 const levels = [
   { value: null, label: 'Tất cả' },
@@ -40,7 +42,7 @@ const sortOptions = [
   { value: 'rating_desc', label: 'Đánh giá cao nhất' },
 ];
 
-function CourseCard({ course }: { course: any }) {
+function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean }) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { addToCart } = useAddToCart();
@@ -274,7 +276,7 @@ function CourseCard({ course }: { course: any }) {
             )}
           </div>
 
-          {!course.isFree ? (
+          {!course.isFree && !isEnrolled ? (
             <button
               type="button"
               onClick={handleAddToCart}
@@ -284,6 +286,14 @@ function CourseCard({ course }: { course: any }) {
               <ShoppingCartIcon className="h-4 w-4 mr-1.5" />
               {addingToCart ? 'Đang thêm...' : 'Thêm giỏ hàng'}
             </button>
+          ) : !course.isFree && isEnrolled ? (
+            <Link
+              href={`/courses/${course.id}`}
+              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg hover:scale-105"
+            >
+              <PlayCircleIcon className="h-4 w-4 mr-1.5" />
+              Đã đăng ký
+            </Link>
           ) : (
             <Link
               href={`/courses/${course.id}`}
@@ -305,12 +315,15 @@ interface CoursesListClientProps {
 }
 
 export default function CoursesListClient({ initialCourses, initialPagination }: CoursesListClientProps) {
+  const { isAuthenticated, user } = useAuth();
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState('totalStudents_desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<number>>(new Set());
 
   const [sortField, sortOrder] = sortBy.split('_');
   const isDesc = sortOrder === 'desc';
@@ -338,6 +351,47 @@ export default function CoursesListClient({ initialCourses, initialPagination }:
   // Use initial data if available and in default state, otherwise use fetched data
   const courses = shouldUseInitial ? (initialCourses || []) : fetchedCourses;
   const pagination = shouldUseInitial ? (initialPagination || { total: 0, page: 1, pageSize: 20 }) : fetchedPagination;
+
+  // Fetch enrolled courses
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'student') {
+      setEnrolledCourseIds(new Set());
+      return;
+    }
+
+    const fetchEnrolledCourses = async () => {
+      try {
+        const response = await authenticatedFetch('/api/courses/my-courses?page=1&pageSize=1000');
+        const result = await safeJsonParse(response);
+
+        if (isSuccessfulResponse(result)) {
+          const data = extractResult(result);
+          let coursesArray = [];
+          
+          if (Array.isArray(data)) {
+            coursesArray = data;
+          } else if (data?.Items || data?.items) {
+            coursesArray = data.Items || data.items;
+          }
+
+          const enrolledIds = new Set<number>();
+          coursesArray.forEach((c: any) => {
+            const courseId = c.Course?.Id || c.Course?.id || c.CourseId || c.courseId || c.Id || c.id;
+            if (courseId) {
+              enrolledIds.add(courseId);
+            }
+          });
+
+          setEnrolledCourseIds(enrolledIds);
+        }
+      } catch (err) {
+        console.error('Error fetching enrolled courses:', err);
+        // Silently fail, just don't show enrolled status
+      }
+    };
+
+    fetchEnrolledCourses();
+  }, [isAuthenticated, user, authenticatedFetch]);
 
   const formatPrice = (price: number) => {
     if (price === 0) return 'Miễn phí';
@@ -493,7 +547,11 @@ export default function CoursesListClient({ initialCourses, initialPagination }:
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8 items-stretch">
                   {courses.map((course) => (
-                    <CourseCard key={course.id} course={course} />
+                    <CourseCard 
+                      key={course.id} 
+                      course={course} 
+                      isEnrolled={enrolledCourseIds.has(course.id)}
+                    />
                   ))}
                 </div>
 

@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { bookApiService } from '@/services/bookApi';
 
 interface Course {
   id: number;
@@ -519,11 +520,35 @@ export default function MyPurchasesPage() {
                           </div>
                         </div>
                         <div className="flex gap-2 mt-4">
-                          <Button asChild className="flex-1" variant="outline">
-                            <Link href={`/books/${book.id}`}>
-                              <BookOpenIcon className="mr-2 h-4 w-4" />
-                              Đọc sách
-                            </Link>
+                          <Button 
+                            className="flex-1" 
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                // Fetch chapters để lấy chương đầu tiên
+                                const chapters = await bookApiService.getBookChapters(book.id);
+                                if (chapters && chapters.length > 0) {
+                                  // Sắp xếp theo orderIndex và lấy chương đầu tiên
+                                  const sortedChapters = [...chapters].sort((a, b) => 
+                                    (a.orderIndex || 0) - (b.orderIndex || 0)
+                                  );
+                                  const firstChapter = sortedChapters[0];
+                                  if (firstChapter && firstChapter.canView !== false) {
+                                    router.push(`/books/${book.id}/chapters/${firstChapter.id}`);
+                                  } else {
+                                    router.push(`/books/${book.id}`);
+                                  }
+                                } else {
+                                  router.push(`/books/${book.id}`);
+                                }
+                              } catch (err) {
+                                console.error('Error fetching chapters:', err);
+                                router.push(`/books/${book.id}`);
+                              }
+                            }}
+                          >
+                            <BookOpenIcon className="mr-2 h-4 w-4" />
+                            Đọc sách
                           </Button>
                           <Button
                             variant="outline"
