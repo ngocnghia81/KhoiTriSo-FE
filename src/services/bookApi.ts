@@ -14,6 +14,7 @@ export interface Book {
   isFree: boolean;
   isOwned?: boolean; // User đã mua/kích hoạt sách này chưa
   approvalStatus: number;
+  isActive?: boolean; // Trạng thái hoạt động của sách
   rating?: number; // Average rating from reviews
   totalReviews?: number; // Total number of reviews
   isbn?: string;
@@ -496,8 +497,23 @@ class BookApiService {
     }
   }
 
+  async disableBook(bookId: number): Promise<Book> {
+    const response = await this.authenticatedRequest(`/api/books/${bookId}/disable`, {
+      method: 'PUT',
+    });
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Không thể vô hiệu hóa sách');
+    }
+    const extracted = extractResult(result);
+    if (!extracted) {
+      throw new Error('No book data received');
+    }
+    return this.mapBook(extracted);
+  }
+
   async restoreBook(bookId: number): Promise<Book> {
-    const response = await this.authenticatedRequest(`/api/admin/books/${bookId}/restore`, {
+    const response = await this.authenticatedRequest(`/api/books/${bookId}/restore`, {
       method: 'PUT',
     });
     
@@ -664,6 +680,7 @@ class BookApiService {
       isFree: (book.price || book.Price || 0) === 0,
       isOwned: book.isOwned !== undefined ? book.isOwned : (book.IsOwned !== undefined ? book.IsOwned : false),
       approvalStatus: book.approvalStatus || book.ApprovalStatus || 0,
+      isActive: book.isActive !== undefined ? book.isActive : (book.IsActive !== undefined ? book.IsActive : true),
       rating: typeof parsedRating === 'string' ? parseFloat(parsedRating) : parsedRating,
       totalReviews: book.totalReviews || book.TotalReviews,
       isbn: book.isbn || book.Isbn,

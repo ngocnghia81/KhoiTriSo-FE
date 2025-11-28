@@ -151,8 +151,8 @@ export default function Header() {
         <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 shadow-sm">
             <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 lg:px-8" aria-label="Global">
                 {/* Logo */}
-                <div className="flex lg:flex-1 mr-4">
-                    <Link href="/" className="-m-1.5 p-1.5 flex items-center gap-2">
+                <div className="flex lg:flex-1 mr-6 lg:mr-8">
+                    <Link href="/" className="-m-1.5 p-1.5 flex items-center gap-2 transition-transform duration-200 hover:scale-105">
                         <Logo size="md" variant="light" showText={true} />
                     </Link>
                 </div>
@@ -171,7 +171,7 @@ export default function Header() {
                                     <div>
                                         <Button 
                                             variant="ghost" 
-                                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all ${
+                                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all duration-200 ease-in-out ${
                                                 active 
                                                     ? "text-blue-600 bg-blue-50 font-medium" 
                                                     : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
@@ -188,7 +188,7 @@ export default function Header() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent 
                                                 align="start" 
-                                                className="w-56 mt-1 shadow-lg border border-gray-200"
+                                                className="w-56 mt-1 shadow-lg border border-gray-200 transition-all duration-200 ease-in-out"
                                                 onMouseEnter={() => handleMouseEnter(item.name)}
                                                 onMouseLeave={handleMouseLeave}
                                                 sideOffset={5}
@@ -201,7 +201,7 @@ export default function Header() {
                                                     >
                                                         <Link 
                                                             href={child.href} 
-                                                            className="w-full flex items-center px-3 py-2 text-sm hover:bg-gray-50 rounded-md"
+                                                            className="w-full flex items-center px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-all duration-200 ease-in-out"
                                                         >
                                                             {child.name}
                                                         </Link>
@@ -214,7 +214,7 @@ export default function Header() {
                                     <Button 
                                         variant="ghost" 
                                         asChild 
-                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all ${
+                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all duration-200 ease-in-out ${
                                             active 
                                                 ? "text-blue-600 bg-blue-50 font-medium" 
                                                 : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
@@ -239,7 +239,7 @@ export default function Header() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setSearchOpen(!searchOpen)}
-                            className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg"
+                            className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-all duration-200 ease-in-out"
                         >
                             <MagnifyingGlassIcon className="h-5 w-5" />
                         </Button>
@@ -299,7 +299,7 @@ export default function Header() {
                         variant="ghost" 
                         size="sm" 
                         asChild 
-                        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative"
+                        className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-lg relative transition-all duration-200 ease-in-out"
                     >
                         <Link href="/cart" className="relative">
                             <ShoppingBagIcon className={`h-5 w-5 transition-transform ${cartCount > 0 ? 'animate-pulse-once' : ''}`} />
@@ -332,7 +332,7 @@ export default function Header() {
                                     variant="ghost" 
                                     asChild 
                                     size="sm"
-                                    className="text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                                    className="text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-all duration-200 ease-in-out"
                                 >
                                     <Link href="/auth/login">Đăng nhập</Link>
                                 </Button>

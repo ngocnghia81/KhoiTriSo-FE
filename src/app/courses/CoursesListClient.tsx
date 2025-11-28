@@ -17,9 +17,10 @@ import {
   FunnelIcon,
   HeartIcon,
   ShoppingCartIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid, CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid';
 import { toast } from 'sonner';
 import { useCourses, Course, PaginationInfo } from '@/hooks/useCourses';
 import { useAddToCart } from '@/hooks/useCart';
@@ -61,6 +62,12 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
     e.preventDefault();
     e.stopPropagation();
 
+    // Check if already enrolled
+    if (isEnrolled) {
+      toast.info('Bạn đã đăng ký khóa học này');
+      return;
+    }
+
     if (!course || course.isFree) {
       router.push(`/courses/${course.id}`);
       return;
@@ -77,8 +84,14 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
       await addToCart({ ItemId: course.id, ItemType: 1 });
       toast.success(`Đã thêm "${stripHtml(course.title)}" vào giỏ hàng`);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('đã có trong giỏ hàng')) {
-        toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+      if (error instanceof Error) {
+        if (error.message.includes('đã có trong giỏ hàng')) {
+          toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+        } else if (error.message.includes('đã đăng ký') || error.message.includes('enrolled')) {
+          toast.info('Bạn đã đăng ký khóa học này');
+        } else {
+          toast.error('Không thể thêm khóa học vào giỏ hàng');
+        }
       } else {
         toast.error('Không thể thêm khóa học vào giỏ hàng');
       }
@@ -100,7 +113,11 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group border border-gray-100 hover:border-blue-200 h-full flex flex-col">
+    <div className={`bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group h-full flex flex-col ${
+      isEnrolled 
+        ? 'border-2 border-green-500 ring-2 ring-green-100' 
+        : 'border border-gray-100 hover:border-blue-200'
+    }`}>
       {/* Course Image */}
       <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50 flex-shrink-0">
         <Image
@@ -115,10 +132,16 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
         {/* Gradient Overlay on Hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         
-        {/* Badges - Only show Free badge */}
-        <div className="absolute top-3 left-3 z-10">
-          {course.isFree && (
-            <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-full shadow-lg">
+        {/* Badges */}
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
+          {isEnrolled && (
+            <span className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
+              <CheckCircleIconSolid className="h-3.5 w-3.5" />
+              Đã đăng ký
+            </span>
+          )}
+          {course.isFree && !isEnrolled && (
+            <span className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-bold rounded-full shadow-lg">
               ✨ Miễn phí
             </span>
           )}
@@ -276,7 +299,25 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
             )}
           </div>
 
-          {!course.isFree && !isEnrolled ? (
+          {isEnrolled ? (
+            <Link
+              href={`/courses/${course.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg hover:scale-105"
+            >
+              <CheckCircleIconSolid className="h-4 w-4 mr-1.5" />
+              Tiếp tục học
+            </Link>
+          ) : course.isFree ? (
+            <Link
+              href={`/courses/${course.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg hover:scale-105"
+            >
+              <PlayCircleIcon className="h-4 w-4 mr-1.5" />
+              Học ngay
+            </Link>
+          ) : (
             <button
               type="button"
               onClick={handleAddToCart}
@@ -286,22 +327,6 @@ function CourseCard({ course, isEnrolled }: { course: any; isEnrolled?: boolean 
               <ShoppingCartIcon className="h-4 w-4 mr-1.5" />
               {addingToCart ? 'Đang thêm...' : 'Thêm giỏ hàng'}
             </button>
-          ) : !course.isFree && isEnrolled ? (
-            <Link
-              href={`/courses/${course.id}`}
-              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg hover:scale-105"
-            >
-              <PlayCircleIcon className="h-4 w-4 mr-1.5" />
-              Đã đăng ký
-            </Link>
-          ) : (
-            <Link
-              href={`/courses/${course.id}`}
-              className="flex items-center px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg hover:scale-105"
-            >
-              <PlayCircleIcon className="h-4 w-4 mr-1.5" />
-              Học ngay
-            </Link>
           )}
         </div>
       </div>

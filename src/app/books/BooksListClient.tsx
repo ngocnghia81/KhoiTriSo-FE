@@ -13,7 +13,8 @@ import {
   SlidersHorizontal,
   X,
   Tag,
-  Clock
+  Clock,
+  CheckCircle
 } from 'lucide-react';
 import { useBooks, BookFilters, PaginationInfo } from '@/hooks/useBooks';
 import { Book } from '@/services/bookApi';
@@ -26,6 +27,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { safeJsonParse, isSuccessfulResponse, extractResult } from '@/utils/apiHelpers';
 
 interface BooksListClientProps {
   initialBooks?: Book[];
@@ -34,6 +38,9 @@ interface BooksListClientProps {
 
 export default function BooksListClient({ initialBooks, initialPagination }: BooksListClientProps) {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
+  const { authenticatedFetch } = useAuthenticatedFetch();
+  
   const [filters, setFilters] = useState<BookFilters>({
     page: 1,
     pageSize: 1000, // Hiển thị tất cả sách
@@ -46,6 +53,7 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
   const [searchInput, setSearchInput] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [loadingBooks, setLoadingBooks] = useState<Set<number>>(new Set());
+  const [purchasedBookIds, setPurchasedBookIds] = useState<Set<number>>(new Set());
   
   // Check if filters are in default state (no filters/search applied)
   const isDefaultState = !filters.categoryId && !filters.search && filters.page === 1 && filters.sortBy === 'createdAt' && filters.sortOrder === 'desc';
@@ -60,6 +68,48 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
   const books = shouldUseInitial ? (initialBooks || []) : fetchedBooks;
   const pagination = shouldUseInitial ? (initialPagination || { currentPage: 1, totalPages: 1, totalItems: 0, pageSize: 1000 }) : fetchedPagination;
 
+  // Fetch purchased books
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'student') {
+      setPurchasedBookIds(new Set());
+      return;
+    }
+
+    const fetchPurchasedBooks = async () => {
+      try {
+        const response = await authenticatedFetch('/api/books/my-books?page=1&pageSize=1000');
+        const result = await safeJsonParse(response);
+
+        if (isSuccessfulResponse(result)) {
+          const data = extractResult(result);
+          let booksArray = [];
+          
+          if (Array.isArray(data)) {
+            booksArray = data;
+          } else if (data?.Items || data?.items) {
+            booksArray = data.Items || data.items;
+          }
+
+          const purchasedIds = new Set<number>();
+          booksArray.forEach((b: any) => {
+            const rawBook = b.Book || b.book || null;
+            const bookId = rawBook?.Id || rawBook?.id || b.BookId || b.bookId || b.Id || b.id;
+            if (bookId) {
+              purchasedIds.add(bookId);
+            }
+          });
+
+          setPurchasedBookIds(purchasedIds);
+        }
+      } catch (err) {
+        console.error('Error fetching purchased books:', err);
+        // Silently fail, just don't show purchased status
+      }
+    };
+
+    fetchPurchasedBooks();
+  }, [isAuthenticated, user, authenticatedFetch]);
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -70,8 +120,21 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
 
   const handleAddToCart = async (book: Book, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Check if already purchased
+    if (purchasedBookIds.has(book.id)) {
+      toast.info('Bạn đã sở hữu sách này');
+      return;
+    }
+    
     if (book.isFree) {
       toast.info('Sách miễn phí không cần thêm vào giỏ hàng');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để thêm sách vào giỏ hàng');
+      router.push('/auth/login');
       return;
     }
 
@@ -81,8 +144,16 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
       await addToCart({ ItemId: book.id, ItemType: 0 }); 
       toast.success(`Đã thêm "${book.title}" vào giỏ hàng`);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('đã có trong giỏ hàng')) {
-        toast.info(`"${book.title}" đã có trong giỏ hàng`);
+      if (error instanceof Error) {
+        if (error.message.includes('đã có trong giỏ hàng')) {
+          toast.info(`"${book.title}" đã có trong giỏ hàng`);
+        } else if (error.message.includes('đã sở hữu')) {
+          toast.info('Bạn đã sở hữu sách này');
+          // Update purchased list
+          setPurchasedBookIds(prev => new Set(prev).add(book.id));
+        } else {
+          toast.error('Không thể thêm sách vào giỏ hàng');
+        }
       } else {
         toast.error('Không thể thêm sách vào giỏ hàng');
       }
@@ -367,7 +438,9 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
               exit={{ opacity: 0 }}
               className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'space-y-6'}
             >
-              {books.map((book, index) => (
+              {books.map((book, index) => {
+                const isPurchased = purchasedBookIds.has(book.id);
+                return (
                 <motion.div
                   key={book.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -375,7 +448,11 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                   transition={{ delay: index * 0.05 }}
                 >
                   <Card 
-                    className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group cursor-pointer h-full flex flex-col"
+                    className={`bg-white shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group cursor-pointer h-full flex flex-col ${
+                      isPurchased 
+                        ? 'border-2 border-green-500 ring-2 ring-green-100' 
+                        : 'border border-gray-200'
+                    }`}
                     onClick={() => handleBookClick(book.id)}
                   >
                     <CardContent className="p-0 flex flex-col h-full">
@@ -395,11 +472,19 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                                 <BookOpen className="h-20 w-20 text-gray-400" />
                               </div>
                             )}
-                            {book.isFree && (
-                              <Badge className="absolute top-4 right-4 bg-green-600 text-white shadow-md">
-                                Miễn phí
-                              </Badge>
-                            )}
+                            <div className="absolute top-4 right-4 flex flex-col gap-2">
+                              {isPurchased && (
+                                <Badge className="bg-green-600 text-white shadow-md flex items-center gap-1">
+                                  <CheckCircle className="h-3 w-3" />
+                                  Đã sở hữu
+                                </Badge>
+                              )}
+                              {book.isFree && !isPurchased && (
+                                <Badge className="bg-blue-600 text-white shadow-md">
+                                  Miễn phí
+                                </Badge>
+                              )}
+                            </div>
                             {(book.rating !== undefined && book.rating !== null) && (
                               <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-4">
                                 <div className="flex items-center space-x-2 text-white text-sm">
@@ -420,7 +505,19 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                               <span className="text-2xl font-bold text-blue-600">
                                 {formatPrice(book.price, book.isFree)}
                               </span>
-                              {!book.isFree && (
+                              {isPurchased ? (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/books/${book.id}`);
+                                  }}
+                                  className="bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Xem ngay
+                                </Button>
+                              ) : !book.isFree ? (
                                 <Button
                                   size="sm"
                                   onClick={(e) => handleAddToCart(book, e)}
@@ -435,6 +532,18 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                                       Thêm
                                     </>
                                   )}
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/books/${book.id}`);
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                                >
+                                  <BookOpen className="h-4 w-4 mr-1" />
+                                  Đọc ngay
                                 </Button>
                               )}
                             </div>
@@ -456,11 +565,25 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                                 <BookOpen className="h-12 w-12 text-gray-400" />
                               </div>
                             )}
+                            {isPurchased && (
+                              <Badge className="absolute top-2 right-2 bg-green-600 text-white shadow-md flex items-center gap-1 text-xs">
+                                <CheckCircle className="h-3 w-3" />
+                                Đã sở hữu
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex-1">
-                            <h3 className="font-bold text-xl text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                              {book.title}
-                            </h3>
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="font-bold text-xl text-gray-900 group-hover:text-blue-600 transition-colors flex-1">
+                                {book.title}
+                              </h3>
+                              {isPurchased && (
+                                <Badge className="bg-green-600 text-white ml-2">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Đã sở hữu
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-gray-600 text-sm line-clamp-3 mb-4">
                               {book.description}
                             </p>
@@ -468,7 +591,18 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                               <span className="text-3xl font-bold text-blue-600">
                                 {formatPrice(book.price, book.isFree)}
                               </span>
-                              {!book.isFree && (
+                              {isPurchased ? (
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/books/${book.id}`);
+                                  }}
+                                  className="bg-green-600 hover:bg-green-700 text-white shadow-sm px-6"
+                                >
+                                  <CheckCircle className="h-5 w-5 mr-2" />
+                                  Xem ngay
+                                </Button>
+                              ) : !book.isFree ? (
                                 <Button
                                   onClick={(e) => handleAddToCart(book, e)}
                                   disabled={loadingBooks.has(book.id)}
@@ -483,6 +617,17 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                                     </>
                                   )}
                                 </Button>
+                              ) : (
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/books/${book.id}`);
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm px-6"
+                                >
+                                  <BookOpen className="h-5 w-5 mr-2" />
+                                  Đọc ngay
+                                </Button>
                               )}
                             </div>
                           </div>
@@ -491,7 +636,7 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
                     </CardContent>
                   </Card>
                 </motion.div>
-              ))}
+              );})}
             </motion.div>
           ) : (
             <motion.div

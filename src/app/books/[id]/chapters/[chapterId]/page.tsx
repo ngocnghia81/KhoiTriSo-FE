@@ -16,7 +16,8 @@ import {
   Circle,
   Eye,
   EyeOff,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,13 @@ export default function BookChapterDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAnswers, setShowAnswers] = useState<Record<number, boolean>>({});
+  
+  // Quick search feature
+  const [searchQuestionId, setSearchQuestionId] = useState('');
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  
   let visibleQuestionIndex = 0;
 
   const formatRichText = (content: string | undefined | null): string => {
@@ -146,7 +154,76 @@ export default function BookChapterDetailPage() {
   useEffect(() => {
     if (!chapter) return;
     typesetMath();
-  }, [chapter, showAnswers]);
+  }, [chapter, showAnswers, searchResult]);
+
+  // Quick search for question by ID
+  const handleSearchQuestion = async () => {
+    if (!searchQuestionId.trim()) {
+      setSearchError('Vui lòng nhập ID câu hỏi');
+      return;
+    }
+
+    const questionId = parseInt(searchQuestionId.trim());
+    if (isNaN(questionId) || questionId <= 0) {
+      setSearchError('ID câu hỏi không hợp lệ');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api'}/books/questions/${questionId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setSearchError('Vui lòng đăng nhập để xem đáp án');
+        } else if (response.status === 403) {
+          setSearchError('Bạn chưa sở hữu sách này');
+        } else if (response.status === 404) {
+          setSearchError('Không tìm thấy câu hỏi này');
+        } else {
+          setSearchError('Không thể tải câu hỏi');
+        }
+        setSearchResult(null);
+        return;
+      }
+
+      const data = await response.json();
+      const result = data?.Result || data;
+      
+      if (result) {
+        setSearchResult(result);
+        setSearchError(null);
+        // Scroll to search result
+        setTimeout(() => {
+          document.getElementById('search-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          typesetMath();
+        }, 100);
+      } else {
+        setSearchError('Không tìm thấy câu hỏi');
+        setSearchResult(null);
+      }
+    } catch (err: any) {
+      console.error('Error searching question:', err);
+      setSearchError('Có lỗi xảy ra khi tìm kiếm');
+      setSearchResult(null);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuestionId('');
+    setSearchResult(null);
+    setSearchError(null);
+  };
 
   const stripHtml = (html: string | undefined | null): string => {
     if (!html) return '';
@@ -404,8 +481,145 @@ export default function BookChapterDetailPage() {
           </div>
         </header>
 
+        {/* Quick Search - Sticky below header */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 sticky top-16 z-10">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 flex items-center gap-2 bg-white rounded-lg border border-gray-300 px-4 py-2.5">
+                <Search className="w-5 h-5 text-gray-400" />
+                <input
+                  type="number"
+                  placeholder="Nhập ID câu hỏi để xem đáp án..."
+                  value={searchQuestionId}
+                  onChange={(e) => setSearchQuestionId(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearchQuestion()}
+                  className="flex-1 outline-none text-gray-900 placeholder-gray-400"
+                />
+                {searchQuestionId && (
+                  <button
+                    onClick={clearSearch}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <Button
+                onClick={handleSearchQuestion}
+                disabled={isSearching || !searchQuestionId.trim()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+              >
+                {isSearching ? 'Đang tìm...' : 'Tìm'}
+              </Button>
+            </div>
+            {searchError && (
+              <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {searchError}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Content */}
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Search Result */}
+          {searchResult && (
+            <div id="search-result" className="mb-8">
+              <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      Kết quả tìm kiếm - Câu {searchResult.Id || searchResult.id}
+                    </CardTitle>
+                    <button
+                      onClick={clearSearch}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Question */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-600 mb-2">Câu hỏi:</p>
+                      <div 
+                        className="text-gray-900 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: searchResult.QuestionText || searchResult.questionText || '' }}
+                      />
+                    </div>
+
+                    {/* Options */}
+                    {searchResult.QuestionOptions && searchResult.QuestionOptions.length > 0 && (
+                      <div>
+                        <p className="text-sm font-semibold text-gray-600 mb-2">Các đáp án:</p>
+                        <div className="space-y-2">
+                          {searchResult.QuestionOptions.map((option: any, idx: number) => {
+                            const isCorrect = option.IsCorrect || option.isCorrect;
+                            return (
+                              <div 
+                                key={idx}
+                                className={`p-3 rounded-lg border-2 ${
+                                  isCorrect 
+                                    ? 'bg-green-50 border-green-300' 
+                                    : 'bg-white border-gray-200'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className={`font-semibold ${isCorrect ? 'text-green-700' : 'text-gray-700'}`}>
+                                    {String.fromCharCode(65 + idx)}.
+                                  </span>
+                                  <div 
+                                    className={`flex-1 prose prose-sm max-w-none ${isCorrect ? 'text-green-900' : 'text-gray-800'}`}
+                                    dangerouslySetInnerHTML={{ __html: option.OptionText || option.optionText || '' }}
+                                  />
+                                  {isCorrect && (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Explanation */}
+                    {(searchResult.Explanation || searchResult.explanation) && (
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                          <FileQuestion className="w-4 h-4" />
+                          Giải thích:
+                        </p>
+                        <div 
+                          className="text-blue-900 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: searchResult.Explanation || searchResult.explanation }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Solution */}
+                    {searchResult.Solution && searchResult.Solution.SolutionText && (
+                      <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4" />
+                          Lời giải chi tiết:
+                        </p>
+                        <div 
+                          className="text-purple-900 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: searchResult.Solution.SolutionText }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Chapter Title */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">

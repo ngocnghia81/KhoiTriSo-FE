@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
   BookOpen, 
   Plus, 
@@ -14,9 +13,11 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Download,
   MoreVertical,
-  RotateCcw
+  RotateCcw,
+  Power,
+  PowerOff,
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,31 +58,13 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useRouter } from 'next/navigation';
 import { useBooks, useDeleteBook } from '@/hooks/useBooks';
-import { bookApiService } from '@/services/bookApi';
-
-interface Book {
-  id: number;
-  title: string;
-  description?: string;
-  authorId: number;
-  authorName?: string;
-  categoryId?: number;
-  categoryName?: string;
-  coverImage?: string;
-  price: number;
-  isFree: boolean;
-  approvalStatus: number;
-  isActive?: boolean;
-  totalQuestions?: number;
-  totalChapters?: number;
-  createdAt: string;
-  updatedAt?: string;
-}
+import { bookApiService, Book } from '@/services/bookApi';
+import { toast } from 'sonner';
 
 const approvalStatusConfig = {
-  0: { label: 'Chờ duyệt', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  1: { label: 'Đã duyệt', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-  2: { label: 'Từ chối', color: 'bg-red-100 text-red-700', icon: XCircle },
+  0: { label: 'Chờ duyệt', color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+  1: { label: 'Đã duyệt', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+  2: { label: 'Từ chối', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
 
 export default function BooksManagementPage() {
@@ -94,6 +77,7 @@ export default function BooksManagementPage() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [processingId, setProcessingId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState({
     title: '',
     description: '',
@@ -114,105 +98,56 @@ export default function BooksManagementPage() {
   // Filter books by active tab (client-side filter)
   const books = React.useMemo(() => {
     if (activeTab === 'active') {
-      // Chỉ hiển thị books có isActive === true
       return allBooks.filter(b => b.isActive === true);
     } else if (activeTab === 'inactive') {
-      // Chỉ hiển thị books có isActive === false
       return allBooks.filter(b => b.isActive === false);
     }
-    // Tab "Tất cả": hiển thị tất cả
     return allBooks;
   }, [allBooks, activeTab]);
 
-  // Update totalPages from pagination
   const totalPages = pagination?.totalPages || 1;
 
-  // Reset to page 1 when filters change (but not when page changes)
   useEffect(() => {
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, categoryFilter, statusFilter, activeTab]);
 
-  // Force enable Select components
-  useEffect(() => {
-    const enableSelects = () => {
-      const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
-      triggers.forEach((trigger) => {
-        const el = trigger as HTMLElement;
-        el.style.pointerEvents = 'auto';
-        el.style.opacity = '1';
-        el.style.cursor = 'pointer';
-        el.removeAttribute('disabled');
-        el.setAttribute('aria-disabled', 'false');
-        el.classList.remove('disabled');
-      });
-    };
-    
-    // Run immediately and after a delay
-    enableSelects();
-    const timeout = setTimeout(enableSelects, 100);
-    
-    return () => clearTimeout(timeout);
-  }, [loading, books]);
-
-  // Debug logging
-  useEffect(() => {
-    console.log('Dashboard Books - Data:', {
-      books: books?.length || 0,
-      loading,
-      error,
-      filters: { page, search, categoryFilter, statusFilter },
-      pagination
-    });
-    console.log('Loading state:', loading, 'Type:', typeof loading);
-  }, [books, loading, error, pagination]);
-
-  // Use hook for delete
   const { deleteBook, loading: deleteLoading } = useDeleteBook();
 
-  // Calculate stats from books data
   const stats = {
     total: books.length,
     pending: books.filter(b => b.approvalStatus === 0).length,
     approved: books.filter(b => b.approvalStatus === 1).length,
     rejected: books.filter(b => b.approvalStatus === 2).length,
+    active: books.filter(b => b.isActive === true).length,
+    inactive: books.filter(b => b.isActive === false).length,
   };
-
-  // TODO: Implement when backend stats API is ready
-  // const fetchStats = async () => {
-  //   try {
-  //     const [totalRes, pendingRes, approvedRes, rejectedRes] = await Promise.all([
-  //       fetch('http://localhost:5214/api/books?pageSize=1'),
-  //       fetch('http://localhost:5214/api/books?approvalStatus=0&pageSize=1'),
-  //       fetch('http://localhost:5214/api/books?approvalStatus=1&pageSize=1'),
-  //       fetch('http://localhost:5214/api/books?approvalStatus=2&pageSize=1'),
-  //     ]);
-  //     const [total, pending, approved, rejected] = await Promise.all([
-  //       totalRes.json(),
-  //       pendingRes.json(),
-  //       approvedRes.json(),
-  //       rejectedRes.json(),
-  //     ]);
-  //     setStats({
-  //       total: total.result?.totalItems || 0,
-  //       pending: pending.result?.totalItems || 0,
-  //       approved: approved.result?.totalItems || 0,
-  //       rejected: rejected.result?.totalItems || 0,
-  //     });
-  //   } catch (error) {
-  //     console.error('Error fetching stats:', error);
-  //   }
-  // };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Bạn có chắc chắn muốn xóa sách này?')) return;
 
     try {
       await deleteBook(id);
-      refetch(); // Stats will auto-update from books data
+      toast.success('Xóa sách thành công');
+      refetch();
     } catch (error) {
       console.error('Error deleting book:', error);
-      alert('Không thể xóa sách!');
+      toast.error('Không thể xóa sách!');
+    }
+  };
+
+  const handleDisable = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn vô hiệu hóa sách này?')) return;
+
+    try {
+      setProcessingId(id);
+      await bookApiService.disableBook(id);
+      toast.success('Vô hiệu hóa sách thành công');
+      refetch();
+    } catch (error: any) {
+      console.error('Error disabling book:', error);
+      toast.error(error.message || 'Không thể vô hiệu hóa sách!');
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -220,13 +155,15 @@ export default function BooksManagementPage() {
     if (!confirm('Bạn có chắc chắn muốn khôi phục sách này?')) return;
 
     try {
+      setProcessingId(id);
       await bookApiService.restoreBook(id);
-      alert('Khôi phục sách thành công!');
+      toast.success('Khôi phục sách thành công');
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error restoring book:', error);
-      const message = error instanceof Error ? error.message : 'Không thể khôi phục sách!';
-      alert(message);
+      toast.error(error.message || 'Không thể khôi phục sách!');
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -239,7 +176,7 @@ export default function BooksManagementPage() {
     setEditFormData({
       title: book.title || '',
       description: book.description || '',
-      isbn: '', // ISBN không có trong Book interface, sẽ để trống
+      isbn: '',
       price: book.isFree ? 0 : book.price || 0,
       categoryId: book.categoryId,
     });
@@ -261,10 +198,11 @@ export default function BooksManagementPage() {
       
       setIsEditModalOpen(false);
       setEditingBook(null);
-      refetch(); // Refresh the list
+      toast.success('Cập nhật sách thành công');
+      refetch();
     } catch (error: any) {
       console.error('Error updating book:', error);
-      alert(error.message || 'Không thể cập nhật sách!');
+      toast.error(error.message || 'Không thể cập nhật sách!');
     } finally {
       setSaving(false);
     }
@@ -275,7 +213,7 @@ export default function BooksManagementPage() {
     const Icon = config.icon;
     
     return (
-      <Badge className={`${config.color} flex items-center gap-1`}>
+      <Badge className={`${config.color} flex items-center gap-1 border`}>
         <Icon className="w-3 h-3" />
         {config.label}
       </Badge>
@@ -283,39 +221,20 @@ export default function BooksManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6 relative overflow-hidden">
-      {/* Floating Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 -left-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl"
-          animate={{ y: [0, -50, 0], x: [0, 30, 0] }}
-          transition={{ duration: 20, repeat: Infinity }}
-        />
-        <motion.div
-          className="absolute bottom-20 -right-20 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl"
-          animate={{ y: [0, 50, 0], x: [0, -30, 0] }}
-          transition={{ duration: 25, repeat: Infinity }}
-        />
-      </div>
-      
-      <div className="relative z-10">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
-              <BookOpen className="w-10 h-10 text-blue-600" />
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <BookOpen className="w-8 h-8 text-blue-600" />
               Quản lý Sách
             </h1>
             <p className="text-gray-600 mt-2">Quản lý toàn bộ sách điện tử trong hệ thống</p>
           </div>
           <Button
             onClick={() => router.push('/dashboard/books/create')}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
             Thêm Sách Mới
@@ -323,110 +242,138 @@ export default function BooksManagementPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Tổng Sách', value: stats.total, color: 'from-blue-500 to-cyan-500', icon: BookOpen },
-            { label: 'Chờ Duyệt', value: stats.pending, color: 'from-yellow-500 to-orange-500', icon: Clock },
-            { label: 'Đã Duyệt', value: stats.approved, color: 'from-green-500 to-emerald-500', icon: CheckCircle },
-            { label: 'Từ Chối', value: stats.rejected, color: 'from-red-500 to-pink-500', icon: XCircle },
-          ].map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md hover:shadow-2xl transition-all duration-300 hover:scale-105 overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-transparent to-blue-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <CardContent className="p-6 relative">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 font-medium mb-1">{stat.label}</p>
-                      <motion.p 
-                        className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: index * 0.1 + 0.3, type: "spring" }}
-                      >
-                        {stat.value}
-                      </motion.p>
-                    </div>
-                    <motion.div 
-                      className={`p-4 bg-gradient-to-br ${stat.color} rounded-xl shadow-lg`}
-                      whileHover={{ rotate: 360, scale: 1.1 }}
-                      transition={{ duration: 0.6 }}
-                    >
-                      <stat.icon className="w-6 h-6 text-white" />
-                    </motion.div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Tổng Sách</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <BookOpen className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Tabs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="mb-6"
-      >
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md overflow-hidden">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Đang hoạt động</p>
+                  <p className="text-2xl font-bold text-green-600 mt-1">{stats.active}</p>
+                </div>
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Đã vô hiệu</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{stats.inactive}</p>
+                </div>
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <XCircle className="w-5 h-5 text-red-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Chờ Duyệt</p>
+                  <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.pending}</p>
+                </div>
+                <div className="p-3 bg-yellow-100 rounded-lg">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Đã Duyệt</p>
+                  <p className="text-2xl font-bold text-green-600 mt-1">{stats.approved}</p>
+                </div>
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Từ Chối</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{stats.rejected}</p>
+                </div>
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <XCircle className="w-5 h-5 text-red-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs */}
+        <Card className="border border-gray-200 shadow-sm">
           <div className="border-b border-gray-200">
-            <nav className="flex -mb-px overflow-x-auto">
+            <nav className="flex -mb-px">
               <button
                 onClick={() => handleTabChange('all')}
-                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'all'
-                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                    ? 'border-blue-600 text-blue-600 bg-blue-50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <BookOpen className="h-5 w-5 mr-2" />
-                Tất cả
+                <BookOpen className="h-4 w-4 mr-2" />
+                Tất cả ({allBooks.length})
               </button>
               <button
                 onClick={() => handleTabChange('active')}
-                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'active'
-                    ? 'border-green-500 text-green-600 bg-green-50'
+                    ? 'border-green-600 text-green-600 bg-green-50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <CheckCircle className="h-5 w-5 mr-2" />
-                Đang hoạt động
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Đang hoạt động ({stats.active})
               </button>
               <button
                 onClick={() => handleTabChange('inactive')}
-                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'inactive'
-                    ? 'border-red-500 text-red-600 bg-red-50'
+                    ? 'border-red-600 text-red-600 bg-red-50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <XCircle className="h-5 w-5 mr-2" />
-                Đã vô hiệu
+                <XCircle className="h-4 w-4 mr-2" />
+                Đã vô hiệu ({stats.inactive})
               </button>
             </nav>
           </div>
         </Card>
-      </motion.div>
 
-      {/* Filters and Search */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-md mb-6 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-purple-50/50" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
-                <Filter className="w-5 h-5 text-white" />
-              </div>
+        {/* Filters and Search */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="w-5 h-5 text-gray-600" />
               Bộ Lọc & Tìm Kiếm
             </CardTitle>
           </CardHeader>
@@ -443,10 +390,7 @@ export default function BooksManagementPage() {
               </div>
               
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger 
-                  className="!cursor-pointer !pointer-events-auto !opacity-100"
-                  style={{ pointerEvents: 'auto', opacity: 1, cursor: 'pointer' }}
-                >
+                <SelectTrigger>
                   <SelectValue placeholder="Trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
@@ -458,10 +402,7 @@ export default function BooksManagementPage() {
               </Select>
 
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger 
-                  className="!cursor-pointer !pointer-events-auto !opacity-100"
-                  style={{ pointerEvents: 'auto', opacity: 1, cursor: 'pointer' }}
-                >
+                <SelectTrigger>
                   <SelectValue placeholder="Danh mục" />
                 </SelectTrigger>
                 <SelectContent>
@@ -474,40 +415,32 @@ export default function BooksManagementPage() {
 
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  refetch();
-                }}
+                onClick={() => refetch()}
                 disabled={loading}
+                className="w-full"
               >
                 {loading ? 'Đang tải...' : 'Làm Mới'}
               </Button>
             </div>
           </CardContent>
         </Card>
-      </motion.div>
 
-      {/* Books Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <Card className="border-0 shadow-2xl bg-white/90 backdrop-blur-md overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 to-purple-50/30" />
-          <CardHeader className="relative border-b border-gray-100 bg-gradient-to-r from-blue-50/50 to-purple-50/50">
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-blue-600" />
+        {/* Books Table */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="border-b border-gray-200">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-blue-600" />
               Danh Sách Sách
             </CardTitle>
-            <CardDescription className="text-base">
-              Hiển thị <span className="font-semibold text-blue-600">{books.length}</span> sách • 
+            <CardDescription>
+              Hiển thị <span className="font-semibold text-gray-900">{books.length}</span> sách • 
               Trang <span className="font-semibold">{page}</span> / {totalPages}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {loading ? (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">Đang tải...</p>
               </div>
             ) : books.length === 0 ? (
@@ -520,67 +453,79 @@ export default function BooksManagementPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Tên Sách</TableHead>
-                        <TableHead>Tác Giả</TableHead>
-                        <TableHead>Danh Mục</TableHead>
-                        <TableHead>Giá</TableHead>
-                        <TableHead>Trạng Thái</TableHead>
-                        <TableHead>Câu Hỏi</TableHead>
-                        <TableHead>Chương</TableHead>
-                        <TableHead className="text-right">Hành Động</TableHead>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-semibold">Tên Sách</TableHead>
+                        <TableHead className="font-semibold">Tác Giả</TableHead>
+                        <TableHead className="font-semibold">Danh Mục</TableHead>
+                        <TableHead className="font-semibold">Giá</TableHead>
+                        <TableHead className="font-semibold">Trạng Thái</TableHead>
+                        <TableHead className="font-semibold">Câu Hỏi</TableHead>
+                        <TableHead className="font-semibold">Chương</TableHead>
+                        <TableHead className="text-right font-semibold">Hành Động</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {books.map((book) => (
-                        <TableRow key={book.id} className="hover:bg-blue-50/50 transition-colors">
+                        <TableRow 
+                          key={book.id} 
+                          className={`hover:bg-gray-50 transition-colors ${
+                            !book.isActive ? 'opacity-60' : ''
+                          }`}
+                        >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-3">
                               {book.coverImage ? (
                                 <img 
                                   src={book.coverImage} 
                                   alt={book.title}
-                                  className="w-10 h-10 object-cover rounded"
+                                  className="w-10 h-10 object-cover rounded border border-gray-200"
                                 />
                               ) : (
-                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded flex items-center justify-center">
-                                  <BookOpen className="w-5 h-5 text-white" />
+                                <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center border border-blue-200">
+                                  <BookOpen className="w-5 h-5 text-blue-600" />
                                 </div>
                               )}
-                              <span>{book.title}</span>
+                              <div>
+                                <span className="font-medium text-gray-900">{book.title}</span>
+                                {!book.isActive && (
+                                  <Badge variant="outline" className="ml-2 text-xs border-red-200 text-red-600">
+                                    Đã vô hiệu
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell>{book.authorName || 'N/A'}</TableCell>
-                          <TableCell>{book.categoryName || 'N/A'}</TableCell>
+                          <TableCell className="text-gray-600">{book.authorName || 'N/A'}</TableCell>
+                          <TableCell className="text-gray-600">{book.categoryName || 'N/A'}</TableCell>
                           <TableCell>
                             {book.isFree ? (
-                              <Badge className="bg-green-100 text-green-700">Miễn phí</Badge>
+                              <Badge className="bg-green-100 text-green-700 border-green-200">Miễn phí</Badge>
                             ) : (
-                              <span>{book.price.toLocaleString('vi-VN')} đ</span>
+                              <span className="text-gray-900 font-medium">{book.price.toLocaleString('vi-VN')} đ</span>
                             )}
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={book.approvalStatus} />
                           </TableCell>
-                          <TableCell>{book.totalQuestions || 0}</TableCell>
-                          <TableCell>{book.totalChapters || 0}</TableCell>
+                          <TableCell className="text-gray-600">{book.totalQuestions || 0}</TableCell>
+                          <TableCell className="text-gray-600">{book.totalChapters || 0}</TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" disabled={processingId === book.id}>
                                   <MoreVertical className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuLabel>Hành động</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => router.push(`/dashboard/books/${book.id}`)}>
                                   <Eye className="w-4 h-4 mr-2" />
-                                  Xem
+                                  Xem chi tiết
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleEditClick(book)}>
                                   <Edit className="w-4 h-4 mr-2" />
-                                  Sửa
+                                  Chỉnh sửa
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => router.push(`/dashboard/books/${book.id}/activation-codes`)}>
                                   <Key className="w-4 h-4 mr-2" />
@@ -591,18 +536,29 @@ export default function BooksManagementPage() {
                                   <DropdownMenuItem 
                                     onClick={() => handleRestore(book.id)}
                                     className="text-green-600 focus:text-green-600"
+                                    disabled={processingId === book.id}
                                   >
                                     <RotateCcw className="w-4 h-4 mr-2" />
                                     Khôi phục
                                   </DropdownMenuItem>
                                 ) : (
-                                  <DropdownMenuItem 
-                                    onClick={() => handleDelete(book.id)}
-                                    className="text-red-600 focus:text-red-600"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Xóa
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDisable(book.id)}
+                                      className="text-orange-600 focus:text-orange-600"
+                                      disabled={processingId === book.id}
+                                    >
+                                      <PowerOff className="w-4 h-4 mr-2" />
+                                      Vô hiệu hóa
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDelete(book.id)}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Xóa
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -614,24 +570,24 @@ export default function BooksManagementPage() {
                 </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-600 font-medium">
-                    Trang <span className="text-blue-600 font-bold">{page}</span> / {totalPages}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    Trang <span className="font-semibold text-gray-900">{page}</span> / {totalPages}
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 disabled:opacity-50"
+                      disabled={page === 1 || loading}
                     >
                       Trước
                     </Button>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 disabled:opacity-50"
+                      disabled={page === totalPages || loading}
                     >
                       Sau
                     </Button>
@@ -641,7 +597,6 @@ export default function BooksManagementPage() {
             )}
           </CardContent>
         </Card>
-      </motion.div>
       </div>
 
       {/* Edit Book Modal */}
@@ -676,9 +631,6 @@ export default function BooksManagementPage() {
                   className="bg-white min-h-[120px]"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Bạn có thể sử dụng các công cụ định dạng để làm nổi bật nội dung
-              </p>
             </div>
 
             <div>
@@ -743,7 +695,7 @@ export default function BooksManagementPage() {
             <Button
               onClick={handleSaveEdit}
               disabled={saving || !editFormData.title.trim()}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
             </Button>
