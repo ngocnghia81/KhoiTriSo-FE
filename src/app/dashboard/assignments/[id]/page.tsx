@@ -3,8 +3,10 @@
 import { useParams } from 'next/navigation';
 import React from 'react';
 import { useAssignment, useAssignmentResults, useAssignmentQuestions, useRedistributePoints, RedistributePointsRequest } from '@/hooks/useAssignments';
+import { useAssignmentAnalytics } from '@/hooks/useAssignmentAnalytics';
 import Link from 'next/link';
-import { ArrowLeft, Info, FileQuestion, ClipboardList, BarChart3, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, Info, FileQuestion, ClipboardList, BarChart3, RefreshCw, X, TrendingUp } from 'lucide-react';
+import Chart from '@/components/dashboard/Chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +23,7 @@ export default function AssignmentDetailPage() {
   const { data: results, loading: rLoading, refetch: refetchResults } = useAssignmentResults(id);
   const { questions, refetch: refetchQuestions } = useAssignmentQuestions(id);
   const { redistributePoints, loading: redistributing } = useRedistributePoints();
+  const { data: analytics, loading: analyticsLoading } = useAssignmentAnalytics(id);
   const [showRedistributeModal, setShowRedistributeModal] = React.useState(false);
   const [questionPoints, setQuestionPoints] = React.useState<Record<number, number>>({});
   const [pointsByType, setPointsByType] = React.useState<Record<number, number>>({
@@ -266,6 +269,10 @@ export default function AssignmentDetailPage() {
               <BarChart3 className="w-4 h-4" />
               Kết quả
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Thống kê
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -476,6 +483,288 @@ export default function AssignmentDetailPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            {analyticsLoading ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="ml-3 text-gray-600">Đang tải dữ liệu thống kê...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : analytics ? (
+              <>
+                {/* Overview Stats */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Thống kê kết quả</CardTitle>
+                    <CardDescription>Xem tổng quan về kết quả của bài tập này</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Tổng số câu hỏi</p>
+                        <p className="text-2xl font-bold text-blue-600 mt-1">
+                          {analytics.TotalQuestions}
+                        </p>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Tổng số lần làm</p>
+                        <p className="text-2xl font-bold text-green-600 mt-1">
+                          {analytics.TotalSubmissions}
+                        </p>
+                      </div>
+                      <div className="p-4 bg-yellow-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Điểm trung bình</p>
+                        <p className="text-2xl font-bold text-yellow-600 mt-1">
+                          {analytics.AverageScore !== null && analytics.AverageScore !== undefined
+                            ? `${analytics.AverageScore.toFixed(1)}/${analytics.MaxScore}`
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="p-4 bg-purple-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Điểm cao nhất</p>
+                        <p className="text-2xl font-bold text-purple-600 mt-1">
+                          {analytics.HighestScore !== null && analytics.HighestScore !== undefined
+                            ? `${analytics.HighestScore.toFixed(1)}/${analytics.MaxScore}`
+                            : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {analytics.PassingScore !== null && analytics.PassingScore !== undefined && (
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600">Tỷ lệ đạt:</p>
+                            <Badge 
+                              className={`mt-1 ${
+                                analytics.PassRate >= 50 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {analytics.PassRate >= 50 ? 'Đạt' : 'Chưa đạt'}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            Điểm đạt yêu cầu: {analytics.PassingScore}%
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Additional Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Thống kê người dùng</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Số người làm:</span>
+                        <span className="font-medium">{analytics.UniqueUsers}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Tỷ lệ hoàn thành:</span>
+                        <span className="font-medium">{analytics.CompletionRate.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">TB lần làm/người:</span>
+                        <span className="font-medium">{analytics.AttemptStats.AverageAttemptsPerUser.toFixed(1)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Thống kê điểm số</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Điểm trung bình:</span>
+                        <span className="font-medium">
+                          {analytics.AverageScore?.toFixed(1) || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Điểm trung vị:</span>
+                        <span className="font-medium">
+                          {analytics.MedianScore?.toFixed(1) || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Điểm thấp nhất:</span>
+                        <span className="font-medium">
+                          {analytics.LowestScore?.toFixed(1) || 'N/A'}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Thời gian</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Thời gian TB:</span>
+                        <span className="font-medium">
+                          {analytics.AverageTimeSpent > 0 
+                            ? `${analytics.AverageTimeSpent.toFixed(0)} phút`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Đã hoàn thành:</span>
+                        <span className="font-medium">{analytics.AttemptStats.CompletedAttempts}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Chưa hoàn thành:</span>
+                        <span className="font-medium">{analytics.AttemptStats.IncompleteAttempts}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Score Distribution */}
+                {analytics.TotalSubmissions > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Phân bố điểm số</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="text-center p-4 bg-red-50 rounded-lg">
+                          <p className="text-sm text-gray-600">Kém (0-49%)</p>
+                          <p className="text-2xl font-bold text-red-600 mt-1">
+                            {analytics.ScoreDistribution.Poor}
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-orange-50 rounded-lg">
+                          <p className="text-sm text-gray-600">Trung bình (50-69%)</p>
+                          <p className="text-2xl font-bold text-orange-600 mt-1">
+                            {analytics.ScoreDistribution.Average}
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                          <p className="text-sm text-gray-600">Khá (70-89%)</p>
+                          <p className="text-2xl font-bold text-yellow-600 mt-1">
+                            {analytics.ScoreDistribution.Good}
+                          </p>
+                        </div>
+                        <div className="text-center p-4 bg-green-50 rounded-lg">
+                          <p className="text-sm text-gray-600">Xuất sắc (90-100%)</p>
+                          <p className="text-2xl font-bold text-green-600 mt-1">
+                            {analytics.ScoreDistribution.Excellent}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Submission Trend */}
+                {analytics.SubmissionTrend.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Xu hướng nộp bài</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-64">
+                        <Chart
+                          data={analytics.SubmissionTrend.map(t => ({ Date: t.Date, Amount: t.Amount }))}
+                          type="area"
+                          xKey="Date"
+                          yKey="Amount"
+                          color="#3b82f6"
+                          height={250}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Question Performance */}
+                {analytics.QuestionPerformance.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Hiệu suất từng câu hỏi</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Câu hỏi
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Số lần làm
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Đúng
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Tỷ lệ đúng
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Điểm TB
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {analytics.QuestionPerformance.map((q) => (
+                              <tr key={q.QuestionId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm">
+                                  <div className="max-w-md truncate" title={q.QuestionText}>
+                                    {q.QuestionText || `Câu hỏi #${q.QuestionId}`}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">{q.TotalAttempts}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900">{q.CorrectAnswers}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center">
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {q.CorrectRate.toFixed(1)}%
+                                    </span>
+                                    <div className="ml-3 w-24 bg-gray-200 rounded-full h-2">
+                                      <div
+                                        className={`h-2 rounded-full ${
+                                          q.CorrectRate >= 80 ? 'bg-green-500' :
+                                          q.CorrectRate >= 60 ? 'bg-yellow-500' :
+                                          q.CorrectRate >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                                        }`}
+                                        style={{ width: `${q.CorrectRate}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {q.AveragePointsEarned.toFixed(2)} / {q.MaxPoints.toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-gray-500 text-center py-8">Chưa có dữ liệu thống kê</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>

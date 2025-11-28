@@ -118,6 +118,8 @@ export default function LessonPlayerPage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveTimeRef = useRef<number>(0);
+  const saveProgressDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [hasInitializedLessonProgress, setHasInitializedLessonProgress] = useState(false);
 
   useEffect(() => {
@@ -580,25 +582,46 @@ export default function LessonPlayerPage() {
 
   useEffect(() => {
     saveProgressRef.current = async (position: number, videoDuration: number, completed: boolean) => {
-      if (!isAuthenticated || !lessonId) return;
+      if (!isAuthenticated || !lessonId) {
+        console.log('[Progress] Skipping save - not authenticated or no lessonId', { isAuthenticated, lessonId });
+        return;
+      }
 
       try {
-        const watchPercentage = videoDuration > 0 ? (position / videoDuration) * 100 : 0;
+        // Convert to integers (seconds) as backend expects int
+        const videoPosition = Math.floor(position);
+        const videoDurationInt = Math.floor(videoDuration);
+        const watchPercentage = videoDurationInt > 0 ? (videoPosition / videoDurationInt) * 100 : 0;
         
-        await authenticatedFetch(`/api/lessons/${lessonId}/video-progress`, {
+        console.log('[Progress] Saving video progress', {
+          lessonId,
+          videoPosition,
+          videoDuration: videoDurationInt,
+          watchPercentage: watchPercentage.toFixed(2),
+          isCompleted: completed || watchPercentage >= 90
+        });
+        
+        const response = await authenticatedFetch(`/api/lessons/${lessonId}/video-progress`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            videoPosition: position,
-            videoDuration: videoDuration,
+            videoPosition: videoPosition,
+            videoDuration: videoDurationInt,
             watchPercentage: watchPercentage,
             isCompleted: completed || watchPercentage >= 90,
           }),
         });
+        
+        const data = await response.json();
+        if (response.ok) {
+          console.log('[Progress] Video progress saved successfully', data);
+        } else {
+          console.error('[Progress] Failed to save video progress', data);
+        }
       } catch (err) {
-        console.error('Error saving video progress:', err);
+        console.error('[Progress] Error saving video progress:', err);
       }
     };
   }, [isAuthenticated, lessonId, authenticatedFetch]);
@@ -608,31 +631,56 @@ export default function LessonPlayerPage() {
 
   useEffect(() => {
     saveLessonProgressRef.current = async (watchTime: number, isCompleted: boolean) => {
-      if (!isAuthenticated || !lessonId) return;
+      if (!isAuthenticated || !lessonId) {
+        console.log('[Progress] Skipping lesson progress save - not authenticated or no lessonId', { isAuthenticated, lessonId });
+        return;
+      }
 
       try {
-        await authenticatedFetch(`/api/lessons/${lessonId}/progress`, {
+        const watchTimeInt = Math.floor(watchTime);
+        console.log('[Progress] Saving lesson progress', {
+          lessonId,
+          watchTime: watchTimeInt,
+          isCompleted
+        });
+        
+        const response = await authenticatedFetch(`/api/lessons/${lessonId}/progress`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            watchTime: Math.floor(watchTime), // Convert to integer seconds
+            watchTime: watchTimeInt, // Convert to integer seconds
             isCompleted: isCompleted,
           }),
         });
+        
+        const data = await response.json();
+        if (response.ok) {
+          console.log('[Progress] Lesson progress saved successfully', data);
+        } else {
+          console.error('[Progress] Failed to save lesson progress', data);
+        }
       } catch (err) {
-        console.error('Error saving lesson progress:', err);
+        console.error('[Progress] Error saving lesson progress:', err);
       }
     };
   }, [isAuthenticated, lessonId, authenticatedFetch]);
 
   // Auto-save progress
   useEffect(() => {
-    if (!isAuthenticated || !lessonId) return;
+    if (!isAuthenticated || !lessonId) {
+      console.log('[Progress] Auto-save effect skipped - not authenticated or no lessonId', { isAuthenticated, lessonId });
+      return;
+    }
 
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) {
+      console.log('[Progress] Auto-save effect skipped - video element not found');
+      return;
+    }
+    
+    console.log('[Progress] Setting up auto-save listeners for lesson', lessonId);
 
     const handleTimeUpdate = () => {
       const current = video.currentTime;
@@ -649,11 +697,55 @@ export default function LessonPlayerPage() {
         
         // Mark as completed if watched 90% or more
         if (percentage >= 90 && !isVideoCompleted) {
+          console.log('[Progress] Video completed (>=90%)', { current, total, percentage });
           setIsVideoCompleted(true);
           saveProgressRef.current?.(current, total, true).catch(console.error);
           // Update UserLessonProgress: completed = true
           saveLessonProgressRef.current?.(current, true).catch(console.error);
         }
+        
+        // Auto-save progress every 5 seconds (debounced)
+        const now = Date.now();
+        if (now - lastSaveTimeRef.current >= 5000) {
+          lastSaveTimeRef.current = now;
+          // Clear previous debounce
+          if (saveProgressDebounceRef.current) {
+            clearTimeout(saveProgressDebounceRef.current);
+          }
+          // Debounce save by 1 second to avoid too many calls
+          saveProgressDebounceRef.current = setTimeout(() => {
+            console.log('[Progress] Auto-saving progress (5s interval)', { current, total, percentage: percentage.toFixed(2) });
+            saveProgressRef.current?.(current, total, false).catch(console.error);
+            saveLessonProgressRef.current?.(current, percentage >= 90).catch(console.error);
+          }, 1000);
+        }
+      }
+    };
+    
+    const handlePause = () => {
+      // Save progress immediately when video is paused
+      const video = videoRef.current;
+      if (video && video.duration > 0) {
+        const current = video.currentTime;
+        const total = video.duration;
+        console.log('[Progress] Video paused - saving progress', { current, total });
+        saveProgressRef.current?.(current, total, false).catch(console.error);
+        const percentage = (current / total) * 100;
+        saveLessonProgressRef.current?.(current, percentage >= 90).catch(console.error);
+      }
+    };
+    
+    const handleSeeked = () => {
+      // Save progress when user seeks to a new position
+      const video = videoRef.current;
+      if (video && video.duration > 0) {
+        const current = video.currentTime;
+        const total = video.duration;
+        console.log('[Progress] Video seeked - saving progress', { current, total });
+        saveProgressRef.current?.(current, total, false).catch(console.error);
+        const percentage = (current / total) * 100;
+        saveLessonProgressRef.current?.(current, percentage >= 90).catch(console.error);
+        lastSaveTimeRef.current = Date.now(); // Reset timer
       }
     };
 
@@ -669,6 +761,7 @@ export default function LessonPlayerPage() {
     // Initialize UserLessonProgress when video starts playing for the first time
     const handlePlay = () => {
       if (!hasInitializedLessonProgress && video.duration > 0) {
+        console.log('[Progress] Video started playing - initializing lesson progress');
         // Create UserLessonProgress with initial watchTime = 0
         saveLessonProgressRef.current?.(0, false).catch(console.error);
         setHasInitializedLessonProgress(true);
@@ -680,6 +773,7 @@ export default function LessonPlayerPage() {
     const handleEnded = () => {
       if (video.duration > 0) {
         const total = video.duration;
+        console.log('[Progress] Video ended - marking as completed', { total });
         saveProgressRef.current?.(total, total, true).catch(console.error);
         // Update UserLessonProgress: completed = true, watchTime = total
         saveLessonProgressRef.current?.(total, true).catch(console.error);
@@ -690,17 +784,21 @@ export default function LessonPlayerPage() {
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('seeked', handleSeeked);
 
-    // Auto-save progress every 10 seconds
+    // Auto-save progress every 10 seconds as backup (even if paused)
     progressSaveIntervalRef.current = setInterval(() => {
-      if (video && !video.paused && video.duration > 0) {
+      if (video && video.duration > 0) {
         const current = video.currentTime;
         const total = video.duration;
+        const percentage = (current / total) * 100;
+        console.log('[Progress] Interval backup save (10s)', { current, total, percentage: percentage.toFixed(2) });
         // Update UserVideoProgress
         saveProgressRef.current?.(current, total, false).catch(console.error);
         // Update UserLessonProgress (watchTime, chưa completed nếu chưa đạt 90%)
-        const percentage = (current / total) * 100;
         saveLessonProgressRef.current?.(current, percentage >= 90).catch(console.error);
+        lastSaveTimeRef.current = Date.now(); // Reset timer
       }
     }, 10000);
 
@@ -709,11 +807,16 @@ export default function LessonPlayerPage() {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('seeked', handleSeeked);
       if (progressSaveIntervalRef.current) {
         clearInterval(progressSaveIntervalRef.current);
       }
+      if (saveProgressDebounceRef.current) {
+        clearTimeout(saveProgressDebounceRef.current);
+      }
     };
-  }, [isAuthenticated, lessonId, duration, currentTime, isVideoCompleted, hasInitializedLessonProgress]);
+  }, [isAuthenticated, lessonId, duration, currentTime, isVideoCompleted, hasInitializedLessonProgress, authenticatedFetch]);
 
   const formatDuration = (seconds: number | undefined | null) => {
     // Validate input

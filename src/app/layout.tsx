@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SignalRProvider } from "@/contexts/SignalRContext";
 import ConditionalLayout from "@/components/ConditionalLayout";
+import ContentProtection from "@/components/ContentProtection";
 import Script from "next/script";
 import "@/utils/suppressWarnings";
 import { Toaster } from "sonner";
@@ -127,10 +126,12 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <SignalRProvider>
-              <ConditionalLayout>
-                {children}
-              </ConditionalLayout>
-              <Toaster position="top-right" richColors />
+              {/* <ContentProtection> */}
+                <ConditionalLayout>
+                  {children}
+                </ConditionalLayout>
+                <Toaster position="top-right" richColors />
+              {/* </ContentProtection> */}
             </SignalRProvider>
           </AuthProvider>
         </LanguageProvider>

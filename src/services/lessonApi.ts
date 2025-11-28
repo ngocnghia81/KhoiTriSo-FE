@@ -368,6 +368,104 @@ class LessonApiService {
       isLiked: data.isLiked ?? data.IsLiked ?? false,
     };
   }
+
+  // Progress APIs
+  async updateLessonProgress(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    lessonId: number,
+    request: {
+      watchTime: number;
+      isCompleted: boolean;
+      videoPosition?: number;
+    }
+  ): Promise<any> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${lessonId}/progress`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to update lesson progress');
+    }
+
+    return extractResult<any>(result);
+  }
+
+  async getVideoProgress(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    lessonId: number
+  ): Promise<{
+    videoPosition: number;
+    videoDuration: number;
+    watchPercentage: number;
+    isCompleted: boolean;
+    lastWatchedAt: string;
+  }> {
+    const response = await authenticatedFetch(`${this.baseUrl}/${lessonId}/video-progress`);
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to get video progress');
+    }
+
+    const data = extractResult<any>(result);
+    if (!data) {
+      // Return default zero progress if not found
+      return {
+        videoPosition: 0,
+        videoDuration: 0,
+        watchPercentage: 0,
+        isCompleted: false,
+        lastWatchedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      videoPosition: data.videoPosition ?? data.VideoPosition ?? 0,
+      videoDuration: data.videoDuration ?? data.VideoDuration ?? 0,
+      watchPercentage: data.watchPercentage ?? data.WatchPercentage ?? 0,
+      isCompleted: data.isCompleted ?? data.IsCompleted ?? false,
+      lastWatchedAt: data.lastWatchedAt ?? data.LastWatchedAt ?? new Date().toISOString(),
+    };
+  }
+
+  async updateVideoProgress(
+    authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>,
+    lessonId: number,
+    request: {
+      videoPosition: number;
+      videoDuration: number;
+      watchPercentage: number;
+      isCompleted: boolean;
+    }
+  ): Promise<any> {
+    // Convert to integers as backend expects int for VideoPosition and VideoDuration
+    const body = {
+      videoPosition: Math.floor(request.videoPosition),
+      videoDuration: Math.floor(request.videoDuration),
+      watchPercentage: request.watchPercentage,
+      isCompleted: request.isCompleted,
+    };
+
+    const response = await authenticatedFetch(`${this.baseUrl}/${lessonId}/video-progress`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const result = await safeJsonParse(response);
+    if (!isSuccessfulResponse(result)) {
+      throw new Error(extractMessage(result) || 'Failed to update video progress');
+    }
+
+    return extractResult<any>(result);
+  }
 }
 
 export const lessonApiService = new LessonApiService();

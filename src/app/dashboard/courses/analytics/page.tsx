@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import Chart from '@/components/dashboard/Chart';
 import {
   ChartBarIcon,
   AcademicCapIcon,
@@ -230,6 +231,25 @@ export default function CourseAnalyticsPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Enrollment Trends Chart */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Xu hướng đăng ký</h3>
+          {data.EnrollmentTrends && data.EnrollmentTrends.length > 0 ? (
+            <div className="h-64">
+              <Chart
+                data={data.EnrollmentTrends.map(t => ({ Date: t.Date, Amount: t.NewEnrollments })) as any}
+                type="area"
+                xKey="Date"
+                yKey="Amount"
+                color="#3b82f6"
+                height={250}
+              />
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">Chưa có dữ liệu</p>
+          )}
         </div>
 
         {/* Category Stats */}
