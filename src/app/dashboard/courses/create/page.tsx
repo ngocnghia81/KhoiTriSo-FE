@@ -202,7 +202,8 @@ export default function CreateCoursePage() {
             IsFree: true // Lesson miễn phí - học viên có thể xem mà không cần mua khóa học
           };
 
-          const lessonResp = await authenticatedFetch('/api/lessons', {
+          const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+          const lessonResp = await authenticatedFetch(`${baseUrl}/lessons`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(introLessonPayload),

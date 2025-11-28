@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
 import { useAddToCart } from '@/hooks/useCart';
-import { safeJsonParse, isSuccessfulResponse, extractMessage } from '@/utils/apiHelpers';
+import { safeJsonParse, isSuccessfulResponse, extractMessage, extractResult } from '@/utils/apiHelpers';
 import {
   ClockIcon,
   UserGroupIcon,
@@ -86,6 +86,33 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
   const [liveClasses, setLiveClasses] = useState<LiveClassDTO[]>([]);
   const [joiningLiveClass, setJoiningLiveClass] = useState<number | null>(null);
 
+  // Refetch course data with authentication to get updated isEnrolled status
+  useEffect(() => {
+    if (!isAuthenticated || !courseId) return;
+
+    const fetchCourseWithAuth = async () => {
+      try {
+        const response = await authenticatedFetch(`/api/courses/${courseId}`);
+        const result = await safeJsonParse(response);
+
+        if (isSuccessfulResponse(result)) {
+          const courseData = result?.Result?.Result ?? result?.Result ?? result;
+          if (courseData) {
+            setCourse(prev => ({
+              ...prev,
+              isEnrolled: courseData.IsEnrolled || courseData.isEnrolled || false,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching course with auth:', err);
+        // Silently fail, keep using initialCourse
+      }
+    };
+
+    fetchCourseWithAuth();
+  }, [isAuthenticated, courseId, authenticatedFetch]);
+
   const handleEnroll = async () => {
     if (!isAuthenticated) {
       router.push('/auth/login');
@@ -121,6 +148,12 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
   const handleAddCourseToCart = async () => {
     if (!course) return;
 
+    // Check if already enrolled
+    if (course.isEnrolled) {
+      toast.info('Bạn đã đăng ký khóa học này');
+      return;
+    }
+
     if (!isAuthenticated) {
       toast.info('Vui lòng đăng nhập để thêm khóa học vào giỏ hàng');
       router.push('/auth/login');
@@ -132,8 +165,16 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
       await addToCart({ ItemId: course.id, ItemType: 1 });
       toast.success(`Đã thêm "${stripHtml(course.title)}" vào giỏ hàng`);
     } catch (err) {
-      if (err instanceof Error && err.message.includes('đã có trong giỏ hàng')) {
-        toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+      if (err instanceof Error) {
+        if (err.message.includes('đã có trong giỏ hàng')) {
+          toast.info(`"${stripHtml(course.title)}" đã có trong giỏ hàng`);
+        } else if (err.message.includes('đã đăng ký') || err.message.includes('enrolled')) {
+          toast.info('Bạn đã đăng ký khóa học này');
+          // Update course state to reflect enrollment
+          setCourse(prev => ({ ...prev, isEnrolled: true }));
+        } else {
+          toast.error('Không thể thêm khóa học vào giỏ hàng');
+        }
       } else {
         toast.error('Không thể thêm khóa học vào giỏ hàng');
       }
@@ -669,16 +710,21 @@ export function CourseDetailClient({ initialCourse, courseId }: CourseDetailClie
                   <div className="space-y-3">
                     <Button
                       onClick={handleAddCourseToCart}
-                      disabled={addingToCart}
+                      disabled={addingToCart || course.isEnrolled}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-70 disabled:cursor-not-allowed"
                       size="lg"
                     >
                       <>
                         <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                        {addingToCart ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
+                        {addingToCart ? 'Đang thêm...' : course.isEnrolled ? 'Đã đăng ký' : 'Thêm vào giỏ hàng'}
                       </>
                     </Button>
-                    {!isAuthenticated && (
+                    {course.isEnrolled && (
+                      <p className="text-sm text-center text-green-600 font-medium">
+                        Bạn đã đăng ký khóa học này
+                      </p>
+                    )}
+                    {!isAuthenticated && !course.isEnrolled && (
                       <p className="text-sm text-center text-gray-500">
                         <Link href="/auth/login" className="text-blue-600 hover:underline">
                           Đăng nhập

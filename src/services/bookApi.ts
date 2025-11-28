@@ -18,6 +18,9 @@ export interface Book {
   rating?: number; // Average rating from reviews
   totalReviews?: number; // Total number of reviews
   isbn?: string;
+  language?: string;
+  publicationYear?: number;
+  edition?: string;
   totalQuestions?: number;
   totalChapters?: number;
   chapters?: BookChapter[]; // Chapters từ GetBookById
@@ -106,7 +109,7 @@ export interface ApiResponse<T> {
 }
 
 class BookApiService {
-  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  private baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
   
   /**
    * Internal fetch method that uses authenticatedFetch for automatic token refresh
@@ -684,6 +687,9 @@ class BookApiService {
       rating: typeof parsedRating === 'string' ? parseFloat(parsedRating) : parsedRating,
       totalReviews: book.totalReviews || book.TotalReviews,
       isbn: book.isbn || book.Isbn,
+      language: book.language || book.Language,
+      publicationYear: book.publicationYear || book.PublicationYear,
+      edition: book.edition || book.Edition,
       totalQuestions: book.totalQuestions || book.TotalQuestions,
       totalChapters: book.totalChapters || book.TotalChapters || (mappedChapters?.length || 0),
       chapters: mappedChapters,

@@ -84,6 +84,9 @@ export default function BooksManagementPage() {
     isbn: '',
     price: 0,
     categoryId: undefined as number | undefined,
+    language: '',
+    publicationYear: undefined as number | undefined,
+    edition: '',
   });
 
   // Use hooks for books data - fetch all books (Admin can see inactive)
@@ -176,9 +179,12 @@ export default function BooksManagementPage() {
     setEditFormData({
       title: book.title || '',
       description: book.description || '',
-      isbn: '',
+      isbn: book.isbn || '',
       price: book.isFree ? 0 : book.price || 0,
       categoryId: book.categoryId,
+      language: book.language || '',
+      publicationYear: book.publicationYear,
+      edition: book.edition || '',
     });
     setIsEditModalOpen(true);
   };
@@ -194,6 +200,9 @@ export default function BooksManagementPage() {
         isbn: editFormData.isbn || undefined,
         price: editFormData.price > 0 ? editFormData.price : undefined,
         categoryId: editFormData.categoryId,
+        language: editFormData.language || undefined,
+        publicationYear: editFormData.publicationYear,
+        edition: editFormData.edition || undefined,
       });
       
       setIsEditModalOpen(false);
@@ -677,6 +686,47 @@ export default function BooksManagementPage() {
                     <SelectItem value="3">Hóa học</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="edit-language">Ngôn ngữ</Label>
+                <Input
+                  id="edit-language"
+                  value={editFormData.language}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, language: e.target.value }))}
+                  placeholder="Ví dụ: Tiếng Việt"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-publication-year">Năm xuất bản</Label>
+                <Input
+                  id="edit-publication-year"
+                  type="number"
+                  value={editFormData.publicationYear || ''}
+                  onChange={(e) => setEditFormData(prev => ({ 
+                    ...prev, 
+                    publicationYear: e.target.value ? parseInt(e.target.value) : undefined 
+                  }))}
+                  placeholder="Ví dụ: 2025"
+                  className="mt-1"
+                  min={1900}
+                  max={2100}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-edition">Phiên bản</Label>
+                <Input
+                  id="edit-edition"
+                  value={editFormData.edition}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, edition: e.target.value }))}
+                  placeholder="Ví dụ: Tái bản lần 2"
+                  className="mt-1"
+                />
               </div>
             </div>
           </div>

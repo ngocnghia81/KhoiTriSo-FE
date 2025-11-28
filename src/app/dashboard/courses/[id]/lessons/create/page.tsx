@@ -53,7 +53,8 @@ function CreateLessonClient() {
     const fetchCourse = async () => {
       try {
         setLoadingCourse(true);
-        const resp = await authenticatedFetch(`/api/courses/${courseId}`);
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+        const resp = await authenticatedFetch(`${baseUrl}/courses/${courseId}`);
         const data = await resp.json();
         
         if (resp.ok) {
@@ -101,7 +102,8 @@ function CreateLessonClient() {
       console.log('Creating lesson with payload:', JSON.stringify(payload, null, 2));
       console.log('IsPublished value:', formData.isPublished, typeof formData.isPublished);
       
-      const resp = await authenticatedFetch('/api/lessons', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+      const resp = await authenticatedFetch(`${baseUrl}/lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -130,7 +132,7 @@ function CreateLessonClient() {
                 FileSize: materialInfo.fileSize
               };
 
-              const materialResp = await authenticatedFetch(`/api/lessons/${lessonId}/materials`, {
+              const materialResp = await authenticatedFetch(`${baseUrl}/lessons/${lessonId}/materials`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(materialPayload)

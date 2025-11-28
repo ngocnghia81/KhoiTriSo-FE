@@ -327,7 +327,7 @@ export default function CoursesManagementPage() {
     if (!confirm('Bạn có chắc chắn muốn khôi phục khóa học này?')) return;
     
     try {
-      const resp = await authenticatedFetch(`/api/admin/courses/${courseId}/restore`, {
+      const resp = await authenticatedFetch(`/api/courses/${courseId}/restore`, {
         method: 'PUT'
       });
       
@@ -774,7 +774,14 @@ export default function CoursesManagementPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {courses.map((course) => (
-              <div key={course.Id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all overflow-hidden flex flex-col">
+              <div 
+                key={course.Id} 
+                className={`bg-white rounded-lg shadow-sm border hover:shadow-md transition-all overflow-hidden flex flex-col ${
+                  course.IsActive === false 
+                    ? 'border-red-300 opacity-75 bg-red-50/30' 
+                    : 'border-gray-200'
+                }`}
+              >
                 {/* Thumbnail */}
                 <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600 overflow-hidden">
                   {course.Thumbnail ? (
@@ -795,6 +802,12 @@ export default function CoursesManagementPage() {
                   {/* Badges */}
                   <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-2">
+                      {course.IsActive === false && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-300 shadow-sm">
+                          <XCircleIcon className="h-3 w-3 mr-1" />
+                          Đã vô hiệu
+                        </span>
+                      )}
                       {getApprovalStatusBadge(course.ApprovalStatus, course.IsPublished)}
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getLevelColor(course.Level)}`}>
                         {getLevelName(course.Level)}
@@ -813,7 +826,9 @@ export default function CoursesManagementPage() {
                 <div className="p-6 flex-1 flex flex-col">
                   {/* Header */}
                   <div className="mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 line-clamp-2 mb-2">
+                    <h3 className={`text-xl font-bold line-clamp-2 mb-2 ${
+                      course.IsActive === false ? 'text-red-700' : 'text-gray-900'
+                    }`}>
                       {course.Title}
                     </h3>
                     <div className="flex items-center gap-2 text-sm text-gray-600">

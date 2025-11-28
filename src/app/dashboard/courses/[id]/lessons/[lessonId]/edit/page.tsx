@@ -51,7 +51,8 @@ function EditLessonClient() {
         setLoadingData(true);
         setError(null);
         
-        const resp = await authenticatedFetch(`/api/lessons/${lessonId}`);
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+        const resp = await authenticatedFetch(`${baseUrl}/lessons/${lessonId}`);
         const data = await resp.json();
         
         if (resp.ok) {
@@ -97,7 +98,8 @@ function EditLessonClient() {
         IsFree: true // Default to free
       };
       
-      const resp = await authenticatedFetch(`/api/lessons/${lessonId}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+      const resp = await authenticatedFetch(`${baseUrl}/lessons/${lessonId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

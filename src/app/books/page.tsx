@@ -37,27 +37,34 @@ async function fetchInitialBooks(): Promise<{ books: Book[]; pagination: Paginat
     const result = await response.json();
     const booksData = result?.Result || result;
     
-    // Transform PascalCase to camelCase
-    const transformedBooks: Book[] = (booksData?.Items || booksData?.items || []).map((book: any) => ({
-      id: book.Id || book.id,
-      title: book.Title || book.title,
-      description: book.Description || book.description,
-      authorId: book.AuthorId || book.authorId,
-      authorName: book.AuthorName || book.authorName,
-      categoryId: book.CategoryId || book.categoryId,
-      categoryName: book.CategoryName || book.categoryName,
-      coverImage: book.CoverImage || book.coverImage,
-      price: book.Price || book.price || 0,
-      isFree: book.IsFree || book.isFree || false,
-      isOwned: book.IsOwned || book.isOwned || false,
-      approvalStatus: book.ApprovalStatus || book.approvalStatus || 0,
-      rating: book.Rating || book.rating,
-      totalReviews: book.TotalReviews || book.totalReviews,
-      totalQuestions: book.TotalQuestions || book.totalQuestions,
-      totalChapters: book.TotalChapters || book.totalChapters,
-      createdAt: book.CreatedAt || book.createdAt,
-      updatedAt: book.UpdatedAt || book.updatedAt,
-    }));
+    // Transform PascalCase to camelCase and filter inactive books
+    const transformedBooks: Book[] = (booksData?.Items || booksData?.items || [])
+      .filter((book: any) => {
+        // Only show active books (IsActive === true)
+        const isActive = book.IsActive !== undefined ? book.IsActive : (book.isActive !== undefined ? book.isActive : true);
+        return isActive === true;
+      })
+      .map((book: any) => ({
+        id: book.Id || book.id,
+        title: book.Title || book.title,
+        description: book.Description || book.description,
+        authorId: book.AuthorId || book.authorId,
+        authorName: book.AuthorName || book.authorName,
+        categoryId: book.CategoryId || book.categoryId,
+        categoryName: book.CategoryName || book.categoryName,
+        coverImage: book.CoverImage || book.coverImage,
+        price: book.Price || book.price || 0,
+        isFree: book.IsFree || book.isFree || false,
+        isOwned: book.IsOwned || book.isOwned || false,
+        approvalStatus: book.ApprovalStatus || book.approvalStatus || 0,
+        isActive: book.IsActive !== undefined ? book.IsActive : (book.isActive !== undefined ? book.isActive : true),
+        rating: book.Rating || book.rating,
+        totalReviews: book.TotalReviews || book.totalReviews,
+        totalQuestions: book.TotalQuestions || book.totalQuestions,
+        totalChapters: book.TotalChapters || book.totalChapters,
+        createdAt: book.CreatedAt || book.createdAt,
+        updatedAt: book.UpdatedAt || book.updatedAt,
+      }));
     
     const totalItems = booksData?.Total || booksData?.total || transformedBooks.length;
     const pageSize = booksData?.PageSize || booksData?.pageSize || 1000;

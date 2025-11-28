@@ -65,7 +65,9 @@ export default function BooksListClient({ initialBooks, initialPagination }: Boo
   const { addToCart } = useAddToCart();
 
   // Use initial data if available and in default state, otherwise use fetched data
-  const books = shouldUseInitial ? (initialBooks || []) : fetchedBooks;
+  // Filter out inactive books on client side as well (double check)
+  const allBooks = shouldUseInitial ? (initialBooks || []) : fetchedBooks;
+  const books = allBooks.filter(book => book.isActive !== false); // Only show active books
   const pagination = shouldUseInitial ? (initialPagination || { currentPage: 1, totalPages: 1, totalItems: 0, pageSize: 1000 }) : fetchedPagination;
 
   // Fetch purchased books

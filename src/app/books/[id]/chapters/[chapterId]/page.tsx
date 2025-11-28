@@ -17,13 +17,17 @@ import {
   Eye,
   EyeOff,
   Search,
-  AlertCircle
+  AlertCircle,
+  Video,
+  PlayCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { bookApiService, BookChapter } from '@/services/bookApi';
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch';
+import { safeJsonParse, isSuccessfulResponse, extractResult, extractMessage } from '@/utils/apiHelpers';
 
 declare global {
   interface Window {
@@ -34,6 +38,7 @@ declare global {
 export default function BookChapterDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const bookId = params?.id ? parseInt(params.id as string) : null;
   const chapterId = params?.chapterId ? parseInt(params.chapterId as string) : null;
   
@@ -156,7 +161,7 @@ export default function BookChapterDetailPage() {
     typesetMath();
   }, [chapter, showAnswers, searchResult]);
 
-  // Quick search for question by ID
+  // Quick search for question by ID using Solutions API
   const handleSearchQuestion = async () => {
     if (!searchQuestionId.trim()) {
       setSearchError('Vui lòng nhập ID câu hỏi');
@@ -169,37 +174,55 @@ export default function BookChapterDetailPage() {
       return;
     }
 
+    if (!bookId) {
+      setSearchError('Không tìm thấy thông tin sách');
+      return;
+    }
+
     setIsSearching(true);
     setSearchError(null);
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api'}/books/questions/${questionId}`, {
+      // Use Solutions API: /api/Solutions?bookId={bookId}&questionId={questionId}
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+      const apiUrl = `${baseUrl}/Solutions?bookId=${bookId}&questionId=${questionId}&page=1&pageSize=20`;
+      const response = await authenticatedFetch(apiUrl, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
 
       if (!response.ok) {
+        const errorData = await safeJsonParse(response);
+        const message = extractMessage(errorData);
+        const errorMessage = errorData?.Error || errorData?.error || message;
         if (response.status === 401) {
           setSearchError('Vui lòng đăng nhập để xem đáp án');
         } else if (response.status === 403) {
-          setSearchError('Bạn chưa sở hữu sách này');
+          setSearchError(errorMessage || 'Bạn chưa sở hữu sách này. Vui lòng kích hoạt sách trước khi xem câu hỏi.');
         } else if (response.status === 404) {
           setSearchError('Không tìm thấy câu hỏi này');
         } else {
-          setSearchError('Không thể tải câu hỏi');
+          setSearchError(errorMessage || message || 'Không thể tải câu hỏi');
         }
         setSearchResult(null);
         return;
       }
 
-      const data = await response.json();
-      const result = data?.Result || data;
+      const result = await safeJsonParse(response);
+
+      if (!isSuccessfulResponse(result)) {
+        const message = extractMessage(result);
+        setSearchError(message || 'Không thể tải câu hỏi');
+        setSearchResult(null);
+        return;
+      }
+
+      const data = extractResult(result);
       
-      if (result) {
-        setSearchResult(result);
+      if (data) {
+        setSearchResult(data);
         setSearchError(null);
         // Scroll to search result
         setTimeout(() => {
@@ -548,17 +571,19 @@ export default function BookChapterDetailPage() {
                       <p className="text-sm font-semibold text-gray-600 mb-2">Câu hỏi:</p>
                       <div 
                         className="text-gray-900 prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: searchResult.QuestionText || searchResult.questionText || '' }}
+                        dangerouslySetInnerHTML={{ __html: searchResult.QuestionContent || searchResult.questionContent || searchResult.QuestionText || searchResult.questionText || '' }}
                       />
                     </div>
 
                     {/* Options */}
-                    {searchResult.QuestionOptions && searchResult.QuestionOptions.length > 0 && (
+                    {(searchResult.Options || searchResult.options || searchResult.QuestionOptions || searchResult.questionOptions) && 
+                     (searchResult.Options || searchResult.options || searchResult.QuestionOptions || searchResult.questionOptions).length > 0 && (
                       <div>
                         <p className="text-sm font-semibold text-gray-600 mb-2">Các đáp án:</p>
                         <div className="space-y-2">
-                          {searchResult.QuestionOptions.map((option: any, idx: number) => {
+                          {(searchResult.Options || searchResult.options || searchResult.QuestionOptions || searchResult.questionOptions).map((option: any, idx: number) => {
                             const isCorrect = option.IsCorrect || option.isCorrect;
+                            const optionText = option.OptionText || option.optionText || option.Content || option.content || '';
                             return (
                               <div 
                                 key={idx}
@@ -574,7 +599,7 @@ export default function BookChapterDetailPage() {
                                   </span>
                                   <div 
                                     className={`flex-1 prose prose-sm max-w-none ${isCorrect ? 'text-green-900' : 'text-gray-800'}`}
-                                    dangerouslySetInnerHTML={{ __html: option.OptionText || option.optionText || '' }}
+                                    dangerouslySetInnerHTML={{ __html: optionText }}
                                   />
                                   {isCorrect && (
                                     <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
@@ -588,7 +613,7 @@ export default function BookChapterDetailPage() {
                     )}
 
                     {/* Explanation */}
-                    {(searchResult.Explanation || searchResult.explanation) && (
+                    {(searchResult.ExplanationContent || searchResult.explanationContent || searchResult.Explanation || searchResult.explanation) && (
                       <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                         <p className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
                           <FileQuestion className="w-4 h-4" />
@@ -596,22 +621,38 @@ export default function BookChapterDetailPage() {
                         </p>
                         <div 
                           className="text-blue-900 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: searchResult.Explanation || searchResult.explanation }}
+                          dangerouslySetInnerHTML={{ __html: searchResult.ExplanationContent || searchResult.explanationContent || searchResult.Explanation || searchResult.explanation }}
                         />
                       </div>
                     )}
 
-                    {/* Solution */}
-                    {searchResult.Solution && searchResult.Solution.SolutionText && (
+                    {/* Video URL */}
+                    {(searchResult.VideoUrl || searchResult.videoUrl) && (
                       <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-                        <p className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                          <BookOpen className="w-4 h-4" />
-                          Lời giải chi tiết:
-                        </p>
-                        <div 
-                          className="text-purple-900 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: searchResult.Solution.SolutionText }}
-                        />
+                        <div className="flex items-center gap-2 mb-4">
+                          <Video className="w-5 h-5 text-purple-600" />
+                          <p className="text-sm font-semibold text-purple-900">
+                            Video giải thích:
+                          </p>
+                        </div>
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black mb-3">
+                          <iframe
+                            src={searchResult.VideoUrl || searchResult.videoUrl}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            title="Video giải thích"
+                          />
+                        </div>
+                        <a 
+                          href={searchResult.VideoUrl || searchResult.videoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-purple-700 hover:text-purple-900 font-medium transition-colors"
+                        >
+                          <PlayCircle className="w-4 h-4" />
+                          Mở video trong tab mới
+                        </a>
                       </div>
                     )}
                   </div>

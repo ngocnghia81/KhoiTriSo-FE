@@ -235,7 +235,18 @@ export default function MyPurchasesPage() {
           booksArray = data.Items || data.items;
         }
 
-        const transformedBooks = booksArray.map((b: any) => {
+        // Filter out books that are inactive
+        const activeBooksArray = booksArray.filter((b: any) => {
+          const rawBook = b.Book || b.book || null;
+          if (!rawBook) return false;
+          // Check if the book itself is active
+          const bookIsActive = rawBook.IsActive !== undefined ? rawBook.IsActive : (rawBook.isActive !== undefined ? rawBook.isActive : true);
+          // Also check if UserBook is active
+          const userBookIsActive = b.IsActive !== undefined ? b.IsActive : (b.isActive !== undefined ? b.isActive : true);
+          return bookIsActive === true && userBookIsActive === true;
+        });
+
+        const transformedBooks = activeBooksArray.map((b: any) => {
           const rawBook = b.Book || b.book || null;
           const authorData = rawBook?.Author || rawBook?.author || b.Author || b.author;
           const categoryData = rawBook?.Category || rawBook?.category || b.Category || b.category;

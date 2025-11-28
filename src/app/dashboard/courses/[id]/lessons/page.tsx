@@ -30,8 +30,10 @@ function LessonsClient() {
         setLoading(true);
         setError(null);
         
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+        
         // Load course info
-        const courseResp = await authenticatedFetch(`/api/courses/${courseId}`);
+        const courseResp = await authenticatedFetch(`${baseUrl}/courses/${courseId}`);
         const courseData = await courseResp.json();
         
         if (!courseResp.ok) {
@@ -43,7 +45,7 @@ function LessonsClient() {
         setCourse(courseInfo);
         
         // Load lessons
-        const lessonsResp = await authenticatedFetch(`/api/courses/${courseId}/lessons`);
+        const lessonsResp = await authenticatedFetch(`${baseUrl}/courses/${courseId}/lessons`);
         const lessonsData = await lessonsResp.json();
         
         if (lessonsResp.ok) {
@@ -74,10 +76,11 @@ function LessonsClient() {
   const handleDeleteLesson = async (lessonId: number) => {
     if (!confirm('Xóa bài học này?')) return;
     
-    const resp = await authenticatedFetch(`/api/lessons/${lessonId}`, { method: 'DELETE' });
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+    const resp = await authenticatedFetch(`${baseUrl}/lessons/${lessonId}`, { method: 'DELETE' });
     if (resp.ok) {
       // Reload lessons
-      const lessonsResp = await authenticatedFetch(`/api/courses/${courseId}/lessons`);
+      const lessonsResp = await authenticatedFetch(`${baseUrl}/courses/${courseId}/lessons`);
       const lessonsData = await lessonsResp.json();
       const lessonsList = lessonsData?.Result?.Items ?? lessonsData?.Result ?? lessonsData?.items ?? [];
       setLessons(lessonsList);
