@@ -21,6 +21,7 @@ import { useCourses, Course } from '@/hooks/useCourses';
 import { useInstructorDetail, useInstructorAnalytics } from '@/hooks/useInstructors';
 import { useBooks } from '@/hooks/useBooks';
 import type { Book } from '@/services/bookApi';
+import Chart from '@/components/dashboard/Chart';
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -264,6 +265,87 @@ export default function InstructorDashboard() {
         ))}
       </div>
 
+      {/* Charts Section */}
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Monthly Earnings Chart */}
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Thu nhập theo tháng</h3>
+            {analytics.MonthlyEarnings && analytics.MonthlyEarnings.length > 0 ? (
+              <div className="h-64">
+                <Chart
+                  data={analytics.MonthlyEarnings.map(e => ({ Date: e.Month, Amount: e.Earnings }))}
+                  type="area"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#10b981"
+                  height={250}
+                />
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">Chưa có dữ liệu</p>
+            )}
+          </div>
+
+          {/* Enrollment Trend Chart */}
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Xu hướng đăng ký</h3>
+            {analytics.EnrollmentTrend && analytics.EnrollmentTrend.length > 0 ? (
+              <div className="h-64">
+                <Chart
+                  data={analytics.EnrollmentTrend.map(t => ({ Date: t.Date, Amount: t.Amount }))}
+                  type="area"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#3b82f6"
+                  height={250}
+                />
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">Chưa có dữ liệu</p>
+            )}
+          </div>
+
+          {/* Revenue Trend Chart */}
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Xu hướng doanh thu</h3>
+            {analytics.RevenueTrend && analytics.RevenueTrend.length > 0 ? (
+              <div className="h-64">
+                <Chart
+                  data={analytics.RevenueTrend.map(t => ({ Date: t.Date, Amount: t.Amount }))}
+                  type="area"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#8b5cf6"
+                  height={250}
+                />
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">Chưa có dữ liệu</p>
+            )}
+          </div>
+
+          {/* Course Performance Chart */}
+          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Hiệu suất khóa học</h3>
+            {analytics.CoursePerformance && analytics.CoursePerformance.length > 0 ? (
+              <div className="h-64">
+                <Chart
+                  data={analytics.CoursePerformance.map(c => ({ Date: c.Title, Amount: c.Revenue }))}
+                  type="bar"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#f59e0b"
+                  height={250}
+                />
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">Chưa có dữ liệu</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main content grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Recent courses */}
@@ -429,6 +511,67 @@ export default function InstructorDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Top Courses and Books Charts */}
+      {analytics && (analytics.TopCourses.length > 0 || analytics.TopBooks.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Courses Chart */}
+          {analytics.TopCourses.length > 0 && (
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Top khóa học</h3>
+              <div className="h-64">
+                <Chart
+                  data={analytics.TopCourses.map(c => ({ Date: c.Title, Amount: c.Revenue }))}
+                  type="bar"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#3b82f6"
+                  height={250}
+                />
+              </div>
+              <div className="mt-4 space-y-2">
+                {analytics.TopCourses.slice(0, 3).map((course) => (
+                  <div key={course.Id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 truncate flex-1">{course.Title}</span>
+                    <div className="flex items-center gap-4 ml-4">
+                      <span className="text-gray-500">{course.Enrollments} học viên</span>
+                      <span className="font-semibold text-gray-900">₫{course.Revenue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top Books Chart */}
+          {analytics.TopBooks.length > 0 && (
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Top sách</h3>
+              <div className="h-64">
+                <Chart
+                  data={analytics.TopBooks.map(b => ({ Date: b.Title, Amount: b.Revenue }))}
+                  type="bar"
+                  xKey="Date"
+                  yKey="Amount"
+                  color="#10b981"
+                  height={250}
+                />
+              </div>
+              <div className="mt-4 space-y-2">
+                {analytics.TopBooks.slice(0, 3).map((book) => (
+                  <div key={book.Id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 truncate flex-1">{book.Title}</span>
+                    <div className="flex items-center gap-4 ml-4">
+                      <span className="text-gray-500">{book.Enrollments} kích hoạt</span>
+                      <span className="font-semibold text-gray-900">₫{book.Revenue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent books */}
       <div className="bg-white shadow-sm rounded-lg border border-gray-200">

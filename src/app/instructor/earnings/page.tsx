@@ -19,6 +19,7 @@ import {
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInstructorAnalytics } from '@/hooks/useInstructors';
+import Chart from '@/components/dashboard/Chart';
 // Note: Metadata can only be exported from a Server Component.
 // This page is a Client Component because it uses client hooks.
 
@@ -260,23 +261,86 @@ export default function InstructorEarningsPage() {
         <div className="lg:col-span-2">
           <div className="bg-white shadow-sm rounded-lg border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Thu nhập theo tháng</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Thu nhập theo tháng</h3>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span>6 tháng gần nhất</span>
+                </div>
+              </div>
             </div>
             <div className="p-6">
-              <div className="space-y-4">
-                {monthly.map((m, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{m.Month}</h4>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold text-gray-900">
-                        {formatCurrency(m.Earnings ?? 0)}
-                      </div>
+              {loading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                  <p className="ml-3 text-gray-600">Đang tải dữ liệu...</p>
+                </div>
+              ) : monthly.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <ChartBarIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p>Chưa có dữ liệu thu nhập</p>
+                </div>
+              ) : (
+                <>
+                  {/* Chart */}
+                  <div className="mb-6">
+                    <div className="h-80">
+                      <Chart
+                        data={monthly.map(m => ({ Date: m.Month, Amount: m.Earnings ?? 0 }))}
+                        type="line"
+                        xKey="Date"
+                        yKey="Amount"
+                        color="#10b981"
+                        height={300}
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  {/* List below chart */}
+                  <div className="border-t pt-6">
+                    <h4 className="text-sm font-medium text-gray-700 mb-4">Chi tiết từng tháng</h4>
+                    <div className="space-y-3">
+                      {monthly.map((m, index) => (
+                        <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                              <CalendarIcon className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">{m.Month}</h4>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {index === monthly.length - 1 ? 'Tháng hiện tại' : 
+                                 index === monthly.length - 2 ? 'Tháng trước' : 
+                                 `${monthly.length - index - 1} tháng trước`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-gray-900">
+                              {formatCurrency(m.Earnings ?? 0)}
+                            </div>
+                            {index > 0 && monthly[index - 1].Earnings > 0 && (
+                              <div className={`text-xs mt-1 ${
+                                (m.Earnings ?? 0) > (monthly[index - 1].Earnings ?? 0) 
+                                  ? 'text-green-600' 
+                                  : (m.Earnings ?? 0) < (monthly[index - 1].Earnings ?? 0)
+                                  ? 'text-red-600'
+                                  : 'text-gray-500'
+                              }`}>
+                                {((m.Earnings ?? 0) > (monthly[index - 1].Earnings ?? 0)) ? '↑' : 
+                                  ((m.Earnings ?? 0) < (monthly[index - 1].Earnings ?? 0)) ? '↓' : '→'} 
+                                {Math.abs(
+                                  (((m.Earnings ?? 0) - (monthly[index - 1].Earnings ?? 0)) / (monthly[index - 1].Earnings ?? 1)) * 100
+                                ).toFixed(1)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

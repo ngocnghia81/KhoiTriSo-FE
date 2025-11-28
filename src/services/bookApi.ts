@@ -303,7 +303,7 @@ class BookApiService {
       const chaptersData = extracted.Chapters || extracted.chapters || extracted;
       const chapters = Array.isArray(chaptersData) ? chaptersData : [];
       console.log(`BookApi - Found ${chapters.length} chapters`);
-      return chapters.map(this.mapBookChapter);
+      return chapters.map(chapter => this.mapBookChapter(chapter));
     } else {
       console.error('BookApi - Unsuccessful response:', result);
       throw new Error(extractMessage(result));
